@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kaos - KIP-848 Consumer Group Simulator</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 { font-size: 20px; font-weight: 600; }
+header h1 span { color: var(--accent); }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.badge.stable { background: rgba(63,185,80,0.15); color: var(--green); }
+.badge.reconciling { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.badge.stopping { background: rgba(248,81,73,0.15); color: var(--red); }
+.badge.stopped { background: rgba(139,148,158,0.15); color: var(--text-muted); }
+.badge.joining { background: rgba(88,166,255,0.15); color: var(--accent); }
+
+/* ── Config form ── */
+.config-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 600px;
+  margin: 40px auto;
+}
+
+.config-card h2 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: var(--accent);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.form-group input, .form-group select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: var(--font-mono);
+}
+
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.form-actions {
+  margin-top: 16px;
+  text-align: center;
+}
+
+/* ── Running view ── */
+.group-state-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.group-state-banner.stable {
+  background: rgba(63,185,80,0.1);
+  border: 2px solid rgba(63,185,80,0.3);
+  color: var(--green);
+}
+
+.group-state-banner.reconciling {
+  background: rgba(210,153,34,0.1);
+  border: 2px solid rgba(210,153,34,0.4);
+  color: var(--yellow);
+}
+
+.group-state-banner.assigning {
+  background: rgba(210,153,34,0.1);
+  border: 2px solid rgba(210,153,34,0.4);
+  color: var(--yellow);
+}
+
+.group-state-banner.empty {
+  background: rgba(139,148,158,0.1);
+  border: 2px solid rgba(139,148,158,0.3);
+  color: var(--text-muted);
+}
+
+.group-state-banner .epoch-info {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.8;
+}
+
+/* ── Control bar ── */
+.control-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.chaos-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.chaos-controls label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.chaos-controls input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  width: 70px;
+}
+
+/* ── Matrix table ── */
+.partition-map {
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.matrix-table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.matrix-table th,
+.matrix-table td {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matrix-table th {
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 11px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.matrix-table th.member-col-header {
+  text-align: left;
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
+}
+
+.matrix-table td.member-info {
+  text-align: left;
+  vertical-align: middle;
+  background: var(--surface);
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
+  overflow: hidden;
+}
+
+.matrix-table td.member-info.stopped-row {
+  opacity: 0.5;
+}
+
+.matrix-member-name {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.matrix-member-id {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.matrix-member-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.matrix-member-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.btn-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-icon:hover { background: var(--border); }
+
+.btn-icon.play {
+  color: var(--green);
+  border-color: rgba(63,185,80,0.4);
+}
+
+.btn-icon.stop {
+  color: var(--red);
+  border-color: rgba(248,81,73,0.4);
+}
+
+.btn-icon.block {
+  color: var(--yellow);
+  border-color: rgba(210,153,34,0.4);
+}
+
+.btn-icon.blocked {
+  color: var(--yellow);
+  border-color: rgba(210,153,34,0.6);
+  background: rgba(210,153,34,0.15);
+}
+
+.btn-icon.partition {
+  color: var(--red);
+  border-color: rgba(248,81,73,0.4);
+}
+
+.btn-icon.partitioned {
+  color: var(--red);
+  border-color: rgba(248,81,73,0.6);
+  background: rgba(248,81,73,0.15);
+}
+
+.btn-icon svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.delay-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.delay-slider {
+  width: 80px;
+  accent-color: var(--accent);
+}
+
+.delay-value {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  min-width: 30px;
+}
+
+/* ── Console log ── */
+.console-log {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 8px 12px;
+}
+
+.console-log .log-entry {
+  padding: 1px 0;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+}
+
+.console-log .log-entry .log-time {
+  color: var(--text-muted);
+  opacity: 0.6;
+  margin-right: 8px;
+}
+
+.console-log .log-entry.log-join { color: var(--green); }
+.console-log .log-entry.log-leave { color: var(--red); }
+.console-log .log-entry.log-state { color: var(--yellow); }
+.console-log .log-entry.log-group { color: var(--accent); }
+
+.matrix-cell {
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.matrix-cell.stopped-row {
+  opacity: 0.3;
+}
+
+.partition-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.partition-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 32px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.partition-chip.assigned {
+  background: rgba(63,185,80,0.25);
+  color: var(--green);
+}
+
+.partition-chip.pending-revocation {
+  background: rgba(210,153,34,0.25);
+  color: var(--yellow);
+}
+
+.partition-chip.pending-assignment {
+  background: rgba(88,166,255,0.2);
+  color: var(--accent);
+}
+
+/* ── Legend ── */
+.legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1><span>Kaos</span> — KIP-848 Consumer Group Simulator</h1>
+  </header>
+
+  <!-- Configuration View -->
+  <div id="config-view">
+    <div class="config-card">
+      <h2>Simulation Configuration</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Topic Prefix</label>
+          <input type="text" id="cfg-topic-prefix" value="simulator-events">
+        </div>
+        <div class="form-group">
+          <label>Number of Topics</label>
+          <input type="number" id="cfg-num-topics" value="3" min="1" max="20">
+        </div>
+        <div class="form-group">
+          <label>Partitions per Topic</label>
+          <input type="number" id="cfg-num-partitions" value="12" min="1" max="100">
+        </div>
+        <div class="form-group">
+          <label>Number of Consumers</label>
+          <input type="number" id="cfg-num-consumers" value="6" min="1" max="20">
+        </div>
+        <div class="form-group">
+          <label>Group ID</label>
+          <input type="text" id="cfg-group-id" value="simulator-group">
+        </div>
+        <div class="form-group">
+          <label>Server Assignor</label>
+          <select id="cfg-assignor">
+            <option value="">(default)</option>
+            <option value="uniform">uniform</option>
+            <option value="range">range</option>
+          </select>
+        </div>
+        <div class="form-group full-width">
+          <label>Default Processing Delay (ms)</label>
+          <input type="number" id="cfg-processing-delay" value="10000" min="0" max="120000">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="btn-start" onclick="startSimulation()">Start Simulation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Running View -->
+  <div id="running-view" style="display:none;">
+    <div id="group-banner" class="group-state-banner empty">
+      Waiting for data...
+    </div>
+
+    <div class="control-bar">
+      <button class="btn btn-danger btn-sm" onclick="stopSimulation()">Stop Simulation</button>
+      <div class="chaos-controls">
+        <label>Min ms</label>
+        <input type="number" id="chaos-min" value="10000">
+        <label>Max ms</label>
+        <input type="number" id="chaos-max" value="30000">
+        <button class="btn btn-outline btn-sm" id="btn-chaos" onclick="toggleChaos()">Start Chaos</button>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:rgba(63,185,80,0.25);"></div> Assigned
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:rgba(210,153,34,0.25);"></div> Pending Revocation
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:rgba(88,166,255,0.2);"></div> Pending Assignment
+      </div>
+    </div>
+
+    <div class="partition-map">
+      <table class="matrix-table" id="matrix-table">
+        <thead id="matrix-head"></thead>
+        <tbody id="matrix-body"></tbody>
+      </table>
+    </div>
+
+    <div class="console-log" id="console-log"></div>
+  </div>
+</div>
+
+<script>
+let pollInterval = null;
+let chaosRunning = false;
+let currentConfig = null;
+let prevState = null; // For change detection.
+let localDelays = {}; // Local delay overrides while slider is active.
+let activeSlider = null; // Slot index of slider being dragged, or null.
+let prevCtrlState = {}; // Previous control state per slot, to avoid unnecessary rebuilds.
+
+async function startSimulation() {
+  const btn = document.getElementById('btn-start');
+  btn.disabled = true;
+  btn.textContent = 'Starting...';
+
+  const config = {
+    topicPrefix: document.getElementById('cfg-topic-prefix').value,
+    numTopics: parseInt(document.getElementById('cfg-num-topics').value),
+    numPartitions: parseInt(document.getElementById('cfg-num-partitions').value),
+    numConsumers: parseInt(document.getElementById('cfg-num-consumers').value),
+    groupId: document.getElementById('cfg-group-id').value,
+    assignor: document.getElementById('cfg-assignor').value,
+    defaultProcessingDelayMs: parseInt(document.getElementById('cfg-processing-delay').value)
+  };
+
+  try {
+    const resp = await fetch('/api/simulator/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(config)
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert('Failed to start: ' + (err.error || resp.statusText));
+      btn.disabled = false;
+      btn.textContent = 'Start Simulation';
+      return;
+    }
+    currentConfig = config;
+    prevState = null;
+    localDelays = {};
+    prevCtrlState = {};
+    document.getElementById('console-log').innerHTML = '';
+    document.getElementById('config-view').style.display = 'none';
+    document.getElementById('running-view').style.display = 'block';
+    logEvent('log-group', 'Simulation started');
+    startPolling();
+  } catch (e) {
+    alert('Error: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Start Simulation';
+  }
+}
+
+async function stopSimulation() {
+  stopPolling();
+  try {
+    await fetch('/api/simulator/stop', {method: 'POST'});
+  } catch (e) {
+    // Ignore.
+  }
+  logEvent('log-group', 'Simulation stopped');
+  chaosRunning = false;
+  prevState = null;
+  document.getElementById('btn-chaos').textContent = 'Start Chaos';
+  document.getElementById('running-view').style.display = 'none';
+  document.getElementById('config-view').style.display = 'block';
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-start').textContent = 'Start Simulation';
+}
+
+async function toggleChaos() {
+  if (chaosRunning) {
+    await fetch('/api/simulator/chaos/stop', {method: 'POST'});
+    chaosRunning = false;
+    document.getElementById('btn-chaos').textContent = 'Start Chaos';
+    logEvent('log-group', 'Chaos stopped');
+  } else {
+    const minMs = parseInt(document.getElementById('chaos-min').value);
+    const maxMs = parseInt(document.getElementById('chaos-max').value);
+    await fetch('/api/simulator/chaos/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({intervalMinMs: minMs, intervalMaxMs: maxMs})
+    });
+    chaosRunning = true;
+    document.getElementById('btn-chaos').textContent = 'Stop Chaos';
+    logEvent('log-group', 'Chaos started (' + minMs + '-' + maxMs + ' ms)');
+  }
+}
+
+function startPolling() {
+  pollInterval = setInterval(pollGroup, 500);
+  pollGroup();
+}
+
+function stopPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+}
+
+async function pollGroup() {
+  try {
+    const resp = await fetch('/api/simulator/group');
+    const data = await resp.json();
+    if (data.phase !== 'RUNNING') return;
+    detectChanges(data);
+    renderGroup(data);
+    prevState = data;
+  } catch (e) {
+    // Ignore transient errors.
+  }
+}
+
+// ── Console log ──
+
+function logEvent(cls, message) {
+  const log = document.getElementById('console-log');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry ' + cls;
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'});
+  entry.innerHTML = '<span class="log-time">' + ts + '</span>' + message;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+function detectChanges(data) {
+  if (!prevState) return;
+
+  // Group state changes.
+  if (data.groupState !== prevState.groupState) {
+    logEvent('log-state', 'Group state: ' + prevState.groupState + ' -> ' + data.groupState);
+  }
+  if (data.groupEpoch !== prevState.groupEpoch) {
+    logEvent('log-group', 'Group epoch: ' + prevState.groupEpoch + ' -> ' + data.groupEpoch);
+  }
+  if (data.targetAssignmentEpoch !== prevState.targetAssignmentEpoch) {
+    logEvent('log-group', 'Target assignment epoch: ' + prevState.targetAssignmentEpoch + ' -> ' + data.targetAssignmentEpoch);
+  }
+
+  // Build member maps by clientId.
+  const prevMembers = {};
+  for (const m of (prevState.members || [])) prevMembers[m.clientId] = m;
+  const currMembers = {};
+  for (const m of (data.members || [])) currMembers[m.clientId] = m;
+
+  // Detect member changes.
+  for (const m of (data.members || [])) {
+    const prev = prevMembers[m.clientId];
+    if (!prev) continue;
+
+    // State change.
+    if (m.state !== prev.state) {
+      logEvent(m.state === 'Stopped' ? 'log-leave' : 'log-state',
+        m.clientId + ': ' + prev.state + ' -> ' + m.state);
+    }
+
+    // Member joined (had no memberId, now has one).
+    if (!prev.memberId && m.memberId) {
+      logEvent('log-join', m.clientId + ' joined (memberId: ' + m.memberId.substring(0, 16) + '...)');
+    }
+
+    // Member left (had memberId, now doesn't).
+    if (prev.memberId && !m.memberId) {
+      logEvent('log-leave', m.clientId + ' left the group');
+    }
+
+    // Epoch change.
+    if (m.memberEpoch !== prev.memberEpoch && m.memberEpoch >= 0) {
+      logEvent('log-state', m.clientId + ': epoch ' + prev.memberEpoch + ' -> ' + m.memberEpoch);
+    }
+
+    // Assignment change.
+    const prevAssign = new Set(prev.assignment || []);
+    const currAssign = new Set(m.assignment || []);
+    const gained = [...currAssign].filter(x => !prevAssign.has(x));
+    const lost = [...prevAssign].filter(x => !currAssign.has(x));
+    if (gained.length > 0) {
+      logEvent('log-join', m.clientId + ' assigned: ' + gained.map(formatPartitionKey).join(', '));
+    }
+    if (lost.length > 0) {
+      logEvent('log-leave', m.clientId + ' revoked: ' + lost.map(formatPartitionKey).join(', '));
+    }
+  }
+}
+
+function formatPartitionKey(key) {
+  const [topic, partition] = splitPartitionKey(key);
+  // Shorten topic name for readability.
+  return topic + ':' + partition;
+}
+
+// ── Rendering (in-place DOM updates) ──
+
+function renderGroup(data) {
+  // Banner.
+  const banner = document.getElementById('group-banner');
+  const gs = (data.groupState || 'UNKNOWN').toUpperCase();
+  let bannerClass = 'empty';
+  if (gs === 'STABLE') bannerClass = 'stable';
+  else if (gs === 'RECONCILING' || gs === 'ASSIGNING') bannerClass = gs.toLowerCase();
+
+  banner.className = 'group-state-banner ' + bannerClass;
+  banner.innerHTML = gs +
+    ' <span class="epoch-info">Group Epoch: ' + (data.groupEpoch ?? '?') +
+    ' | Target Assignment Epoch: ' + (data.targetAssignmentEpoch ?? '?') + '</span>';
+
+  if (!currentConfig) return;
+
+  const topics = [];
+  for (let i = 1; i <= currentConfig.numTopics; i++) {
+    topics.push(currentConfig.topicPrefix + '-' + i);
+  }
+
+  // Header (only build once).
+  const thead = document.getElementById('matrix-head');
+  if (!thead.dataset.built) {
+    let headHtml = '<tr><th class="member-col-header">Member</th>';
+    for (const t of topics) headHtml += '<th>' + t + '</th>';
+    headHtml += '</tr>';
+    thead.innerHTML = headHtml;
+    thead.dataset.built = '1';
+  }
+
+  const members = (data.members || []).slice().sort((a, b) => a.slotIndex - b.slotIndex);
+
+  const tbody = document.getElementById('matrix-body');
+
+  for (const m of members) {
+    const rowId = 'row-' + m.slotIndex;
+    let row = document.getElementById(rowId);
+    const isStopped = m.state === 'Stopped';
+    const isStable = m.state === 'Stable';
+    const isReconciling = m.state === 'Reconciling';
+
+    if (!row) {
+      row = document.createElement('tr');
+      row.id = rowId;
+      tbody.appendChild(row);
+    }
+
+    // Ensure correct number of cells: 1 member + N topics.
+    while (row.cells.length < 1 + topics.length) {
+      row.insertCell();
+    }
+    while (row.cells.length > 1 + topics.length) {
+      row.deleteCell(row.cells.length - 1);
+    }
+
+    // ── Member cell ──
+    const memberCell = row.cells[0];
+    memberCell.className = 'member-info' + (isStopped ? ' stopped-row' : '');
+
+    const isStopping = m.state === 'Stopping';
+
+    let badgeClass = 'stopped';
+    if (isStable) badgeClass = 'stable';
+    else if (isReconciling) badgeClass = 'reconciling';
+    else if (isStopping) badgeClass = 'stopping';
+    else if (m.state === 'Joining') badgeClass = 'joining';
+
+    // Update member info (name, badge, id, epoch) — always safe to replace.
+    let infoId = 'info-' + m.slotIndex;
+    let infoDiv = document.getElementById(infoId);
+    if (!infoDiv) {
+      infoDiv = document.createElement('div');
+      infoDiv.id = infoId;
+      memberCell.innerHTML = '';
+      memberCell.appendChild(infoDiv);
+    }
+
+    const infoKey = m.state + '|' + m.memberId + '|' + m.memberEpoch;
+    if (infoDiv.dataset.key !== infoKey) {
+      infoDiv.dataset.key = infoKey;
+      let infoHtml = '<div class="matrix-member-name">' + m.clientId +
+        ' <span class="badge ' + badgeClass + '">' + m.state + '</span></div>';
+      if (m.memberId) {
+        infoHtml += '<div class="matrix-member-id">' + m.memberId + '</div>';
+      }
+      infoHtml += '<div class="matrix-member-meta">Epoch: ' + (m.memberEpoch >= 0 ? m.memberEpoch : '\u2014') + '</div>';
+      infoDiv.innerHTML = infoHtml;
+    }
+
+    // Controls — only rebuild if not actively dragging this slider.
+    let ctrlId = 'ctrl-' + m.slotIndex;
+    let ctrlDiv = document.getElementById(ctrlId);
+    if (!ctrlDiv) {
+      ctrlDiv = document.createElement('div');
+      ctrlDiv.id = ctrlId;
+      ctrlDiv.className = 'matrix-member-controls';
+      memberCell.appendChild(ctrlDiv);
+    }
+
+    const displayDelay = localDelays[m.slotIndex] !== undefined ? localDelays[m.slotIndex] : m.processingDelayMs;
+    const ctrlKey = m.subscribed + '|' + m.blocked + '|' + m.partitioned + '|' + displayDelay;
+
+    if (activeSlider === m.slotIndex) {
+      // Slider is active — only update the delay label from local state.
+      const lbl = ctrlDiv.querySelector('.delay-value');
+      if (lbl && localDelays[m.slotIndex] !== undefined) {
+        lbl.textContent = (localDelays[m.slotIndex] / 1000).toFixed(0) + 's';
+      }
+    } else if (ctrlKey !== prevCtrlState[m.slotIndex]) {
+      prevCtrlState[m.slotIndex] = ctrlKey;
+      let ctrlHtml = '';
+      if (m.subscribed) {
+        ctrlHtml += '<button class="btn-icon stop" onclick="unsubscribe(' + m.slotIndex + ')" title="Unsubscribe consumer"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1"/></svg></button>';
+      } else {
+        ctrlHtml += '<button class="btn-icon play" onclick="subscribe(' + m.slotIndex + ')" title="Subscribe consumer"><svg viewBox="0 0 16 16"><polygon points="4,2 14,8 4,14"/></svg></button>';
+      }
+      if (m.subscribed) {
+        if (m.blocked) {
+          ctrlHtml += '<button class="btn-icon blocked" onclick="unblockMember(' + m.slotIndex + ')" title="Unblock poll()"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="12" rx="1"/><rect x="9" y="2" width="5" height="12" rx="1"/></svg></button>';
+        } else {
+          ctrlHtml += '<button class="btn-icon block" onclick="blockMember(' + m.slotIndex + ')" title="Block poll()"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="12" rx="1"/><rect x="9" y="2" width="5" height="12" rx="1"/></svg></button>';
+        }
+        if (m.partitioned) {
+          ctrlHtml += '<button class="btn-icon partitioned" onclick="healMember(' + m.slotIndex + ')" title="Heal network partition"><svg viewBox="0 0 16 16"><path d="M8.9 1.5L5 8h3.5l-.9 6.5L12 8H8.5z"/></svg></button>';
+        } else {
+          ctrlHtml += '<button class="btn-icon partition" onclick="partitionMember(' + m.slotIndex + ')" title="Simulate network partition"><svg viewBox="0 0 16 16"><path d="M8.9 1.5L5 8h3.5l-.9 6.5L12 8H8.5z"/></svg></button>';
+        }
+      }
+      ctrlHtml += '<span class="delay-label">Delay</span>';
+      ctrlHtml += '<input type="range" class="delay-slider" min="0" max="60000" step="1000" value="' +
+        displayDelay + '" oninput="onSliderInput(' + m.slotIndex + ', this)" onchange="onSliderChange(' + m.slotIndex + ', this)" ' +
+        'onmousedown="activeSlider=' + m.slotIndex + '" ontouchstart="activeSlider=' + m.slotIndex + '">';
+      ctrlHtml += '<span class="delay-value">' + (displayDelay / 1000).toFixed(0) + 's</span>';
+      ctrlDiv.innerHTML = ctrlHtml;
+    }
+
+    // ── Partition cells ──
+    const assigned = new Set(m.assignment || []);
+    const target = new Set(m.targetAssignment || []);
+
+    for (let ti = 0; ti < topics.length; ti++) {
+      const cell = row.cells[1 + ti];
+      cell.className = 'matrix-cell' + (isStopped ? ' stopped-row' : '');
+
+      const topic = topics[ti];
+      const partitions = [];
+      const allKeys = new Set([...assigned, ...target]);
+      for (const key of allKeys) {
+        const [tName, pIdx] = splitPartitionKey(key);
+        if (tName === topic) {
+          const inAssigned = assigned.has(key);
+          const inTarget = target.has(key);
+
+          let stateClass;
+          if (inAssigned && !inTarget && !isStable) {
+            stateClass = 'pending-revocation';
+          } else if (inAssigned) {
+            stateClass = 'assigned';
+          } else if (inTarget && !inAssigned) {
+            stateClass = 'pending-assignment';
+          } else {
+            stateClass = 'assigned';
+          }
+
+          partitions.push({partition: parseInt(pIdx), stateClass: stateClass});
+        }
+      }
+
+      partitions.sort((a, b) => a.partition - b.partition);
+
+      const cellKey = partitions.map(p => p.partition + ':' + p.stateClass).join(',');
+      if (cell.dataset.key !== cellKey) {
+        cell.dataset.key = cellKey;
+        let chipsHtml = '<div class="partition-chips">';
+        for (const p of partitions) {
+          chipsHtml += '<span class="partition-chip ' + p.stateClass + '">' + p.partition + '</span>';
+        }
+        chipsHtml += '</div>';
+        cell.innerHTML = chipsHtml;
+      }
+    }
+  }
+
+  // Remove stale rows.
+  const validIds = new Set(members.map(m => 'row-' + m.slotIndex));
+  for (let i = tbody.rows.length - 1; i >= 0; i--) {
+    if (!validIds.has(tbody.rows[i].id)) {
+      tbody.deleteRow(i);
+    }
+  }
+}
+
+// ── Slider handling ──
+
+function onSliderInput(index, slider) {
+  // Live feedback while dragging — update label only, don't send to server.
+  localDelays[index] = parseInt(slider.value);
+  const lbl = slider.nextElementSibling;
+  if (lbl) lbl.textContent = (slider.value / 1000).toFixed(0) + 's';
+}
+
+function onSliderChange(index, slider) {
+  // Fired on release — send to server.
+  const value = parseInt(slider.value);
+  localDelays[index] = value;
+  activeSlider = null;
+  setDelay(index, value);
+}
+
+function splitPartitionKey(key) {
+  const lastDash = key.lastIndexOf('-');
+  return [key.substring(0, lastDash), key.substring(lastDash + 1)];
+}
+
+async function subscribe(index) {
+  logEvent('log-join', 'consumer-' + index + ': subscribing...');
+  await fetch('/api/simulator/members/' + index + '/subscribe', {method: 'POST'});
+}
+
+async function unsubscribe(index) {
+  logEvent('log-leave', 'consumer-' + index + ': unsubscribing...');
+  await fetch('/api/simulator/members/' + index + '/unsubscribe', {method: 'POST'});
+}
+
+async function partitionMember(index) {
+  logEvent('log-leave', 'consumer-' + index + ': simulating network partition...');
+  await fetch('/api/simulator/members/' + index + '/partition', {method: 'POST'});
+}
+
+async function healMember(index) {
+  logEvent('log-join', 'consumer-' + index + ': healing network partition...');
+  await fetch('/api/simulator/members/' + index + '/heal', {method: 'POST'});
+}
+
+async function blockMember(index) {
+  logEvent('log-state', 'consumer-' + index + ': blocking poll()...');
+  await fetch('/api/simulator/members/' + index + '/block', {method: 'POST'});
+}
+
+async function unblockMember(index) {
+  logEvent('log-state', 'consumer-' + index + ': unblocking poll()...');
+  await fetch('/api/simulator/members/' + index + '/unblock', {method: 'POST'});
+}
+
+async function setDelay(index, value) {
+  logEvent('log-state', 'consumer-' + index + ': delay set to ' + (value / 1000).toFixed(0) + 's');
+  await fetch('/api/simulator/members/' + index + '/delay', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({delayMs: value})
+  });
+}
+
+// Check initial state on load.
+(async function() {
+  try {
+    const resp = await fetch('/api/simulator/status');
+    const data = await resp.json();
+    if (data.phase === 'RUNNING') {
+      currentConfig = data.config;
+      document.getElementById('config-view').style.display = 'none';
+      document.getElementById('running-view').style.display = 'block';
+      if (data.chaosRunning) {
+        chaosRunning = true;
+        document.getElementById('btn-chaos').textContent = 'Stop Chaos';
+      }
+      startPolling();
+    }
+  } catch (e) {
+    // Ignore.
+  }
+})();
+</script>
+</body>
+</html>
