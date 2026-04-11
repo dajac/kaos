@@ -13,6 +13,7 @@ public class SimulatorGroupState {
         public int slotIndex;
         public String clientId;
         public String memberId;
+        public String instanceId;
         public int memberEpoch;
         public String state; // "Stable", "Reconciling", "Stopped"
         public boolean subscribed;

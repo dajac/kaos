@@ -159,6 +159,7 @@ public class SimulatorRestServer {
             SimulatorGroupState.MemberState adminMember = adminMembers.get(slot.clientId());
             if (adminMember != null) {
                 m.put("memberId", adminMember.memberId);
+                m.put("instanceId", adminMember.instanceId);
                 m.put("memberEpoch", adminMember.memberEpoch);
                 // Override state to "Stopping" if unsubscribed but still in the group.
                 if (!slot.desiredSubscribed().get()) {
@@ -170,6 +171,7 @@ public class SimulatorRestServer {
                 m.put("targetAssignment", adminMember.targetAssignment);
             } else {
                 m.put("memberId", "");
+                m.put("instanceId", null);
                 m.put("memberEpoch", -1);
                 m.put("state", slot.desiredSubscribed().get() ? "Joining" : "Stopped");
                 m.put("assignment", Set.of());

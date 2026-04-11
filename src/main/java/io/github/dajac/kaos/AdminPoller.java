@@ -88,6 +88,7 @@ public class AdminPoller {
             SimulatorGroupState.MemberState ms = new SimulatorGroupState.MemberState();
             ms.clientId = member.clientId();
             ms.memberId = member.consumerId();
+            ms.instanceId = member.groupInstanceId().orElse(null);
             ms.memberEpoch = member.memberEpoch().orElse(-1);
 
             Set<TopicPartition> assigned = member.assignment().topicPartitions();

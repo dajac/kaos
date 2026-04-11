@@ -49,14 +49,13 @@ body {
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: 1fr;
   height: 100vh;
   gap: 0;
 }
 
 /* ── Sidebar ── */
 .sidebar {
-  grid-row: 1 / 3;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -114,7 +113,7 @@ body {
 
 .section-label {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1.5px;
@@ -137,22 +136,22 @@ body {
 
 .status-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
 }
 
 .status-value {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
 .status-badge {
   display: inline-block;
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 3px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -173,9 +172,9 @@ body {
 .field-label {
   display: block;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   letter-spacing: 0.3px;
 }
 
@@ -230,15 +229,8 @@ body {
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn:active { transform: scale(0.98); }
 
-.btn-start {
-  background: var(--green);
-  color: #0a0e14;
-}
-
-.btn-stop {
-  background: var(--red);
-  color: #0a0e14;
-}
+.btn-start { background: var(--green); color: #0a0e14; }
+.btn-stop { background: var(--red); color: #0a0e14; }
 
 /* ── Auto-Pilot ── */
 .btn-autopilot {
@@ -270,185 +262,297 @@ body {
 .main::-webkit-scrollbar-track { background: transparent; }
 .main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* ── Matrix table ── */
-.matrix-table {
-  border-collapse: collapse;
-  width: 100%;
-  table-layout: fixed;
-  font-family: var(--font-mono);
-  font-size: 11px;
+/* ──────────────────────────────────────────────────────────────
+   Bento card grid — each consumer is a self-contained card with
+   a stacked "coordinator zone" (top) and "consumer zone" (bottom).
+   The visible gap between zones makes server/consumer divergence
+   a primary visual axis instead of a table-cell detail.
+   ────────────────────────────────────────────────────────────── */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 14px;
+  align-content: start;
 }
 
-.matrix-table th,
-.matrix-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.matrix-table th {
+.card {
   background: var(--surface);
-  color: var(--text-dim);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  border-bottom: 1px solid var(--border);
-}
-
-.matrix-table th.member-col-header {
-  text-align: left;
-  width: 400px;
-  min-width: 400px;
-  max-width: 400px;
-  position: sticky;
-  left: 0;
-  z-index: 3;
-}
-
-.matrix-table td.member-info {
-  text-align: left;
-  vertical-align: middle;
-  background: var(--surface);
-  width: 400px;
-  min-width: 400px;
-  max-width: 400px;
-  overflow: hidden;
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  border-right: 1px solid var(--border);
-  padding: 0;
-}
-
-.matrix-table td.member-info.stopped-row {
-  opacity: 0.45;
-}
-
-.member-cell-layout {
+  border: 1px solid var(--border);
+  border-radius: 8px;
   display: flex;
+  flex-direction: row;
   align-items: stretch;
+  overflow: hidden;
+  transition: border-color 0.25s, opacity 0.25s, box-shadow 0.3s;
+  position: relative;
 }
 
-/* ── Left: server state ── */
-.member-state {
-  flex: 1;
-  padding: 6px 8px;
+.card.stable { border-color: rgba(52,211,153,0.35); }
+.card.reconciling {
+  border-color: rgba(251,191,36,0.45);
+  box-shadow: 0 0 0 1px rgba(251,191,36,0.12), 0 0 22px -8px rgba(251,191,36,0.4);
+}
+.card.stopping { border-color: rgba(248,113,113,0.4); }
+.card.joining { border-color: rgba(76,154,255,0.45); }
+.card.stopped { opacity: 0.45; }
+
+/* Accent stripe down the left edge mirrors the member state. */
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--text-dim);
+  transition: background 0.2s;
+  z-index: 1;
+}
+.card.stable::before    { background: var(--green); }
+.card.reconciling::before { background: var(--yellow); }
+.card.stopping::before  { background: var(--red); }
+.card.joining::before   { background: var(--accent); }
+.card.stopped::before   { background: var(--text-dim); }
+
+/* ── Left column: consumer metadata ── */
+.card-meta {
+  flex: 0 0 260px;
+  padding: 14px 16px 14px 20px;
+  background: var(--surface2);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   min-width: 0;
 }
 
-.member-header {
+.card-meta-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .member-name {
-  font-weight: 600;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
   color: var(--text);
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
 }
 
 .badge {
   display: inline-block;
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 3px;
-  font-size: 9px;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   flex-shrink: 0;
 }
 
 .badge.stable { background: var(--green-dim); color: var(--green); }
 .badge.reconciling { background: var(--yellow-dim); color: var(--yellow); }
 .badge.stopping { background: var(--red-dim); color: var(--red); }
-.badge.stopped { background: rgba(107,122,141,0.1); color: var(--text-dim); }
+.badge.stopped { background: rgba(107,122,141,0.12); color: var(--text-dim); }
 .badge.joining { background: var(--accent-dim); color: var(--accent); }
 
-.member-detail {
-  font-size: 9px;
+/* Labeled metadata line: "label  value" — used for id, instance, epoch. */
+.meta-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
   color: var(--text-dim);
-  margin-top: 1px;
+  min-width: 0;
+}
+
+.meta-line-label {
+  flex: 0 0 auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  opacity: 0.8;
+  width: 56px;
+}
+
+.meta-line-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* ── Right: controls stack ── */
-.member-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 4px;
-  border-left: 1px solid var(--border-subtle);
-  flex-shrink: 0;
+.meta-line-value.dim {
+  color: var(--text-dim);
+  opacity: 0.6;
+  font-weight: 400;
 }
 
-.ctrl-delay {
+/* ── Middle: shared-topic grid with coordinator + consumer columns ──
+   Three columns: topic name | coordinator chips | consumer chips.
+   A wider gap before the coordinator column visually separates the
+   metadata section from the partition views. */
+.zones {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--bg);
+  padding: 12px 16px;
+  column-gap: 14px;
+  row-gap: 0;
+  align-content: start;
+}
+
+.zone-cell {
+  padding: 4px 0;
   display: flex;
+  align-items: flex-start;
+}
+
+.zone-cell.zone-cell-name {
+  grid-column: 1;
+  padding-right: 24px;
+}
+
+.zone-cell.zone-cell-server {
+  grid-column: 2;
+}
+
+.zone-cell.zone-cell-consumer {
+  grid-column: 3;
+}
+
+/* Header cells (one per column, in the first row of the grid). */
+.zone-cell.zone-header {
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
+  padding-top: 0;
+  padding-bottom: 8px;
 }
 
-.ctrl-delay.disabled {
-  opacity: 0.3;
-}
-
-.ctrl-delay-label {
+.zone-label {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+  color: var(--text-dim);
+}
+
+.zone-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-dim);
+  margin-left: auto;
   letter-spacing: 0.3px;
 }
 
-.ctrl-delay-input {
-  width: 50px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 9px;
+/* Subtle row separators between topics (not on the header row). */
+.zone-cell.zone-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.zone-topic-name {
   font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 600;
-  text-align: left;
+  color: var(--text-muted);
+  line-height: 26px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.ctrl-delay-input:focus {
-  outline: none;
-  border-color: var(--accent);
+.zone-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+  min-height: 26px;
+  align-items: flex-start;
+  align-content: flex-start;
 }
 
-.ctrl-delay-unit {
+.zone-empty {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   color: var(--text-dim);
+  font-style: italic;
+}
+
+.partition-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  flex: 0 0 auto;
+  transition: background 0.25s, color 0.25s;
+  box-sizing: border-box;
+}
+
+.partition-chip.assigned {
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(52,211,153,0.25);
+}
+
+.partition-chip.pending-assignment {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid rgba(76,154,255,0.3);
+}
+
+.partition-chip.pending-revocation {
+  background: var(--yellow-dim);
+  color: var(--yellow);
+  border: 1px solid rgba(251,191,36,0.35);
+}
+
+/* ── Right column: per-consumer controls ── */
+.member-controls {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 16px;
+  background: var(--surface2);
+  border-left: 1px solid var(--border-subtle);
+  align-items: stretch;
 }
 
 .ctrl-btn {
-  padding: 2px 6px;
+  padding: 5px 12px;
   border-radius: 3px;
   border: 1px solid var(--border);
-  background: var(--surface2);
+  background: var(--surface);
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.3px;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
   white-space: nowrap;
   text-align: center;
-  min-width: 82px;
 }
 
 .ctrl-btn:hover { background: var(--surface3); color: var(--text); }
@@ -475,155 +579,46 @@ body {
   background: var(--red-dim);
 }
 
-/* ── Partition cells ── */
-.matrix-cell {
-  vertical-align: top;
-  white-space: normal;
-  padding: 0 !important;
-  height: 1px; /* needed so .cell-split height:100% can stretch to row height */
-}
-
-.matrix-cell.stopped-row {
-  opacity: 0.25;
-}
-
-.cell-split {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  height: 100%;
-  min-height: 100%;
-}
-
-.cell-side {
-  flex: 1 1 50%;
-  min-width: 0;
-  min-height: 22px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 3px;
-  padding: 6px;
-}
-
-.cell-side-server {
-  border-right: 1px solid var(--border-subtle);
-}
-
-.matrix-table th.topic-header {
-  padding: 0;
-  min-width: 600px;
-}
-
-.topic-header-name {
-  padding: 6px 8px 4px;
-  border-bottom: 1px solid var(--border-subtle);
-  text-align: center;
-}
-
-.topic-header-subs {
-  display: flex;
-}
-
-.topic-header-sub {
-  flex: 1 1 50%;
-  padding: 4px 8px;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.topic-header-sub + .topic-header-sub {
-  border-left: 1px solid var(--border-subtle);
-}
-
-.partition-chip {
+.ctrl-delay {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 22px;
-  padding: 0;
-  border-radius: 3px;
+  gap: 5px;
+  padding: 3px 4px;
+}
+
+.ctrl-delay.disabled { opacity: 0.3; }
+
+.ctrl-delay-label {
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+}
+
+.ctrl-delay-input {
+  width: 50px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 3px 5px;
+  border-radius: 3px;
+  font-size: 11px;
   font-family: var(--font-mono);
-  flex: 0 0 auto;
-  transition: background 0.2s, color 0.2s;
-}
-
-.partition-chip.assigned {
-  background: var(--green-dim);
-  color: var(--green);
-}
-
-.partition-chip.pending-assignment {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-
-.partition-chip.pending-revocation {
-  background: var(--yellow-dim);
-  color: var(--yellow);
-}
-
-/* ── Console ── */
-.console {
-  grid-column: 2;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  overflow-y: auto;
-  height: 160px;
-  min-height: 100px;
-}
-
-.console::-webkit-scrollbar { width: 4px; }
-.console::-webkit-scrollbar-track { background: transparent; }
-.console::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-.console-header {
-  position: sticky;
-  top: 0;
-  background: var(--surface);
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 9px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
+  text-align: left;
+}
+
+.ctrl-delay-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ctrl-delay-unit {
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--text-dim);
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
 }
-
-.console-body {
-  padding: 4px 12px 8px;
-}
-
-.log-entry {
-  padding: 1px 0;
-  color: var(--text-muted);
-  white-space: pre-wrap;
-  line-height: 1.6;
-}
-
-.log-entry .log-time {
-  color: var(--text-dim);
-  margin-right: 8px;
-}
-
-.log-entry.log-join { color: var(--green); }
-.log-entry.log-leave { color: var(--red); }
-.log-entry.log-state { color: var(--yellow); }
-.log-entry.log-group { color: var(--accent); }
 
 /* ── Legend (inline in main header area) ── */
 .main-header {
@@ -632,7 +627,7 @@ body {
   z-index: 4;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
-  padding: 8px 12px;
+  padding: 8px 14px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -642,20 +637,21 @@ body {
   display: flex;
   gap: 14px;
   margin-left: auto;
+  flex-wrap: wrap;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
 }
 
 .legend-swatch {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 2px;
 }
 
@@ -677,7 +673,7 @@ body {
 
 .empty-state-text {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.5px;
 }
 
@@ -785,13 +781,13 @@ body {
     </div>
   </aside>
 
-  <!-- ── Main: matrix ── -->
+  <!-- ── Main: card grid ── -->
   <main class="main" id="main-area">
     <div class="empty-state" id="empty-state">
       <div class="empty-state-icon">&#9654;</div>
       <div class="empty-state-text">Configure and start a simulation</div>
     </div>
-    <div id="matrix-wrapper" style="display:none;">
+    <div id="view-wrapper" style="display:none;">
       <div class="main-header" id="main-header">
         <div class="header-status">
           <span id="status-state" class="status-badge s-idle">IDLE</span>
@@ -800,30 +796,19 @@ body {
         </div>
         <div class="legend">
           <div class="legend-item">
-            <div class="legend-swatch" style="background:var(--green-dim);"></div> Assigned
+            <div class="legend-swatch" style="background:var(--green-dim); border:1px solid rgba(52,211,153,0.25);"></div> Assigned
           </div>
           <div class="legend-item">
-            <div class="legend-swatch" style="background:var(--accent-dim);"></div> Pending
+            <div class="legend-swatch" style="background:var(--accent-dim); border:1px solid rgba(76,154,255,0.3);"></div> Pending
           </div>
           <div class="legend-item">
-            <div class="legend-swatch" style="background:var(--yellow-dim);"></div> Revoking
+            <div class="legend-swatch" style="background:var(--yellow-dim); border:1px solid rgba(251,191,36,0.35);"></div> Revoking
           </div>
         </div>
       </div>
-      <table class="matrix-table" id="matrix-table">
-        <thead id="matrix-head"></thead>
-        <tbody id="matrix-body"></tbody>
-      </table>
+      <div class="card-grid" id="card-grid"></div>
     </div>
   </main>
-
-  <!-- ── Console ── -->
-  <div class="console" id="console-panel">
-    <div class="console-header">
-      <span>Event Log</span>
-    </div>
-    <div class="console-body" id="console-log"></div>
-  </div>
 </div>
 
 <script>
@@ -861,7 +846,7 @@ function setSimulationUI(running) {
     btn.disabled = false;
     document.getElementById('btn-autopilot').disabled = false;
     document.getElementById('empty-state').style.display = 'none';
-    document.getElementById('matrix-wrapper').style.display = '';
+    document.getElementById('view-wrapper').style.display = '';
   } else {
     unlockConfig();
     btn.textContent = 'Start';
@@ -871,10 +856,8 @@ function setSimulationUI(running) {
     document.getElementById('btn-autopilot').disabled = true;
     document.getElementById('btn-autopilot').className = 'btn btn-autopilot';
     document.getElementById('empty-state').style.display = '';
-    document.getElementById('matrix-wrapper').style.display = 'none';
-    document.getElementById('matrix-head').innerHTML = '';
-    document.getElementById('matrix-body').innerHTML = '';
-    document.getElementById('matrix-head').removeAttribute('data-built');
+    document.getElementById('view-wrapper').style.display = 'none';
+    document.getElementById('card-grid').innerHTML = '';
     updateStatus(null);
   }
 }
@@ -940,9 +923,7 @@ async function startSimulation() {
     prevState = null;
     localDelays = {};
     prevCtrlState = {};
-    document.getElementById('console-log').innerHTML = '';
     setSimulationUI(true);
-    logEvent('log-group', 'Simulation started');
     startPolling();
   } catch (e) {
     alert('Error: ' + e.message);
@@ -959,7 +940,6 @@ async function stopSimulation() {
   try {
     await fetch('/api/simulator/stop', {method: 'POST'});
   } catch (e) { /* ignore */ }
-  logEvent('log-group', 'Simulation stopped');
   autopilotRunning = false;
   prevState = null;
   document.getElementById('btn-autopilot').className = 'btn-autopilot';
@@ -972,7 +952,6 @@ async function toggleAutopilot() {
     await fetch('/api/simulator/chaos/stop', {method: 'POST'});
     autopilotRunning = false;
     btn.className = 'btn btn-autopilot';
-    logEvent('log-group', 'Auto-Pilot off');
   } else {
     await fetch('/api/simulator/chaos/start', {
       method: 'POST',
@@ -981,7 +960,6 @@ async function toggleAutopilot() {
     });
     autopilotRunning = true;
     btn.className = 'btn btn-autopilot active';
-    logEvent('log-group', 'Auto-Pilot on');
   }
 }
 
@@ -1003,82 +981,25 @@ async function pollGroup() {
     const data = await resp.json();
     if (data.phase !== 'RUNNING') return;
     updateStatus(data);
-    detectChanges(data);
     renderGroup(data);
     prevState = data;
   } catch (e) { /* ignore */ }
 }
 
-// ── Console log ──
-
-function logEvent(cls, message) {
-  const log = document.getElementById('console-log');
-  const entry = document.createElement('div');
-  entry.className = 'log-entry ' + cls;
-  const now = new Date();
-  const ts = now.toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'});
-  entry.innerHTML = '<span class="log-time">' + ts + '</span>' + message;
-  log.appendChild(entry);
-  const panel = document.getElementById('console-panel');
-  panel.scrollTop = panel.scrollHeight;
+function splitPartitionKey(key) {
+  const lastDash = key.lastIndexOf('-');
+  return [key.substring(0, lastDash), key.substring(lastDash + 1)];
 }
 
-function detectChanges(data) {
-  if (!prevState) return;
+// ── Rendering: bento cards ──
 
-  if (data.groupState !== prevState.groupState) {
-    logEvent('log-state', 'Group state: ' + prevState.groupState + ' \u2192 ' + data.groupState);
-  }
-  if (data.groupEpoch !== prevState.groupEpoch) {
-    logEvent('log-group', 'Group epoch: ' + prevState.groupEpoch + ' \u2192 ' + data.groupEpoch);
-  }
-  if (data.targetAssignmentEpoch !== prevState.targetAssignmentEpoch) {
-    logEvent('log-group', 'Target assignment epoch: ' + prevState.targetAssignmentEpoch + ' \u2192 ' + data.targetAssignmentEpoch);
-  }
-
-  const prevMembers = {};
-  for (const m of (prevState.members || [])) prevMembers[m.clientId] = m;
-
-  for (const m of (data.members || [])) {
-    const prev = prevMembers[m.clientId];
-    if (!prev) continue;
-
-    if (m.state !== prev.state) {
-      logEvent(m.state === 'Stopped' ? 'log-leave' : 'log-state',
-        m.clientId + ': ' + prev.state + ' \u2192 ' + m.state);
-    }
-
-    if (!prev.memberId && m.memberId) {
-      logEvent('log-join', m.clientId + ' joined (' + m.memberId.substring(0, 12) + '\u2026)');
-    }
-
-    if (prev.memberId && !m.memberId) {
-      logEvent('log-leave', m.clientId + ' left the group');
-    }
-
-    if (m.memberEpoch !== prev.memberEpoch && m.memberEpoch >= 0) {
-      logEvent('log-state', m.clientId + ': epoch ' + prev.memberEpoch + ' \u2192 ' + m.memberEpoch);
-    }
-
-    const prevAssign = new Set(prev.assignment || []);
-    const currAssign = new Set(m.assignment || []);
-    const gained = [...currAssign].filter(x => !prevAssign.has(x));
-    const lost = [...prevAssign].filter(x => !currAssign.has(x));
-    if (gained.length > 0) {
-      logEvent('log-join', m.clientId + ' assigned: ' + gained.map(formatPartitionKey).join(', '));
-    }
-    if (lost.length > 0) {
-      logEvent('log-leave', m.clientId + ' revoked: ' + lost.map(formatPartitionKey).join(', '));
-    }
-  }
+function badgeClassFor(state) {
+  if (state === 'Stable') return 'stable';
+  if (state === 'Reconciling') return 'reconciling';
+  if (state === 'Stopping') return 'stopping';
+  if (state === 'Joining') return 'joining';
+  return 'stopped';
 }
-
-function formatPartitionKey(key) {
-  const [topic, partition] = splitPartitionKey(key);
-  return topic + ':' + partition;
-}
-
-// ── Rendering ──
 
 function renderGroup(data) {
   if (!currentConfig) return;
@@ -1087,192 +1008,227 @@ function renderGroup(data) {
   for (let i = 1; i <= currentConfig.numTopics; i++) {
     topics.push(currentConfig.topicPrefix + '-' + i);
   }
+  const numPartitions = currentConfig.numPartitions;
 
-  const thead = document.getElementById('matrix-head');
-  if (!thead.dataset.built) {
-    let headHtml = '<tr><th class="member-col-header">Member</th>';
-    for (const t of topics) {
-      headHtml += '<th class="topic-header">' +
-        '<div class="topic-header-name">' + t + '</div>' +
-        '<div class="topic-header-subs">' +
-          '<div class="topic-header-sub">server</div>' +
-          '<div class="topic-header-sub">consumer</div>' +
-        '</div></th>';
-    }
-    headHtml += '</tr>';
-    thead.innerHTML = headHtml;
-    thead.dataset.built = '1';
-  }
-
+  const grid = document.getElementById('card-grid');
   const members = (data.members || []).slice().sort((a, b) => a.slotIndex - b.slotIndex);
-  const tbody = document.getElementById('matrix-body');
+
+  const validIds = new Set();
 
   for (const m of members) {
-    const rowId = 'row-' + m.slotIndex;
-    let row = document.getElementById(rowId);
+    const cardId = 'card-' + m.slotIndex;
+    validIds.add(cardId);
+    let card = document.getElementById(cardId);
+
+    if (!card) {
+      card = document.createElement('div');
+      card.id = cardId;
+      card.className = 'card';
+      card.innerHTML =
+        '<div class="card-meta">' +
+          '<div class="card-meta-row">' +
+            '<span class="member-name"></span>' +
+            '<span class="badge"></span>' +
+          '</div>' +
+          '<div class="meta-line meta-line-id">' +
+            '<span class="meta-line-label">id</span>' +
+            '<span class="meta-line-value"></span>' +
+          '</div>' +
+          '<div class="meta-line meta-line-instance">' +
+            '<span class="meta-line-label">instance</span>' +
+            '<span class="meta-line-value"></span>' +
+          '</div>' +
+          '<div class="meta-line meta-line-epoch">' +
+            '<span class="meta-line-label">epoch</span>' +
+            '<span class="meta-line-value"></span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="zones"></div>' +
+        '<div class="member-controls"></div>';
+      grid.appendChild(card);
+    }
+
     const isStopped = m.state === 'Stopped';
-    const isStable = m.state === 'Stable';
-    const isReconciling = m.state === 'Reconciling';
+    const bCls = badgeClassFor(m.state);
+    // Card root classes (state only — divergence applied below).
+    card.className = 'card ' + bCls + (isStopped ? ' stopped' : '');
 
-    if (!row) {
-      row = document.createElement('tr');
-      row.id = rowId;
-      tbody.appendChild(row);
+    // ── Metadata column ──
+    const nameEl = card.querySelector('.member-name');
+    const badgeEl = card.querySelector('.badge');
+    const idValEl = card.querySelector('.meta-line-id .meta-line-value');
+    const instanceValEl = card.querySelector('.meta-line-instance .meta-line-value');
+    const epochValEl = card.querySelector('.meta-line-epoch .meta-line-value');
+
+    if (nameEl.textContent !== m.clientId) nameEl.textContent = m.clientId;
+    if (badgeEl.textContent !== m.state) {
+      badgeEl.textContent = m.state;
+      badgeEl.className = 'badge ' + bCls;
     }
 
-    while (row.cells.length < 1 + topics.length) row.insertCell();
-    while (row.cells.length > 1 + topics.length) row.deleteCell(row.cells.length - 1);
-
-    // ── Member cell ──
-    const memberCell = row.cells[0];
-    memberCell.className = 'member-info' + (isStopped ? ' stopped-row' : '');
-
-    const isStopping = m.state === 'Stopping';
-
-    let badgeClass = 'stopped';
-    if (isStable) badgeClass = 'stable';
-    else if (isReconciling) badgeClass = 'reconciling';
-    else if (isStopping) badgeClass = 'stopping';
-    else if (m.state === 'Joining') badgeClass = 'joining';
-
-    // Ensure layout wrapper exists.
-    let layoutId = 'layout-' + m.slotIndex;
-    let layoutDiv = document.getElementById(layoutId);
-    if (!layoutDiv) {
-      layoutDiv = document.createElement('div');
-      layoutDiv.id = layoutId;
-      layoutDiv.className = 'member-cell-layout';
-      memberCell.innerHTML = '';
-      memberCell.appendChild(layoutDiv);
+    const idTxt = m.memberId || '\u2014';
+    if (idValEl.textContent !== idTxt) {
+      idValEl.textContent = idTxt;
+      idValEl.className = 'meta-line-value' + (m.memberId ? '' : ' dim');
     }
 
-    // Left: server state.
-    let infoId = 'info-' + m.slotIndex;
-    let infoDiv = document.getElementById(infoId);
-    if (!infoDiv) {
-      infoDiv = document.createElement('div');
-      infoDiv.id = infoId;
-      infoDiv.className = 'member-state';
-      layoutDiv.appendChild(infoDiv);
+    const instanceTxt = m.instanceId || '\u2014';
+    if (instanceValEl.textContent !== instanceTxt) {
+      instanceValEl.textContent = instanceTxt;
+      instanceValEl.className = 'meta-line-value' + (m.instanceId ? '' : ' dim');
     }
 
-    const infoKey = m.state + '|' + m.memberId + '|' + m.memberEpoch;
-    if (infoDiv.dataset.key !== infoKey) {
-      infoDiv.dataset.key = infoKey;
-      let infoHtml = '<div class="member-header"><span class="member-name">' + m.clientId +
-        '</span> <span class="badge ' + badgeClass + '">' + m.state + '</span></div>';
-      if (m.memberId) {
-        infoHtml += '<div class="member-detail">' + m.memberId + '</div>';
+    const epochTxt = (m.memberEpoch >= 0 ? String(m.memberEpoch) : '\u2014');
+    if (epochValEl.textContent !== epochTxt) {
+      epochValEl.textContent = epochTxt;
+      epochValEl.className = 'meta-line-value' + (m.memberEpoch >= 0 ? '' : ' dim');
+    }
+
+    // ── Zones ──
+    const coordCurrent = new Set(m.assignment || []);
+    const coordTarget = new Set(m.targetAssignment || []);
+    const consumerLocal = new Set(m.localAssignment || []);
+
+    // Coordinator-view (server) chips by topic, merging current + target.
+    const serverByTopic = {};
+    const consumerByTopic = {};
+    let serverCount = 0;
+    let consumerCount = 0;
+
+    for (const t of topics) {
+      serverByTopic[t] = [];
+      consumerByTopic[t] = [];
+    }
+
+    for (const t of topics) {
+      for (let p = 0; p < numPartitions; p++) {
+        const key = t + '-' + p;
+        const inCurrent = coordCurrent.has(key);
+        const inTarget = coordTarget.has(key);
+        const inLocal = consumerLocal.has(key);
+        if (inCurrent && inTarget) {
+          serverByTopic[t].push({p: p, cls: 'assigned'});
+          serverCount++;
+        } else if (inTarget) {
+          serverByTopic[t].push({p: p, cls: 'pending-assignment'});
+          serverCount++;
+        } else if (inCurrent) {
+          serverByTopic[t].push({p: p, cls: 'pending-revocation'});
+          serverCount++;
+        }
+        if (inLocal) {
+          consumerByTopic[t].push({p: p, cls: 'assigned'});
+          consumerCount++;
+        }
       }
-      infoHtml += '<div class="member-detail">epoch ' + (m.memberEpoch >= 0 ? m.memberEpoch : '\u2014') + '</div>';
-      infoDiv.innerHTML = infoHtml;
     }
 
-    // Right: controls stack.
-    let ctrlId = 'ctrl-' + m.slotIndex;
-    let ctrlDiv = document.getElementById(ctrlId);
-    if (!ctrlDiv) {
-      ctrlDiv = document.createElement('div');
-      ctrlDiv.id = ctrlId;
-      ctrlDiv.className = 'member-controls';
-      layoutDiv.appendChild(ctrlDiv);
+    const zonesEl = card.querySelector('.zones');
+
+    // Signature key spans the whole grid; rebuild as a unit when anything moves.
+    const zonesKey = serverCount + '|' + consumerCount + '|' + topics.map(t =>
+      t + ':' + serverByTopic[t].map(c => c.p + c.cls[0]).join(',') +
+      ':' + consumerByTopic[t].map(c => c.p).join(',')
+    ).join('|');
+
+    if (zonesEl.dataset.key !== zonesKey) {
+      zonesEl.dataset.key = zonesKey;
+      zonesEl.innerHTML = buildZonesGrid(topics, serverByTopic, consumerByTopic, serverCount, consumerCount);
     }
 
+    // ── Controls ──
+    const ctrlDiv = card.querySelector('.member-controls');
     const displayDelay = localDelays[m.slotIndex] !== undefined ? localDelays[m.slotIndex] : m.processingDelayMs;
     const ctrlKey = m.subscribed + '|' + m.blocked + '|' + m.partitioned + '|' + displayDelay;
     const dis = !m.subscribed ? ' disabled' : '';
 
     if (ctrlKey !== prevCtrlState[m.slotIndex]) {
       prevCtrlState[m.slotIndex] = ctrlKey;
-      let ctrlHtml = '';
-
-      // Start / Stop.
+      let html = '';
       if (m.subscribed) {
-        ctrlHtml += '<button class="ctrl-btn act-stop" onclick="unsubscribe(' + m.slotIndex + ')">stop</button>';
+        html += '<button class="ctrl-btn act-stop" onclick="unsubscribe(' + m.slotIndex + ')">stop</button>';
       } else {
-        ctrlHtml += '<button class="ctrl-btn act-start" onclick="subscribe(' + m.slotIndex + ')">start</button>';
+        html += '<button class="ctrl-btn act-start" onclick="subscribe(' + m.slotIndex + ')">start</button>';
       }
-
-      // Block poll / Block network — always shown, disabled when stopped.
-      ctrlHtml += '<button class="ctrl-btn act-block-poll' + (m.blocked ? ' on' : '') + '"' + dis +
+      html += '<button class="ctrl-btn act-block-poll' + (m.blocked ? ' on' : '') + '"' + dis +
         ' onclick="' + (m.blocked ? 'unblockMember(' : 'blockMember(') + m.slotIndex + ')">block polling</button>';
-      ctrlHtml += '<button class="ctrl-btn act-block-net' + (m.partitioned ? ' on' : '') + '"' + dis +
+      html += '<button class="ctrl-btn act-block-net' + (m.partitioned ? ' on' : '') + '"' + dis +
         ' onclick="' + (m.partitioned ? 'healMember(' : 'partitionMember(') + m.slotIndex + ')">block network</button>';
-
-      // Delay input.
-      ctrlHtml += '<div class="ctrl-delay' + (m.subscribed ? '' : ' disabled') + '">';
-      ctrlHtml += '<span class="ctrl-delay-label">polling delay</span>';
-      ctrlHtml += '<input class="ctrl-delay-input" type="number" min="0" max="120" value="' +
+      html += '<div class="ctrl-delay' + (m.subscribed ? '' : ' disabled') + '">';
+      html += '<span class="ctrl-delay-label">delay</span>';
+      html += '<input class="ctrl-delay-input" type="number" min="0" max="120" value="' +
         Math.round(displayDelay / 1000) + '" onchange="onDelayInput(' + m.slotIndex + ', this)"' + dis + '>';
-      ctrlHtml += '<span class="ctrl-delay-unit">s</span>';
-      ctrlHtml += '</div>';
-
-      ctrlDiv.innerHTML = ctrlHtml;
-    }
-
-    // ── Partition cells ──
-    // Cell is split vertically:
-    //   left side  = server view (current vs target, three states)
-    //   right side = consumer view (local from rebalance listener, single state)
-    // Each side just shows the chips it has — no alignment between sides.
-    const coordCurrent = new Set(m.assignment || []);
-    const coordTarget = new Set(m.targetAssignment || []);
-    const consumerLocal = new Set(m.localAssignment || []);
-    const numPartitions = currentConfig.numPartitions;
-
-    for (let ti = 0; ti < topics.length; ti++) {
-      const cell = row.cells[1 + ti];
-      cell.className = 'matrix-cell' + (isStopped ? ' stopped-row' : '');
-
-      const topic = topics[ti];
-
-      const serverChips = [];
-      const consumerChips = [];
-      for (let p = 0; p < numPartitions; p++) {
-        const key = topic + '-' + p;
-        const inCurrent = coordCurrent.has(key);
-        const inTarget = coordTarget.has(key);
-        const inLocal = consumerLocal.has(key);
-
-        if (inCurrent && inTarget) serverChips.push({p: p, cls: 'assigned'});
-        else if (inTarget) serverChips.push({p: p, cls: 'pending-assignment'});
-        else if (inCurrent) serverChips.push({p: p, cls: 'pending-revocation'});
-
-        if (inLocal) consumerChips.push({p: p, cls: 'assigned'});
-      }
-
-      const cellKey =
-        'S:' + serverChips.map(c => c.p + ':' + c.cls).join(',') +
-        '|C:' + consumerChips.map(c => c.p).join(',');
-      if (cell.dataset.key !== cellKey) {
-        cell.dataset.key = cellKey;
-        let html = '<div class="cell-split">';
-        html += '<div class="cell-side cell-side-server">';
-        for (const c of serverChips) {
-          html += '<span class="partition-chip ' + c.cls + '">' + c.p + '</span>';
-        }
-        html += '</div>';
-        html += '<div class="cell-side cell-side-consumer">';
-        for (const c of consumerChips) {
-          html += '<span class="partition-chip ' + c.cls + '">' + c.p + '</span>';
-        }
-        html += '</div>';
-        html += '</div>';
-        cell.innerHTML = html;
-      }
+      html += '<span class="ctrl-delay-unit">s</span>';
+      html += '</div>';
+      ctrlDiv.innerHTML = html;
     }
   }
 
-  // Remove stale rows.
-  const validIds = new Set(members.map(m => 'row-' + m.slotIndex));
-  for (let i = tbody.rows.length - 1; i >= 0; i--) {
-    if (!validIds.has(tbody.rows[i].id)) {
-      tbody.deleteRow(i);
+  // Remove stale cards (consumer count shrank).
+  for (let i = grid.children.length - 1; i >= 0; i--) {
+    const child = grid.children[i];
+    if (!validIds.has(child.id)) {
+      grid.removeChild(child);
+      const m = child.id.match(/^card-(\d+)$/);
+      if (m) {
+        delete prevCtrlState[parseInt(m[1])];
+        delete localDelays[parseInt(m[1])];
+      }
     }
   }
 }
 
-// ── Slider handling ──
+function buildZonesGrid(topics, serverByTopic, consumerByTopic, serverCount, consumerCount) {
+  // 4-column grid: topic name | coordinator chips | divider | consumer chips.
+  // The divider is a single element spanning all rows for a continuous line.
+  let html = '';
+
+  // Header row.
+  html += '<div class="zone-cell zone-header zone-cell-name"></div>';
+  html += '<div class="zone-cell zone-header zone-cell-server">' +
+    '<span class="zone-label">Coordinator view</span>' +
+    '<span class="zone-count">' + serverCount + ' part' + (serverCount === 1 ? '' : 's') + '</span>' +
+    '</div>';
+  html += '<div class="zone-cell zone-header zone-cell-consumer">' +
+    '<span class="zone-label">Consumer view</span>' +
+    '<span class="zone-count">' + consumerCount + ' part' + (consumerCount === 1 ? '' : 's') + '</span>' +
+    '</div>';
+
+  // One row per topic — three cells each.
+  for (const t of topics) {
+    html += '<div class="zone-cell zone-row zone-cell-name">' +
+      '<span class="zone-topic-name" title="' + escapeHtml(t) + '">' + escapeHtml(t) + '</span>' +
+      '</div>';
+
+    html += '<div class="zone-cell zone-row zone-cell-server"><div class="zone-chips">';
+    for (const c of serverByTopic[t]) {
+      html += '<span class="partition-chip ' + c.cls + '">' + c.p + '</span>';
+    }
+    html += '</div></div>';
+
+    html += '<div class="zone-cell zone-row zone-cell-consumer"><div class="zone-chips">';
+    for (const c of consumerByTopic[t]) {
+      html += '<span class="partition-chip ' + c.cls + '">' + c.p + '</span>';
+    }
+    html += '</div></div>';
+  }
+
+  return html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+function setsEqual(a, b) {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+// ── Member control handlers ──
 
 function onDelayInput(index, input) {
   const seconds = parseInt(input.value) || 0;
@@ -1281,43 +1237,31 @@ function onDelayInput(index, input) {
   setDelay(index, ms);
 }
 
-function splitPartitionKey(key) {
-  const lastDash = key.lastIndexOf('-');
-  return [key.substring(0, lastDash), key.substring(lastDash + 1)];
-}
-
 async function subscribe(index) {
-  logEvent('log-join', 'consumer-' + index + ': subscribing\u2026');
   await fetch('/api/simulator/members/' + index + '/subscribe', {method: 'POST'});
 }
 
 async function unsubscribe(index) {
-  logEvent('log-leave', 'consumer-' + index + ': unsubscribing\u2026');
   await fetch('/api/simulator/members/' + index + '/unsubscribe', {method: 'POST'});
 }
 
 async function partitionMember(index) {
-  logEvent('log-leave', 'consumer-' + index + ': network partition\u2026');
   await fetch('/api/simulator/members/' + index + '/partition', {method: 'POST'});
 }
 
 async function healMember(index) {
-  logEvent('log-join', 'consumer-' + index + ': healing partition\u2026');
   await fetch('/api/simulator/members/' + index + '/heal', {method: 'POST'});
 }
 
 async function blockMember(index) {
-  logEvent('log-state', 'consumer-' + index + ': blocking poll()\u2026');
   await fetch('/api/simulator/members/' + index + '/block', {method: 'POST'});
 }
 
 async function unblockMember(index) {
-  logEvent('log-state', 'consumer-' + index + ': unblocking poll()\u2026');
   await fetch('/api/simulator/members/' + index + '/unblock', {method: 'POST'});
 }
 
 async function setDelay(index, value) {
-  logEvent('log-state', 'consumer-' + index + ': delay \u2192 ' + (value / 1000).toFixed(0) + 's');
   await fetch('/api/simulator/members/' + index + '/delay', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1332,7 +1276,6 @@ async function setDelay(index, value) {
     const data = await resp.json();
     if (data.phase === 'RUNNING') {
       currentConfig = data.config;
-      // Populate config fields from running config.
       if (currentConfig) {
         document.getElementById('cfg-group-id').value = currentConfig.groupId || '';
         document.getElementById('cfg-topic-prefix').value = currentConfig.topicPrefix || '';
