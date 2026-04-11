@@ -479,30 +479,80 @@ body {
 .matrix-cell {
   vertical-align: top;
   white-space: normal;
+  padding: 0 !important;
+  height: 1px; /* needed so .cell-split height:100% can stretch to row height */
 }
 
 .matrix-cell.stopped-row {
   opacity: 0.25;
 }
 
-.partition-chips {
+.cell-split {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  height: 100%;
+  min-height: 100%;
+}
+
+.cell-side {
+  flex: 1 1 50%;
+  min-width: 0;
+  min-height: 22px;
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 3px;
-  justify-content: flex-start;
+  padding: 6px;
+}
+
+.cell-side-server {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.matrix-table th.topic-header {
+  padding: 0;
+  min-width: 600px;
+}
+
+.topic-header-name {
+  padding: 6px 8px 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: center;
+}
+
+.topic-header-subs {
+  display: flex;
+}
+
+.topic-header-sub {
+  flex: 1 1 50%;
+  padding: 4px 8px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.topic-header-sub + .topic-header-sub {
+  border-left: 1px solid var(--border-subtle);
 }
 
 .partition-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 30px;
-  height: 24px;
-  padding: 2px 6px;
+  width: 28px;
+  height: 22px;
+  padding: 0;
   border-radius: 3px;
   font-size: 11px;
   font-weight: 600;
   font-family: var(--font-mono);
+  flex: 0 0 auto;
   transition: background 0.2s, color 0.2s;
 }
 
@@ -511,14 +561,14 @@ body {
   color: var(--green);
 }
 
-.partition-chip.pending-revocation {
-  background: var(--yellow-dim);
-  color: var(--yellow);
-}
-
 .partition-chip.pending-assignment {
   background: var(--accent-dim);
   color: var(--accent);
+}
+
+.partition-chip.pending-revocation {
+  background: var(--yellow-dim);
+  color: var(--yellow);
 }
 
 /* ── Console ── */
@@ -672,11 +722,11 @@ body {
       </div>
       <div class="field">
         <label class="field-label">Topics</label>
-        <input class="field-input" type="number" id="cfg-num-topics" value="3" min="1" max="20">
+        <input class="field-input" type="number" id="cfg-num-topics" value="2" min="1" max="20">
       </div>
       <div class="field">
         <label class="field-label">Partitions</label>
-        <input class="field-input" type="number" id="cfg-num-partitions" value="12" min="1" max="100">
+        <input class="field-input" type="number" id="cfg-num-partitions" value="18" min="1" max="100">
       </div>
       <div class="field">
         <label class="field-label">Consumers</label>
@@ -750,13 +800,13 @@ body {
         </div>
         <div class="legend">
           <div class="legend-item">
-            <div class="legend-swatch" style="background:var(--green-dim);border:1px solid rgba(52,211,153,0.25);"></div> Assigned
+            <div class="legend-swatch" style="background:var(--green-dim);"></div> Assigned
           </div>
           <div class="legend-item">
-            <div class="legend-swatch" style="background:var(--yellow-dim);border:1px solid rgba(251,191,36,0.2);"></div> Revoking
+            <div class="legend-swatch" style="background:var(--accent-dim);"></div> Pending
           </div>
           <div class="legend-item">
-            <div class="legend-swatch" style="background:var(--accent-dim);border:1px solid rgba(76,154,255,0.2);"></div> Pending
+            <div class="legend-swatch" style="background:var(--yellow-dim);"></div> Revoking
           </div>
         </div>
       </div>
@@ -1041,7 +1091,14 @@ function renderGroup(data) {
   const thead = document.getElementById('matrix-head');
   if (!thead.dataset.built) {
     let headHtml = '<tr><th class="member-col-header">Member</th>';
-    for (const t of topics) headHtml += '<th>' + t + '</th>';
+    for (const t of topics) {
+      headHtml += '<th class="topic-header">' +
+        '<div class="topic-header-name">' + t + '</div>' +
+        '<div class="topic-header-subs">' +
+          '<div class="topic-header-sub">server</div>' +
+          '<div class="topic-header-sub">consumer</div>' +
+        '</div></th>';
+    }
     headHtml += '</tr>';
     thead.innerHTML = headHtml;
     thead.dataset.built = '1';
@@ -1154,48 +1211,54 @@ function renderGroup(data) {
     }
 
     // ── Partition cells ──
-    const assigned = new Set(m.assignment || []);
-    const target = new Set(m.targetAssignment || []);
+    // Cell is split vertically:
+    //   left side  = server view (current vs target, three states)
+    //   right side = consumer view (local from rebalance listener, single state)
+    // Each side just shows the chips it has — no alignment between sides.
+    const coordCurrent = new Set(m.assignment || []);
+    const coordTarget = new Set(m.targetAssignment || []);
+    const consumerLocal = new Set(m.localAssignment || []);
+    const numPartitions = currentConfig.numPartitions;
 
     for (let ti = 0; ti < topics.length; ti++) {
       const cell = row.cells[1 + ti];
       cell.className = 'matrix-cell' + (isStopped ? ' stopped-row' : '');
 
       const topic = topics[ti];
-      const partitions = [];
-      const allKeys = new Set([...assigned, ...target]);
-      for (const key of allKeys) {
-        const [tName, pIdx] = splitPartitionKey(key);
-        if (tName === topic) {
-          const inAssigned = assigned.has(key);
-          const inTarget = target.has(key);
 
-          let stateClass;
-          if (inAssigned && !inTarget && !isStable) {
-            stateClass = 'pending-revocation';
-          } else if (inAssigned) {
-            stateClass = 'assigned';
-          } else if (inTarget && !inAssigned) {
-            stateClass = 'pending-assignment';
-          } else {
-            stateClass = 'assigned';
-          }
+      const serverChips = [];
+      const consumerChips = [];
+      for (let p = 0; p < numPartitions; p++) {
+        const key = topic + '-' + p;
+        const inCurrent = coordCurrent.has(key);
+        const inTarget = coordTarget.has(key);
+        const inLocal = consumerLocal.has(key);
 
-          partitions.push({partition: parseInt(pIdx), stateClass: stateClass});
-        }
+        if (inCurrent && inTarget) serverChips.push({p: p, cls: 'assigned'});
+        else if (inTarget) serverChips.push({p: p, cls: 'pending-assignment'});
+        else if (inCurrent) serverChips.push({p: p, cls: 'pending-revocation'});
+
+        if (inLocal) consumerChips.push({p: p, cls: 'assigned'});
       }
 
-      partitions.sort((a, b) => a.partition - b.partition);
-
-      const cellKey = partitions.map(p => p.partition + ':' + p.stateClass).join(',');
+      const cellKey =
+        'S:' + serverChips.map(c => c.p + ':' + c.cls).join(',') +
+        '|C:' + consumerChips.map(c => c.p).join(',');
       if (cell.dataset.key !== cellKey) {
         cell.dataset.key = cellKey;
-        let chipsHtml = '<div class="partition-chips">';
-        for (const p of partitions) {
-          chipsHtml += '<span class="partition-chip ' + p.stateClass + '">' + p.partition + '</span>';
+        let html = '<div class="cell-split">';
+        html += '<div class="cell-side cell-side-server">';
+        for (const c of serverChips) {
+          html += '<span class="partition-chip ' + c.cls + '">' + c.p + '</span>';
         }
-        chipsHtml += '</div>';
-        cell.innerHTML = chipsHtml;
+        html += '</div>';
+        html += '<div class="cell-side cell-side-consumer">';
+        for (const c of consumerChips) {
+          html += '<span class="partition-chip ' + c.cls + '">' + c.p + '</span>';
+        }
+        html += '</div>';
+        html += '</div>';
+        cell.innerHTML = html;
       }
     }
   }

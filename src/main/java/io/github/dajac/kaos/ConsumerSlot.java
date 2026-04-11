@@ -1,7 +1,10 @@
 package io.github.dajac.kaos;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -11,6 +14,7 @@ public class ConsumerSlot {
     private final AtomicBoolean blocked = new AtomicBoolean(false);
     private final AtomicBoolean partitioned = new AtomicBoolean(false);
     private final AtomicInteger processingDelayMs;
+    private final Set<TopicPartition> localAssignment = ConcurrentHashMap.newKeySet();
     private KafkaConsumer<String, String> consumer;
     private Thread thread;
 
@@ -41,6 +45,10 @@ public class ConsumerSlot {
 
     public AtomicInteger processingDelayMs() {
         return processingDelayMs;
+    }
+
+    public Set<TopicPartition> localAssignment() {
+        return localAssignment;
     }
 
     public KafkaConsumer<String, String> consumer() {

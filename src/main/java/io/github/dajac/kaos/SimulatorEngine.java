@@ -4,10 +4,12 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -307,15 +309,36 @@ public class SimulatorEngine {
         KafkaConsumer<String, String> consumer = slot.consumer();
         boolean currentlySubscribed = false;
 
+        // Rebalance listener tracks the consumer's local view of its assignment.
+        // Fires on the polling thread during poll(), so it accurately reflects
+        // when the consumer client perceives reconciliation events.
+        ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                slot.localAssignment().addAll(partitions);
+            }
+
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                slot.localAssignment().removeAll(partitions);
+            }
+
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+                slot.localAssignment().removeAll(partitions);
+            }
+        };
+
         while (running.get()) {
             boolean desired = slot.desiredSubscribed().get();
             if (desired && !currentlySubscribed) {
-                consumer.subscribe(topics);
+                consumer.subscribe(topics, listener);
                 currentlySubscribed = true;
             } else if (!desired && currentlySubscribed) {
                 try {
                     consumer.unsubscribe();
                     currentlySubscribed = false;
+                    slot.localAssignment().clear();
                 } catch (Exception e) {
                     // May fail if called mid-reconciliation. Retry next iteration.
                 }

@@ -26,7 +26,7 @@ public class SimulatorConfig {
         this.groupId = "simulator-group";
         this.topicPrefix = "kaos";
         this.numTopics = 2;
-        this.numPartitions = 12;
+        this.numPartitions = 18;
         this.numConsumers = 6;
         this.sessionTimeoutMs = 45000;
         this.heartbeatIntervalMs = 5000;

@@ -16,6 +16,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.kafka.common.TopicPartition;
 
 public class SimulatorRestServer {
 
@@ -146,6 +149,12 @@ public class SimulatorRestServer {
             m.put("blocked", slot.blocked().get());
             m.put("partitioned", slot.partitioned().get());
             m.put("processingDelayMs", slot.processingDelayMs().get());
+
+            // Consumer's local view of its assignment, captured via rebalance listener.
+            Set<String> localAssignment = slot.localAssignment().stream()
+                .map(tp -> tp.topic() + "-" + tp.partition())
+                .collect(Collectors.toSet());
+            m.put("localAssignment", localAssignment);
 
             SimulatorGroupState.MemberState adminMember = adminMembers.get(slot.clientId());
             if (adminMember != null) {
