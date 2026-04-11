@@ -26,6 +26,8 @@
   --yellow-dim: rgba(251,191,36,0.10);
   --red: #f87171;
   --red-dim: rgba(248,113,113,0.10);
+  --fault: #5cd5ff;
+  --fault-dim: rgba(92,213,255,0.12);
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
   --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --sidebar-w: 280px;
@@ -565,18 +567,11 @@ body {
 .ctrl-btn.act-start { color: var(--green); border-color: rgba(52,211,153,0.3); }
 .ctrl-btn.act-stop { color: var(--red); border-color: rgba(248,113,113,0.3); }
 
-.ctrl-btn.act-block-poll { color: var(--text-muted); border-color: var(--border); }
-.ctrl-btn.act-block-poll.on {
-  color: var(--yellow);
-  border-color: rgba(251,191,36,0.4);
-  background: var(--yellow-dim);
-}
-
-.ctrl-btn.act-block-net { color: var(--text-muted); border-color: var(--border); }
-.ctrl-btn.act-block-net.on {
-  color: var(--red);
-  border-color: rgba(248,113,113,0.4);
-  background: var(--red-dim);
+.ctrl-btn.act-fault { color: var(--text-muted); border-color: var(--border); }
+.ctrl-btn.act-fault.on {
+  color: var(--fault);
+  border-color: rgba(92,213,255,0.45);
+  background: var(--fault-dim);
 }
 
 .ctrl-delay {
@@ -1150,10 +1145,12 @@ function renderGroup(data) {
       } else {
         html += '<button class="ctrl-btn act-start" onclick="subscribe(' + m.slotIndex + ')">start</button>';
       }
-      html += '<button class="ctrl-btn act-block-poll' + (m.blocked ? ' on' : '') + '"' + dis +
-        ' onclick="' + (m.blocked ? 'unblockMember(' : 'blockMember(') + m.slotIndex + ')">block polling</button>';
-      html += '<button class="ctrl-btn act-block-net' + (m.partitioned ? ' on' : '') + '"' + dis +
-        ' onclick="' + (m.partitioned ? 'healMember(' : 'partitionMember(') + m.slotIndex + ')">block network</button>';
+      html += '<button class="ctrl-btn act-fault' + (m.blocked ? ' on' : '') + '"' + dis +
+        ' onclick="' + (m.blocked ? 'unblockMember(' : 'blockMember(') + m.slotIndex + ')">' +
+        (m.blocked ? 'resume' : 'freeze') + '</button>';
+      html += '<button class="ctrl-btn act-fault' + (m.partitioned ? ' on' : '') + '"' + dis +
+        ' onclick="' + (m.partitioned ? 'healMember(' : 'partitionMember(') + m.slotIndex + ')">' +
+        (m.partitioned ? 'restore' : 'partition') + '</button>';
       html += '<div class="ctrl-delay' + (m.subscribed ? '' : ' disabled') + '">';
       html += '<span class="ctrl-delay-label">delay</span>';
       html += '<input class="ctrl-delay-input" type="number" min="0" max="120" value="' +
