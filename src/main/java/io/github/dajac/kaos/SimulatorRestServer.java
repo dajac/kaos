@@ -124,6 +124,7 @@ public class SimulatorRestServer {
         result.put("phase", engine.phase().name());
 
         if (adminState != null) {
+            result.put("groupType", adminState.groupType);
             result.put("groupEpoch", adminState.groupEpoch);
             result.put("targetAssignmentEpoch", adminState.targetAssignmentEpoch);
             result.put("groupState", adminState.groupState);
@@ -134,6 +135,16 @@ public class SimulatorRestServer {
         // Build merged member list: all slots + admin data.
         List<Map<String, Object>> members = new ArrayList<>();
         List<ConsumerSlot> slots = engine.slots();
+
+        // Group-level generation: max across slots (classic groups don't
+        // expose this through describeConsumerGroups).
+        int groupGeneration = -1;
+        for (ConsumerSlot s : slots) {
+            int g = s.generationId().get();
+            if (g > groupGeneration) groupGeneration = g;
+        }
+        result.put("groupGeneration", groupGeneration);
+
         Map<String, SimulatorGroupState.MemberState> adminMembers = new HashMap<>();
         if (adminState != null && adminState.members != null) {
             for (SimulatorGroupState.MemberState ms : adminState.members) {
@@ -149,6 +160,7 @@ public class SimulatorRestServer {
             m.put("blocked", slot.blocked().get());
             m.put("partitioned", slot.partitioned().get());
             m.put("processingDelayMs", slot.processingDelayMs().get());
+            m.put("generationId", slot.generationId().get());
 
             // Consumer's local view of its assignment, captured via rebalance listener.
             Set<String> localAssignment = slot.localAssignment().stream()

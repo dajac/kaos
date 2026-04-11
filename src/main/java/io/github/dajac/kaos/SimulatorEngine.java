@@ -84,7 +84,11 @@ public class SimulatorEngine {
             running.set(true);
 
             createTopics();
-            configureGroup();
+            // Group-level dynamic configs (consumer.session.timeout.ms etc.)
+            // only apply to consumer-protocol groups.
+            if ("consumer".equals(config.protocol)) {
+                configureGroup();
+            }
             startProxy();
             startProducer();
             startConsumers();
@@ -284,12 +288,24 @@ public class SimulatorEngine {
             props.put(ConsumerConfig.CLIENT_ID_CONFIG, slot.clientId());
             props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
             props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-            props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(config.maxPollIntervalMs));
-            if (config.assignor != null && !config.assignor.isEmpty()) {
-                props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, config.assignor);
+
+            boolean classic = "classic".equals(config.protocol);
+            if (classic) {
+                // KIP-848 consumer is the default in 4.x; opt out for classic.
+                props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic");
+                if (config.assignor != null && !config.assignor.isEmpty()) {
+                    props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+                        classicAssignorClass(config.assignor));
+                }
+            } else {
+                props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
+                if (config.assignor != null && !config.assignor.isEmpty()) {
+                    props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, config.assignor);
+                }
             }
+
             if (config.staticMembers) {
                 props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, config.groupId + "-" + slot.clientId());
             }
@@ -302,6 +318,21 @@ public class SimulatorEngine {
             thread.start();
 
             slots.add(slot);
+        }
+    }
+
+    private static String classicAssignorClass(String name) {
+        switch (name) {
+            case "range":
+                return "org.apache.kafka.clients.consumer.RangeAssignor";
+            case "roundrobin":
+                return "org.apache.kafka.clients.consumer.RoundRobinAssignor";
+            case "sticky":
+                return "org.apache.kafka.clients.consumer.StickyAssignor";
+            case "cooperative-sticky":
+                return "org.apache.kafka.clients.consumer.CooperativeStickyAssignor";
+            default:
+                return name; // assume fully qualified class name
         }
     }
 
@@ -339,6 +370,7 @@ public class SimulatorEngine {
                     consumer.unsubscribe();
                     currentlySubscribed = false;
                     slot.localAssignment().clear();
+                    slot.generationId().set(-1);
                 } catch (Exception e) {
                     // May fail if called mid-reconciliation. Retry next iteration.
                 }
@@ -356,15 +388,36 @@ public class SimulatorEngine {
             }
 
             try {
-                consumer.poll(Duration.ofMillis(500));
+                // poll(0) is non-blocking: it sends pending requests and reads
+                // any ready responses, but doesn't loop waiting for new I/O.
+                // This means a multi-step rebalance (e.g. classic eager:
+                // revoke → JoinGroup → SyncGroup → assign) advances by one
+                // network round-trip per call instead of completing entirely
+                // in one consumer.poll() invocation. External observers (the
+                // simulator's REST polling) can then sample the in-between
+                // states — including the empty assignment between revoke and
+                // assign.
+                consumer.poll(Duration.ofMillis(0));
             } catch (Exception e) {
                 if (running.get()) {
                     // Ignore transient errors.
                 }
             }
 
-            // Processing delay — simulates slow record processing.
-            // Re-read the delay each sleep iteration so changes apply immediately.
+            // Capture the current group generation. For the consumer protocol
+            // this is the member epoch; for the classic protocol it is the
+            // group generation id.
+            try {
+                slot.generationId().set(consumer.groupMetadata().generationId());
+            } catch (Exception e) {
+                // Ignore.
+            }
+
+            // Processing delay — simulates slow record processing. The
+            // delay also paces multi-step rebalances: with poll(0), each
+            // outer iteration advances the protocol by at most one network
+            // round-trip, so the in-between states stay visible for the
+            // entire delay window.
             long delayStart = System.currentTimeMillis();
             while (running.get()) {
                 int delayMs = slot.processingDelayMs().get();

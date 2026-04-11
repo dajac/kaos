@@ -17,6 +17,7 @@ public class SimulatorConfig {
     public int assignmentIntervalMs;
 
     // Consumer.
+    public String protocol; // "consumer" or "classic"
     public String assignor;
     public int maxPollIntervalMs;
     public int defaultProcessingDelayMs;
@@ -31,6 +32,7 @@ public class SimulatorConfig {
         this.sessionTimeoutMs = 45000;
         this.heartbeatIntervalMs = 5000;
         this.assignmentIntervalMs = 1000;
+        this.protocol = "consumer";
         this.assignor = "";
         this.maxPollIntervalMs = 300000;
         this.defaultProcessingDelayMs = 10000;

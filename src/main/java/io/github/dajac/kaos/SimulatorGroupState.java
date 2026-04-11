@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Set;
 
 public class SimulatorGroupState {
+    public String groupType; // "Consumer" or "Classic"
     public int groupEpoch;
     public int targetAssignmentEpoch;
     public String groupState;

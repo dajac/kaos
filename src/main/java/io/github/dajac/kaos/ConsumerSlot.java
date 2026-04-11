@@ -14,6 +14,7 @@ public class ConsumerSlot {
     private final AtomicBoolean blocked = new AtomicBoolean(false);
     private final AtomicBoolean partitioned = new AtomicBoolean(false);
     private final AtomicInteger processingDelayMs;
+    private final AtomicInteger generationId = new AtomicInteger(-1);
     private final Set<TopicPartition> localAssignment = ConcurrentHashMap.newKeySet();
     private KafkaConsumer<String, String> consumer;
     private Thread thread;
@@ -45,6 +46,10 @@ public class ConsumerSlot {
 
     public AtomicInteger processingDelayMs() {
         return processingDelayMs;
+    }
+
+    public AtomicInteger generationId() {
+        return generationId;
     }
 
     public Set<TopicPartition> localAssignment() {

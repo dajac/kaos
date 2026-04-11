@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kaos — KIP-848 Consumer Group Simulator</title>
+<title>Kaos — Kafka Consumer Group Simulator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -163,6 +163,11 @@ body {
 .status-badge.s-reconciling, .status-badge.s-assigning { background: var(--yellow-dim); color: var(--yellow); }
 .status-badge.s-empty { background: rgba(107,122,141,0.12); color: var(--text-dim); }
 .status-badge.s-idle { background: rgba(107,122,141,0.12); color: var(--text-dim); }
+.status-badge.s-type {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
 
 /* ── Form fields ── */
 .field {
@@ -696,7 +701,7 @@ body {
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-brand">Kaos</div>
-      <div class="sidebar-subtitle">KIP-848 Consumer Group Simulator</div>
+      <div class="sidebar-subtitle">Kafka Consumer Group Simulator</div>
     </div>
 
     <div class="sidebar-scroll">
@@ -746,12 +751,15 @@ body {
     <div class="sidebar-section">
       <div class="section-label">Consumer</div>
       <div class="field">
-        <label class="field-label">Assignor</label>
-        <select class="field-input" id="cfg-assignor">
-          <option value="">(default)</option>
-          <option value="uniform">uniform</option>
-          <option value="range">range</option>
+        <label class="field-label">Protocol</label>
+        <select class="field-input" id="cfg-protocol" onchange="onProtocolChange()">
+          <option value="consumer">consumer</option>
+          <option value="classic">classic</option>
         </select>
+      </div>
+      <div class="field">
+        <label class="field-label">Assignor</label>
+        <select class="field-input" id="cfg-assignor"></select>
       </div>
       <div class="field">
         <label class="field-label">Max Poll Interval (ms)</label>
@@ -785,9 +793,11 @@ body {
     <div id="view-wrapper" style="display:none;">
       <div class="main-header" id="main-header">
         <div class="header-status">
+          <span id="status-type" class="status-badge s-type">&mdash;</span>
           <span id="status-state" class="status-badge s-idle">IDLE</span>
-          <span class="status-item"><span class="status-label">epoch</span> <span id="status-epoch" class="status-value">&mdash;</span></span>
-          <span class="status-item"><span class="status-label">target</span> <span id="status-target-epoch" class="status-value">&mdash;</span></span>
+          <span class="status-item" id="status-item-epoch"><span class="status-label">epoch</span> <span id="status-epoch" class="status-value">&mdash;</span></span>
+          <span class="status-item" id="status-item-target"><span class="status-label">target</span> <span id="status-target-epoch" class="status-value">&mdash;</span></span>
+          <span class="status-item" id="status-item-generation" style="display:none;"><span class="status-label">generation</span> <span id="status-generation" class="status-value">&mdash;</span></span>
         </div>
         <div class="legend">
           <div class="legend-item">
@@ -818,7 +828,8 @@ let simulationRunning = false;
 const LOCKED_FIELDS = [
   'cfg-group-id', 'cfg-topic-prefix', 'cfg-num-topics', 'cfg-num-partitions',
   'cfg-num-consumers', 'cfg-session-timeout', 'cfg-heartbeat-interval',
-  'cfg-assignment-interval', 'cfg-assignor', 'cfg-max-poll-interval', 'cfg-static-members'
+  'cfg-assignment-interval', 'cfg-protocol', 'cfg-assignor',
+  'cfg-max-poll-interval', 'cfg-static-members'
 ];
 
 function lockConfig() {
@@ -827,6 +838,60 @@ function lockConfig() {
 
 function unlockConfig() {
   LOCKED_FIELDS.forEach(id => document.getElementById(id).disabled = false);
+  // Re-apply protocol-dependent disabling for fields that don't apply
+  // to the classic protocol.
+  applyProtocolDisabling();
+}
+
+const ASSIGNORS_BY_PROTOCOL = {
+  consumer: [
+    {value: '', label: '(default)'},
+    {value: 'uniform', label: 'uniform'},
+    {value: 'range', label: 'range'}
+  ],
+  classic: [
+    {value: 'range', label: 'range'},
+    {value: 'roundrobin', label: 'roundrobin'},
+    {value: 'sticky', label: 'sticky'},
+    {value: 'cooperative-sticky', label: 'cooperative-sticky'}
+  ]
+};
+
+// Group-level configs only apply to the consumer protocol.
+const CONSUMER_ONLY_FIELDS = [
+  'cfg-session-timeout', 'cfg-heartbeat-interval', 'cfg-assignment-interval'
+];
+
+function populateAssignors(protocol, preferredValue) {
+  const sel = document.getElementById('cfg-assignor');
+  const opts = ASSIGNORS_BY_PROTOCOL[protocol] || ASSIGNORS_BY_PROTOCOL.consumer;
+  sel.innerHTML = '';
+  for (const o of opts) {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    sel.appendChild(opt);
+  }
+  // Try to keep the previous selection if still valid; otherwise pick the first.
+  if (preferredValue !== undefined && opts.some(o => o.value === preferredValue)) {
+    sel.value = preferredValue;
+  } else {
+    sel.value = opts[0].value;
+  }
+}
+
+function applyProtocolDisabling() {
+  const protocol = document.getElementById('cfg-protocol').value;
+  const isConsumer = protocol === 'consumer';
+  for (const id of CONSUMER_ONLY_FIELDS) {
+    document.getElementById(id).disabled = !isConsumer || simulationRunning;
+  }
+}
+
+function onProtocolChange() {
+  const protocol = document.getElementById('cfg-protocol').value;
+  populateAssignors(protocol);
+  applyProtocolDisabling();
 }
 
 function setSimulationUI(running) {
@@ -859,26 +924,58 @@ function setSimulationUI(running) {
 
 function updateStatus(data) {
   const stateEl = document.getElementById('status-state');
+  const typeEl = document.getElementById('status-type');
   const epochEl = document.getElementById('status-epoch');
   const targetEl = document.getElementById('status-target-epoch');
+  const generationEl = document.getElementById('status-generation');
+  const epochItem = document.getElementById('status-item-epoch');
+  const targetItem = document.getElementById('status-item-target');
+  const generationItem = document.getElementById('status-item-generation');
 
   if (!data || !data.groupState) {
     stateEl.textContent = simulationRunning ? 'STARTING' : 'IDLE';
     stateEl.className = 'status-badge s-idle';
+    typeEl.textContent = '\u2014';
     epochEl.textContent = '\u2014';
     targetEl.textContent = '\u2014';
+    generationEl.textContent = '\u2014';
+    epochItem.style.display = '';
+    targetItem.style.display = '';
+    generationItem.style.display = 'none';
     return;
   }
 
-  const gs = (data.groupState || 'UNKNOWN').toUpperCase();
+  const rawGs = data.groupState || 'UNKNOWN';
+  // Insert a space before each capital letter (except the first) so
+  // PreparingRebalance / CompletingRebalance read with a space.
+  const gs = rawGs.replace(/([a-z])([A-Z])/g, '$1 $2').toUpperCase();
   let badgeCls = 's-empty';
-  if (gs === 'STABLE') badgeCls = 's-stable';
-  else if (gs === 'RECONCILING' || gs === 'ASSIGNING') badgeCls = 's-reconciling';
+  if (rawGs === 'Stable') badgeCls = 's-stable';
+  else if (rawGs === 'Reconciling' || rawGs === 'Assigning' ||
+           rawGs === 'PreparingRebalance' || rawGs === 'CompletingRebalance') badgeCls = 's-reconciling';
 
   stateEl.textContent = gs;
   stateEl.className = 'status-badge ' + badgeCls;
-  epochEl.textContent = data.groupEpoch ?? '\u2014';
-  targetEl.textContent = data.targetAssignmentEpoch ?? '\u2014';
+
+  const gtype = data.groupType || '\u2014';
+  typeEl.textContent = gtype.toUpperCase();
+
+  // Classic groups don't have group epoch / target epoch but do have a
+  // group generation. Swap which fields are visible.
+  const isClassic = gtype.toLowerCase() === 'classic';
+  if (isClassic) {
+    epochItem.style.display = 'none';
+    targetItem.style.display = 'none';
+    generationItem.style.display = '';
+    generationEl.textContent = (data.groupGeneration != null && data.groupGeneration >= 0)
+      ? data.groupGeneration : '\u2014';
+  } else {
+    epochItem.style.display = '';
+    targetItem.style.display = '';
+    generationItem.style.display = 'none';
+    epochEl.textContent = (data.groupEpoch != null && data.groupEpoch >= 0) ? data.groupEpoch : '\u2014';
+    targetEl.textContent = (data.targetAssignmentEpoch != null && data.targetAssignmentEpoch >= 0) ? data.targetAssignmentEpoch : '\u2014';
+  }
 }
 
 async function startSimulation() {
@@ -895,6 +992,7 @@ async function startSimulation() {
     sessionTimeoutMs: parseInt(document.getElementById('cfg-session-timeout').value),
     heartbeatIntervalMs: parseInt(document.getElementById('cfg-heartbeat-interval').value),
     assignmentIntervalMs: parseInt(document.getElementById('cfg-assignment-interval').value),
+    protocol: document.getElementById('cfg-protocol').value,
     assignor: document.getElementById('cfg-assignor').value,
     maxPollIntervalMs: parseInt(document.getElementById('cfg-max-poll-interval').value),
     defaultProcessingDelayMs: 10000,
@@ -1004,6 +1102,7 @@ function renderGroup(data) {
     topics.push(currentConfig.topicPrefix + '-' + i);
   }
   const numPartitions = currentConfig.numPartitions;
+  const isClassic = (data.groupType || '').toLowerCase() === 'classic';
 
   const grid = document.getElementById('card-grid');
   const members = (data.members || []).slice().sort((a, b) => a.slotIndex - b.slotIndex);
@@ -1034,7 +1133,7 @@ function renderGroup(data) {
             '<span class="meta-line-value"></span>' +
           '</div>' +
           '<div class="meta-line meta-line-epoch">' +
-            '<span class="meta-line-label">epoch</span>' +
+            '<span class="meta-line-label meta-line-label-epoch">epoch</span>' +
             '<span class="meta-line-value"></span>' +
           '</div>' +
         '</div>' +
@@ -1073,10 +1172,18 @@ function renderGroup(data) {
       instanceValEl.className = 'meta-line-value' + (m.instanceId ? '' : ' dim');
     }
 
-    const epochTxt = (m.memberEpoch >= 0 ? String(m.memberEpoch) : '\u2014');
+    // For classic groups show "generation" sourced from the consumer's
+    // groupMetadata(). For consumer-protocol groups show "epoch" sourced
+    // from the admin API memberEpoch.
+    const epochLabelEl = card.querySelector('.meta-line-label-epoch');
+    const labelTxt = isClassic ? 'generation' : 'epoch';
+    if (epochLabelEl.textContent !== labelTxt) epochLabelEl.textContent = labelTxt;
+    const rawValue = isClassic ? m.generationId : m.memberEpoch;
+    const has = rawValue != null && rawValue >= 0;
+    const epochTxt = has ? String(rawValue) : '\u2014';
     if (epochValEl.textContent !== epochTxt) {
       epochValEl.textContent = epochTxt;
-      epochValEl.className = 'meta-line-value' + (m.memberEpoch >= 0 ? '' : ' dim');
+      epochValEl.className = 'meta-line-value' + (has ? '' : ' dim');
     }
 
     // ── Zones ──
@@ -1268,6 +1375,10 @@ async function setDelay(index, value) {
 
 // ── Init: check if simulation is already running ──
 (async function() {
+  // Default the assignor dropdown for the consumer protocol.
+  populateAssignors('consumer');
+  applyProtocolDisabling();
+
   try {
     const resp = await fetch('/api/simulator/status');
     const data = await resp.json();
@@ -1282,7 +1393,9 @@ async function setDelay(index, value) {
         document.getElementById('cfg-session-timeout').value = currentConfig.sessionTimeoutMs || 45000;
         document.getElementById('cfg-heartbeat-interval').value = currentConfig.heartbeatIntervalMs || 5000;
         document.getElementById('cfg-assignment-interval').value = currentConfig.assignmentIntervalMs || 1000;
-        document.getElementById('cfg-assignor').value = currentConfig.assignor || '';
+        const protocol = currentConfig.protocol || 'consumer';
+        document.getElementById('cfg-protocol').value = protocol;
+        populateAssignors(protocol, currentConfig.assignor || '');
         document.getElementById('cfg-max-poll-interval').value = currentConfig.maxPollIntervalMs || 300000;
         document.getElementById('cfg-static-members').value = currentConfig.staticMembers ? 'true' : 'false';
       }

@@ -79,9 +79,12 @@ public class AdminPoller {
             .get();
 
         SimulatorGroupState state = new SimulatorGroupState();
+        state.groupType = desc.type().toString();
         state.groupEpoch = desc.groupEpoch().orElse(-1);
         state.targetAssignmentEpoch = desc.targetAssignmentEpoch().orElse(-1);
         state.groupState = desc.groupState().toString();
+
+        boolean isConsumerProtocol = "Consumer".equalsIgnoreCase(state.groupType);
 
         List<SimulatorGroupState.MemberState> members = new ArrayList<>();
         for (MemberDescription member : desc.members()) {
@@ -92,9 +95,11 @@ public class AdminPoller {
             ms.memberEpoch = member.memberEpoch().orElse(-1);
 
             Set<TopicPartition> assigned = member.assignment().topicPartitions();
+            // For classic groups there is no separate target assignment;
+            // mirror the current assignment so the UI shows it as "synced".
             Set<TopicPartition> target = member.targetAssignment()
                 .map(a -> a.topicPartitions())
-                .orElse(Collections.emptySet());
+                .orElse(isConsumerProtocol ? Collections.emptySet() : assigned);
 
             ms.assignment = assigned.stream()
                 .map(tp -> tp.topic() + "-" + tp.partition())
@@ -103,10 +108,20 @@ public class AdminPoller {
                 .map(tp -> tp.topic() + "-" + tp.partition())
                 .collect(Collectors.toSet());
 
-            if (!assigned.equals(target) || ms.memberEpoch < state.targetAssignmentEpoch) {
-                ms.state = "Reconciling";
+            if (isConsumerProtocol) {
+                if (!assigned.equals(target) || ms.memberEpoch < state.targetAssignmentEpoch) {
+                    ms.state = "Reconciling";
+                } else {
+                    ms.state = "Stable";
+                }
             } else {
-                ms.state = "Stable";
+                // Classic groups: state is derived from the group-level state.
+                String gs = state.groupState;
+                if ("PreparingRebalance".equals(gs) || "CompletingRebalance".equals(gs)) {
+                    ms.state = "Reconciling";
+                } else {
+                    ms.state = "Stable";
+                }
             }
 
             members.add(ms);
