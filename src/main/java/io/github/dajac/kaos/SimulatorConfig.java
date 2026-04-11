@@ -4,22 +4,37 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SimulatorConfig {
+    // Setup.
+    public String groupId;
     public String topicPrefix;
     public int numTopics;
     public int numPartitions;
-    public String assignor;
     public int numConsumers;
-    public String groupId;
+
+    // Group.
+    public int sessionTimeoutMs;
+    public int heartbeatIntervalMs;
+    public int assignmentIntervalMs;
+
+    // Consumer.
+    public String assignor;
+    public int maxPollIntervalMs;
     public int defaultProcessingDelayMs;
+    public boolean staticMembers;
 
     public SimulatorConfig() {
-        this.topicPrefix = "simulator-events";
+        this.groupId = "simulator-group";
+        this.topicPrefix = "kaos";
         this.numTopics = 2;
         this.numPartitions = 12;
-        this.assignor = "";
         this.numConsumers = 6;
-        this.groupId = "simulator-group";
+        this.sessionTimeoutMs = 45000;
+        this.heartbeatIntervalMs = 5000;
+        this.assignmentIntervalMs = 1000;
+        this.assignor = "";
+        this.maxPollIntervalMs = 300000;
         this.defaultProcessingDelayMs = 10000;
+        this.staticMembers = false;
     }
 
     public List<String> topicNames() {

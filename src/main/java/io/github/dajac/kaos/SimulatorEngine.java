@@ -1,20 +1,26 @@
 package io.github.dajac.kaos;
 
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
@@ -76,6 +82,7 @@ public class SimulatorEngine {
             running.set(true);
 
             createTopics();
+            configureGroup();
             startProxy();
             startProducer();
             startConsumers();
@@ -209,6 +216,36 @@ public class SimulatorEngine {
         }
     }
 
+    private void configureGroup() throws Exception {
+        Properties props = new Properties();
+        props.put("bootstrap.servers", bootstrapServers);
+        try (AdminClient admin = AdminClient.create(props)) {
+            ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, config.groupId);
+
+            Collection<AlterConfigOp> ops = Arrays.asList(
+                new AlterConfigOp(
+                    new org.apache.kafka.clients.admin.ConfigEntry(
+                        "consumer.session.timeout.ms",
+                        String.valueOf(config.sessionTimeoutMs)),
+                    AlterConfigOp.OpType.SET),
+                new AlterConfigOp(
+                    new org.apache.kafka.clients.admin.ConfigEntry(
+                        "consumer.heartbeat.interval.ms",
+                        String.valueOf(config.heartbeatIntervalMs)),
+                    AlterConfigOp.OpType.SET),
+                new AlterConfigOp(
+                    new org.apache.kafka.clients.admin.ConfigEntry(
+                        "consumer.assignment.interval.ms",
+                        String.valueOf(config.assignmentIntervalMs)),
+                    AlterConfigOp.OpType.SET)
+            );
+
+            Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
+            configs.put(groupResource, ops);
+            admin.incrementalAlterConfigs(configs).all().get();
+        }
+    }
+
     private void startProducer() {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -247,8 +284,12 @@ public class SimulatorEngine {
             props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
             props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+            props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(config.maxPollIntervalMs));
             if (config.assignor != null && !config.assignor.isEmpty()) {
                 props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, config.assignor);
+            }
+            if (config.staticMembers) {
+                props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, config.groupId + "-" + slot.clientId());
             }
 
             KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);

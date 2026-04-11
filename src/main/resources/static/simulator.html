@@ -3,440 +3,492 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kaos - KIP-848 Consumer Group Simulator</title>
+<title>Kaos — KIP-848 Consumer Group Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0d1117;
-  --surface: #161b22;
-  --surface2: #21262d;
-  --border: #30363d;
-  --text: #e6edf3;
-  --text-muted: #8b949e;
-  --accent: #58a6ff;
-  --green: #3fb950;
-  --yellow: #d29922;
-  --red: #f85149;
-  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --bg: #0a0e14;
+  --surface: #12171f;
+  --surface2: #1a2029;
+  --surface3: #222a35;
+  --border: #2a3342;
+  --border-subtle: #1e2736;
+  --text: #d4dce8;
+  --text-muted: #6b7a8d;
+  --text-dim: #4a5568;
+  --accent: #4c9aff;
+  --accent-dim: rgba(76,154,255,0.12);
+  --green: #34d399;
+  --green-dim: rgba(52,211,153,0.12);
+  --yellow: #fbbf24;
+  --yellow-dim: rgba(251,191,36,0.10);
+  --red: #f87171;
+  --red-dim: rgba(248,113,113,0.10);
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --sidebar-w: 280px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
 }
 
-.container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
+/* ── Layout shell ── */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-rows: 1fr auto;
+  height: 100vh;
+  gap: 0;
 }
 
-header {
+/* ── Sidebar ── */
+.sidebar {
+  grid-row: 1 / 3;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.sidebar-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.sidebar-scroll::-webkit-scrollbar { width: 4px; }
+.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+.sidebar-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sidebar-header {
+  flex: 0 0 auto;
+  padding: 16px 16px 12px;
   border-bottom: 1px solid var(--border);
 }
 
-header h1 { font-size: 20px; font-weight: 600; }
-header h1 span { color: var(--accent); }
+.sidebar-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+}
 
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
+.sidebar-brand {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.badge.stable { background: rgba(63,185,80,0.15); color: var(--green); }
-.badge.reconciling { background: rgba(210,153,34,0.15); color: var(--yellow); }
-.badge.stopping { background: rgba(248,81,73,0.15); color: var(--red); }
-.badge.stopped { background: rgba(139,148,158,0.15); color: var(--text-muted); }
-.badge.joining { background: rgba(88,166,255,0.15); color: var(--accent); }
-
-/* ── Config form ── */
-.config-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 24px;
-  max-width: 600px;
-  margin: 40px auto;
-}
-
-.config-card h2 {
-  font-size: 16px;
-  margin-bottom: 16px;
   color: var(--accent);
 }
 
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.form-group.full-width {
-  grid-column: 1 / -1;
-}
-
-.form-group label {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-transform: uppercase;
+.sidebar-subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
   letter-spacing: 0.3px;
 }
 
-.form-group input, .form-group select {
+.sidebar-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sidebar-section:last-child {
+  border-bottom: none;
+}
+
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+/* ── Status line (in main header) ── */
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.status-value {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.status-badge.s-stable { background: var(--green-dim); color: var(--green); }
+.status-badge.s-reconciling, .status-badge.s-assigning { background: var(--yellow-dim); color: var(--yellow); }
+.status-badge.s-empty { background: rgba(107,122,141,0.12); color: var(--text-dim); }
+.status-badge.s-idle { background: rgba(107,122,141,0.12); color: var(--text-dim); }
+
+/* ── Form fields ── */
+.field {
+  margin-bottom: 8px;
+}
+
+.field:last-child { margin-bottom: 0; }
+
+.field-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 3px;
+  letter-spacing: 0.3px;
+}
+
+.field-input {
+  width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
   font-family: var(--font-mono);
+  transition: border-color 0.15s;
 }
 
-.form-group input:focus, .form-group select:focus {
+.field-input:focus {
   outline: none;
   border-color: var(--accent);
 }
 
+.field-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--surface2);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ── Buttons ── */
 .btn {
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.3px;
   border: none;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.12s, background 0.12s;
+  width: 100%;
 }
 
 .btn:hover { opacity: 0.85; }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn:active { transform: scale(0.98); }
 
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
+.btn-start {
+  background: var(--green);
+  color: #0a0e14;
 }
 
-.btn-danger {
+.btn-stop {
   background: var(--red);
-  color: #fff;
+  color: #0a0e14;
 }
 
-.btn-sm {
-  padding: 4px 10px;
-  font-size: 12px;
-}
-
-.btn-outline {
-  background: transparent;
+/* ── Auto-Pilot ── */
+.btn-autopilot {
+  width: 100%;
+  background: var(--surface3);
   border: 1px solid var(--border);
-  color: var(--text);
-}
-
-.form-actions {
-  margin-top: 16px;
-  text-align: center;
-}
-
-/* ── Running view ── */
-.group-state-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 14px 20px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  font-size: 18px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.group-state-banner.stable {
-  background: rgba(63,185,80,0.1);
-  border: 2px solid rgba(63,185,80,0.3);
-  color: var(--green);
-}
-
-.group-state-banner.reconciling {
-  background: rgba(210,153,34,0.1);
-  border: 2px solid rgba(210,153,34,0.4);
-  color: var(--yellow);
-}
-
-.group-state-banner.assigning {
-  background: rgba(210,153,34,0.1);
-  border: 2px solid rgba(210,153,34,0.4);
-  color: var(--yellow);
-}
-
-.group-state-banner.empty {
-  background: rgba(139,148,158,0.1);
-  border: 2px solid rgba(139,148,158,0.3);
   color: var(--text-muted);
 }
 
-.group-state-banner .epoch-info {
-  font-size: 13px;
-  font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
-  opacity: 0.8;
+.btn-autopilot:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
-/* ── Control bar ── */
-.control-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
+.btn-autopilot.active {
+  background: var(--yellow-dim);
+  border-color: rgba(251,191,36,0.3);
+  color: var(--yellow);
 }
 
-.chaos-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
+/* ── Main area ── */
+.main {
+  overflow: auto;
+  padding: 0;
+  background: var(--bg);
 }
 
-.chaos-controls label {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.chaos-controls input {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  width: 70px;
-}
+.main::-webkit-scrollbar { width: 6px; height: 6px; }
+.main::-webkit-scrollbar-track { background: transparent; }
+.main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 /* ── Matrix table ── */
-.partition-map {
-  margin-bottom: 16px;
-  overflow-x: auto;
-}
-
 .matrix-table {
   border-collapse: collapse;
   width: 100%;
   table-layout: fixed;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .matrix-table th,
 .matrix-table td {
   padding: 6px 8px;
-  border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .matrix-table th {
-  background: var(--surface2);
-  color: var(--text-muted);
+  background: var(--surface);
+  color: var(--text-dim);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
+  border-bottom: 1px solid var(--border);
 }
 
 .matrix-table th.member-col-header {
   text-align: left;
-  width: 300px;
-  min-width: 300px;
-  max-width: 300px;
+  width: 400px;
+  min-width: 400px;
+  max-width: 400px;
+  position: sticky;
+  left: 0;
+  z-index: 3;
 }
 
 .matrix-table td.member-info {
   text-align: left;
   vertical-align: middle;
   background: var(--surface);
-  width: 300px;
-  min-width: 300px;
-  max-width: 300px;
+  width: 400px;
+  min-width: 400px;
+  max-width: 400px;
   overflow: hidden;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  border-right: 1px solid var(--border);
+  padding: 0;
 }
 
 .matrix-table td.member-info.stopped-row {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
-.matrix-member-name {
+.member-cell-layout {
+  display: flex;
+  align-items: stretch;
+}
+
+/* ── Left: server state ── */
+.member-state {
+  flex: 1;
+  padding: 6px 8px;
+  min-width: 0;
+}
+
+.member-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.member-name {
   font-weight: 600;
   font-size: 12px;
   color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
-.matrix-member-id {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-.matrix-member-meta {
-  font-size: 10px;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-.matrix-member-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.btn-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  color: var(--text);
-  font-size: 12px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: background 0.15s, border-color 0.15s;
+.badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   flex-shrink: 0;
 }
 
-.btn-icon:hover { background: var(--border); }
+.badge.stable { background: var(--green-dim); color: var(--green); }
+.badge.reconciling { background: var(--yellow-dim); color: var(--yellow); }
+.badge.stopping { background: var(--red-dim); color: var(--red); }
+.badge.stopped { background: rgba(107,122,141,0.1); color: var(--text-dim); }
+.badge.joining { background: var(--accent-dim); color: var(--accent); }
 
-.btn-icon.play {
-  color: var(--green);
-  border-color: rgba(63,185,80,0.4);
+.member-detail {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.btn-icon.stop {
-  color: var(--red);
-  border-color: rgba(248,81,73,0.4);
+/* ── Right: controls stack ── */
+.member-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-left: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
-.btn-icon.block {
-  color: var(--yellow);
-  border-color: rgba(210,153,34,0.4);
+.ctrl-delay {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
 }
 
-.btn-icon.blocked {
-  color: var(--yellow);
-  border-color: rgba(210,153,34,0.6);
-  background: rgba(210,153,34,0.15);
+.ctrl-delay.disabled {
+  opacity: 0.3;
 }
 
-.btn-icon.partition {
-  color: var(--red);
-  border-color: rgba(248,81,73,0.4);
-}
-
-.btn-icon.partitioned {
-  color: var(--red);
-  border-color: rgba(248,81,73,0.6);
-  background: rgba(248,81,73,0.15);
-}
-
-.btn-icon svg {
-  width: 12px;
-  height: 12px;
-  fill: currentColor;
-}
-
-.delay-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  margin-right: 2px;
-}
-
-.delay-slider {
-  width: 80px;
-  accent-color: var(--accent);
-}
-
-.delay-value {
-  font-size: 10px;
-  color: var(--text-muted);
+.ctrl-delay-label {
   font-family: var(--font-mono);
-  min-width: 30px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
 }
 
-/* ── Console log ── */
-.console-log {
-  background: var(--surface);
+.ctrl-delay-input {
+  width: 50px;
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-top: 16px;
-  max-height: 200px;
-  overflow-y: auto;
+  color: var(--text);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 9px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 8px 12px;
+  font-weight: 600;
+  text-align: left;
 }
 
-.console-log .log-entry {
-  padding: 1px 0;
+.ctrl-delay-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ctrl-delay-unit {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+.ctrl-btn {
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
   color: var(--text-muted);
-  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+  text-align: center;
+  min-width: 82px;
 }
 
-.console-log .log-entry .log-time {
-  color: var(--text-muted);
-  opacity: 0.6;
-  margin-right: 8px;
+.ctrl-btn:hover { background: var(--surface3); color: var(--text); }
+.ctrl-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
-.console-log .log-entry.log-join { color: var(--green); }
-.console-log .log-entry.log-leave { color: var(--red); }
-.console-log .log-entry.log-state { color: var(--yellow); }
-.console-log .log-entry.log-group { color: var(--accent); }
+.ctrl-btn.act-start { color: var(--green); border-color: rgba(52,211,153,0.3); }
+.ctrl-btn.act-stop { color: var(--red); border-color: rgba(248,113,113,0.3); }
 
+.ctrl-btn.act-block-poll { color: var(--text-muted); border-color: var(--border); }
+.ctrl-btn.act-block-poll.on {
+  color: var(--yellow);
+  border-color: rgba(251,191,36,0.4);
+  background: var(--yellow-dim);
+}
+
+.ctrl-btn.act-block-net { color: var(--text-muted); border-color: var(--border); }
+.ctrl-btn.act-block-net.on {
+  color: var(--red);
+  border-color: rgba(248,113,113,0.4);
+  background: var(--red-dim);
+}
+
+/* ── Partition cells ── */
 .matrix-cell {
-  vertical-align: middle;
+  vertical-align: top;
   white-space: normal;
 }
 
 .matrix-cell.stopped-row {
-  opacity: 0.3;
+  opacity: 0.25;
 }
 
 .partition-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 3px;
   justify-content: flex-start;
 }
 
@@ -444,165 +496,381 @@ header h1 span { color: var(--accent); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 40px;
-  height: 32px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 700;
+  min-width: 30px;
+  height: 24px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
   font-family: var(--font-mono);
+  transition: background 0.2s, color 0.2s;
 }
 
 .partition-chip.assigned {
-  background: rgba(63,185,80,0.25);
+  background: var(--green-dim);
   color: var(--green);
 }
 
 .partition-chip.pending-revocation {
-  background: rgba(210,153,34,0.25);
+  background: var(--yellow-dim);
   color: var(--yellow);
 }
 
 .partition-chip.pending-assignment {
-  background: rgba(88,166,255,0.2);
+  background: var(--accent-dim);
   color: var(--accent);
 }
 
-/* ── Legend ── */
+/* ── Console ── */
+.console {
+  grid-column: 2;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  overflow-y: auto;
+  height: 160px;
+  min-height: 100px;
+}
+
+.console::-webkit-scrollbar { width: 4px; }
+.console::-webkit-scrollbar-track { background: transparent; }
+.console::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.console-header {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.console-body {
+  padding: 4px 12px 8px;
+}
+
+.log-entry {
+  padding: 1px 0;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.log-entry .log-time {
+  color: var(--text-dim);
+  margin-right: 8px;
+}
+
+.log-entry.log-join { color: var(--green); }
+.log-entry.log-leave { color: var(--red); }
+.log-entry.log-state { color: var(--yellow); }
+.log-entry.log-group { color: var(--accent); }
+
+/* ── Legend (inline in main header area) ── */
+.main-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .legend {
   display: flex;
-  gap: 16px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
+  gap: 14px;
+  margin-left: auto;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
 }
 
 .legend-swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-dim);
+  gap: 8px;
+}
+
+.empty-state-icon {
+  font-size: 32px;
+  opacity: 0.3;
+}
+
+.empty-state-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Resize handle ── */
+.resize-handle {
+  grid-column: 2;
+  height: 4px;
+  background: transparent;
+  cursor: ns-resize;
+  position: relative;
+  z-index: 5;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+  background: var(--accent);
+  opacity: 0.4;
 }
 </style>
 </head>
 <body>
-<div class="container">
-  <header>
-    <h1><span>Kaos</span> — KIP-848 Consumer Group Simulator</h1>
-  </header>
 
-  <!-- Configuration View -->
-  <div id="config-view">
-    <div class="config-card">
-      <h2>Simulation Configuration</h2>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>Topic Prefix</label>
-          <input type="text" id="cfg-topic-prefix" value="simulator-events">
-        </div>
-        <div class="form-group">
-          <label>Number of Topics</label>
-          <input type="number" id="cfg-num-topics" value="3" min="1" max="20">
-        </div>
-        <div class="form-group">
-          <label>Partitions per Topic</label>
-          <input type="number" id="cfg-num-partitions" value="12" min="1" max="100">
-        </div>
-        <div class="form-group">
-          <label>Number of Consumers</label>
-          <input type="number" id="cfg-num-consumers" value="6" min="1" max="20">
-        </div>
-        <div class="form-group">
-          <label>Group ID</label>
-          <input type="text" id="cfg-group-id" value="simulator-group">
-        </div>
-        <div class="form-group">
-          <label>Server Assignor</label>
-          <select id="cfg-assignor">
-            <option value="">(default)</option>
-            <option value="uniform">uniform</option>
-            <option value="range">range</option>
-          </select>
-        </div>
-        <div class="form-group full-width">
-          <label>Default Processing Delay (ms)</label>
-          <input type="number" id="cfg-processing-delay" value="10000" min="0" max="120000">
-        </div>
-      </div>
-      <div class="form-actions">
-        <button class="btn btn-primary" id="btn-start" onclick="startSimulation()">Start Simulation</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Running View -->
-  <div id="running-view" style="display:none;">
-    <div id="group-banner" class="group-state-banner empty">
-      Waiting for data...
+<div class="app">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand">Kaos</div>
+      <div class="sidebar-subtitle">KIP-848 Consumer Group Simulator</div>
     </div>
 
-    <div class="control-bar">
-      <button class="btn btn-danger btn-sm" onclick="stopSimulation()">Stop Simulation</button>
-      <div class="chaos-controls">
-        <label>Min ms</label>
-        <input type="number" id="chaos-min" value="10000">
-        <label>Max ms</label>
-        <input type="number" id="chaos-max" value="30000">
-        <button class="btn btn-outline btn-sm" id="btn-chaos" onclick="toggleChaos()">Start Chaos</button>
+    <div class="sidebar-scroll">
+    <!-- Setup -->
+    <div class="sidebar-section">
+      <div class="section-label">Setup</div>
+      <div class="field">
+        <label class="field-label">Group ID</label>
+        <input class="field-input" type="text" id="cfg-group-id" value="simulator-group">
+      </div>
+      <div class="field">
+        <label class="field-label">Topic Prefix</label>
+        <input class="field-input" type="text" id="cfg-topic-prefix" value="kaos">
+      </div>
+      <div class="field">
+        <label class="field-label">Topics</label>
+        <input class="field-input" type="number" id="cfg-num-topics" value="3" min="1" max="20">
+      </div>
+      <div class="field">
+        <label class="field-label">Partitions</label>
+        <input class="field-input" type="number" id="cfg-num-partitions" value="12" min="1" max="100">
+      </div>
+      <div class="field">
+        <label class="field-label">Consumers</label>
+        <input class="field-input" type="number" id="cfg-num-consumers" value="6" min="1" max="20">
       </div>
     </div>
 
-    <div class="legend">
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:rgba(63,185,80,0.25);"></div> Assigned
+    <!-- Group -->
+    <div class="sidebar-section">
+      <div class="section-label">Group</div>
+      <div class="field">
+        <label class="field-label">Session Timeout (ms)</label>
+        <input class="field-input" type="number" id="cfg-session-timeout" value="45000" min="1000" max="300000">
       </div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:rgba(210,153,34,0.25);"></div> Pending Revocation
+      <div class="field">
+        <label class="field-label">Heartbeat Interval (ms)</label>
+        <input class="field-input" type="number" id="cfg-heartbeat-interval" value="5000" min="500" max="60000">
       </div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:rgba(88,166,255,0.2);"></div> Pending Assignment
+      <div class="field">
+        <label class="field-label">Assignment Interval (ms)</label>
+        <input class="field-input" type="number" id="cfg-assignment-interval" value="1000" min="0" max="60000">
       </div>
     </div>
 
-    <div class="partition-map">
+    <!-- Consumer -->
+    <div class="sidebar-section">
+      <div class="section-label">Consumer</div>
+      <div class="field">
+        <label class="field-label">Assignor</label>
+        <select class="field-input" id="cfg-assignor">
+          <option value="">(default)</option>
+          <option value="uniform">uniform</option>
+          <option value="range">range</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label">Max Poll Interval (ms)</label>
+        <input class="field-input" type="number" id="cfg-max-poll-interval" value="300000" min="1000" max="600000">
+      </div>
+      <div class="field">
+        <label class="field-label">Static Members</label>
+        <select class="field-input" id="cfg-static-members">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+      </div>
+    </div>
+
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-section">
+        <button class="btn btn-start" id="btn-start" onclick="startSimulation()">Start</button>
+        <button class="btn btn-autopilot" id="btn-autopilot" onclick="toggleAutopilot()" disabled style="margin-top:6px;">Auto-Pilot</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main: matrix ── -->
+  <main class="main" id="main-area">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-state-icon">&#9654;</div>
+      <div class="empty-state-text">Configure and start a simulation</div>
+    </div>
+    <div id="matrix-wrapper" style="display:none;">
+      <div class="main-header" id="main-header">
+        <div class="header-status">
+          <span id="status-state" class="status-badge s-idle">IDLE</span>
+          <span class="status-item"><span class="status-label">epoch</span> <span id="status-epoch" class="status-value">&mdash;</span></span>
+          <span class="status-item"><span class="status-label">target</span> <span id="status-target-epoch" class="status-value">&mdash;</span></span>
+        </div>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-swatch" style="background:var(--green-dim);border:1px solid rgba(52,211,153,0.25);"></div> Assigned
+          </div>
+          <div class="legend-item">
+            <div class="legend-swatch" style="background:var(--yellow-dim);border:1px solid rgba(251,191,36,0.2);"></div> Revoking
+          </div>
+          <div class="legend-item">
+            <div class="legend-swatch" style="background:var(--accent-dim);border:1px solid rgba(76,154,255,0.2);"></div> Pending
+          </div>
+        </div>
+      </div>
       <table class="matrix-table" id="matrix-table">
         <thead id="matrix-head"></thead>
         <tbody id="matrix-body"></tbody>
       </table>
     </div>
+  </main>
 
-    <div class="console-log" id="console-log"></div>
+  <!-- ── Console ── -->
+  <div class="console" id="console-panel">
+    <div class="console-header">
+      <span>Event Log</span>
+    </div>
+    <div class="console-body" id="console-log"></div>
   </div>
 </div>
 
 <script>
 let pollInterval = null;
-let chaosRunning = false;
+let autopilotRunning = false;
 let currentConfig = null;
-let prevState = null; // For change detection.
-let localDelays = {}; // Local delay overrides while slider is active.
-let activeSlider = null; // Slot index of slider being dragged, or null.
-let prevCtrlState = {}; // Previous control state per slot, to avoid unnecessary rebuilds.
+let prevState = null;
+let localDelays = {};
+let prevCtrlState = {};
+let simulationRunning = false;
+
+const LOCKED_FIELDS = [
+  'cfg-group-id', 'cfg-topic-prefix', 'cfg-num-topics', 'cfg-num-partitions',
+  'cfg-num-consumers', 'cfg-session-timeout', 'cfg-heartbeat-interval',
+  'cfg-assignment-interval', 'cfg-assignor', 'cfg-max-poll-interval', 'cfg-static-members'
+];
+
+function lockConfig() {
+  LOCKED_FIELDS.forEach(id => document.getElementById(id).disabled = true);
+}
+
+function unlockConfig() {
+  LOCKED_FIELDS.forEach(id => document.getElementById(id).disabled = false);
+}
+
+function setSimulationUI(running) {
+  simulationRunning = running;
+  const btn = document.getElementById('btn-start');
+
+  if (running) {
+    lockConfig();
+    btn.textContent = 'Stop';
+    btn.className = 'btn btn-stop';
+    btn.onclick = stopSimulation;
+    btn.disabled = false;
+    document.getElementById('btn-autopilot').disabled = false;
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('matrix-wrapper').style.display = '';
+  } else {
+    unlockConfig();
+    btn.textContent = 'Start';
+    btn.className = 'btn btn-start';
+    btn.onclick = startSimulation;
+    btn.disabled = false;
+    document.getElementById('btn-autopilot').disabled = true;
+    document.getElementById('btn-autopilot').className = 'btn btn-autopilot';
+    document.getElementById('empty-state').style.display = '';
+    document.getElementById('matrix-wrapper').style.display = 'none';
+    document.getElementById('matrix-head').innerHTML = '';
+    document.getElementById('matrix-body').innerHTML = '';
+    document.getElementById('matrix-head').removeAttribute('data-built');
+    updateStatus(null);
+  }
+}
+
+function updateStatus(data) {
+  const stateEl = document.getElementById('status-state');
+  const epochEl = document.getElementById('status-epoch');
+  const targetEl = document.getElementById('status-target-epoch');
+
+  if (!data || !data.groupState) {
+    stateEl.textContent = simulationRunning ? 'STARTING' : 'IDLE';
+    stateEl.className = 'status-badge s-idle';
+    epochEl.textContent = '\u2014';
+    targetEl.textContent = '\u2014';
+    return;
+  }
+
+  const gs = (data.groupState || 'UNKNOWN').toUpperCase();
+  let badgeCls = 's-empty';
+  if (gs === 'STABLE') badgeCls = 's-stable';
+  else if (gs === 'RECONCILING' || gs === 'ASSIGNING') badgeCls = 's-reconciling';
+
+  stateEl.textContent = gs;
+  stateEl.className = 'status-badge ' + badgeCls;
+  epochEl.textContent = data.groupEpoch ?? '\u2014';
+  targetEl.textContent = data.targetAssignmentEpoch ?? '\u2014';
+}
 
 async function startSimulation() {
   const btn = document.getElementById('btn-start');
   btn.disabled = true;
-  btn.textContent = 'Starting...';
+  btn.textContent = 'Starting\u2026';
 
   const config = {
+    groupId: document.getElementById('cfg-group-id').value,
     topicPrefix: document.getElementById('cfg-topic-prefix').value,
     numTopics: parseInt(document.getElementById('cfg-num-topics').value),
     numPartitions: parseInt(document.getElementById('cfg-num-partitions').value),
     numConsumers: parseInt(document.getElementById('cfg-num-consumers').value),
-    groupId: document.getElementById('cfg-group-id').value,
+    sessionTimeoutMs: parseInt(document.getElementById('cfg-session-timeout').value),
+    heartbeatIntervalMs: parseInt(document.getElementById('cfg-heartbeat-interval').value),
+    assignmentIntervalMs: parseInt(document.getElementById('cfg-assignment-interval').value),
     assignor: document.getElementById('cfg-assignor').value,
-    defaultProcessingDelayMs: parseInt(document.getElementById('cfg-processing-delay').value)
+    maxPollIntervalMs: parseInt(document.getElementById('cfg-max-poll-interval').value),
+    defaultProcessingDelayMs: 10000,
+    staticMembers: document.getElementById('cfg-static-members').value === 'true'
   };
 
   try {
@@ -615,7 +883,7 @@ async function startSimulation() {
       const err = await resp.json();
       alert('Failed to start: ' + (err.error || resp.statusText));
       btn.disabled = false;
-      btn.textContent = 'Start Simulation';
+      btn.textContent = 'Start';
       return;
     }
     currentConfig = config;
@@ -623,51 +891,47 @@ async function startSimulation() {
     localDelays = {};
     prevCtrlState = {};
     document.getElementById('console-log').innerHTML = '';
-    document.getElementById('config-view').style.display = 'none';
-    document.getElementById('running-view').style.display = 'block';
+    setSimulationUI(true);
     logEvent('log-group', 'Simulation started');
     startPolling();
   } catch (e) {
     alert('Error: ' + e.message);
     btn.disabled = false;
-    btn.textContent = 'Start Simulation';
+    btn.textContent = 'Start';
   }
 }
 
 async function stopSimulation() {
+  const btn = document.getElementById('btn-start');
+  btn.disabled = true;
+  btn.textContent = 'Stopping\u2026';
   stopPolling();
   try {
     await fetch('/api/simulator/stop', {method: 'POST'});
-  } catch (e) {
-    // Ignore.
-  }
+  } catch (e) { /* ignore */ }
   logEvent('log-group', 'Simulation stopped');
-  chaosRunning = false;
+  autopilotRunning = false;
   prevState = null;
-  document.getElementById('btn-chaos').textContent = 'Start Chaos';
-  document.getElementById('running-view').style.display = 'none';
-  document.getElementById('config-view').style.display = 'block';
-  document.getElementById('btn-start').disabled = false;
-  document.getElementById('btn-start').textContent = 'Start Simulation';
+  document.getElementById('btn-autopilot').className = 'btn-autopilot';
+  setSimulationUI(false);
 }
 
-async function toggleChaos() {
-  if (chaosRunning) {
+async function toggleAutopilot() {
+  const btn = document.getElementById('btn-autopilot');
+  if (autopilotRunning) {
     await fetch('/api/simulator/chaos/stop', {method: 'POST'});
-    chaosRunning = false;
-    document.getElementById('btn-chaos').textContent = 'Start Chaos';
-    logEvent('log-group', 'Chaos stopped');
+    autopilotRunning = false;
+    btn.className = 'btn btn-autopilot';
+    logEvent('log-group', 'Auto-Pilot off');
   } else {
-    const minMs = parseInt(document.getElementById('chaos-min').value);
-    const maxMs = parseInt(document.getElementById('chaos-max').value);
     await fetch('/api/simulator/chaos/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({intervalMinMs: minMs, intervalMaxMs: maxMs})
+      body: JSON.stringify({intervalMinMs: 10000, intervalMaxMs: 30000})
     });
-    chaosRunning = true;
-    document.getElementById('btn-chaos').textContent = 'Stop Chaos';
-    logEvent('log-group', 'Chaos started (' + minMs + '-' + maxMs + ' ms)');
+    autopilotRunning = true;
+    btn.className = 'btn btn-autopilot active';
+    logEvent('log-group', 'Auto-Pilot on');
   }
 }
 
@@ -688,12 +952,11 @@ async function pollGroup() {
     const resp = await fetch('/api/simulator/group');
     const data = await resp.json();
     if (data.phase !== 'RUNNING') return;
+    updateStatus(data);
     detectChanges(data);
     renderGroup(data);
     prevState = data;
-  } catch (e) {
-    // Ignore transient errors.
-  }
+  } catch (e) { /* ignore */ }
 }
 
 // ── Console log ──
@@ -706,56 +969,47 @@ function logEvent(cls, message) {
   const ts = now.toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'});
   entry.innerHTML = '<span class="log-time">' + ts + '</span>' + message;
   log.appendChild(entry);
-  log.scrollTop = log.scrollHeight;
+  const panel = document.getElementById('console-panel');
+  panel.scrollTop = panel.scrollHeight;
 }
 
 function detectChanges(data) {
   if (!prevState) return;
 
-  // Group state changes.
   if (data.groupState !== prevState.groupState) {
-    logEvent('log-state', 'Group state: ' + prevState.groupState + ' -> ' + data.groupState);
+    logEvent('log-state', 'Group state: ' + prevState.groupState + ' \u2192 ' + data.groupState);
   }
   if (data.groupEpoch !== prevState.groupEpoch) {
-    logEvent('log-group', 'Group epoch: ' + prevState.groupEpoch + ' -> ' + data.groupEpoch);
+    logEvent('log-group', 'Group epoch: ' + prevState.groupEpoch + ' \u2192 ' + data.groupEpoch);
   }
   if (data.targetAssignmentEpoch !== prevState.targetAssignmentEpoch) {
-    logEvent('log-group', 'Target assignment epoch: ' + prevState.targetAssignmentEpoch + ' -> ' + data.targetAssignmentEpoch);
+    logEvent('log-group', 'Target assignment epoch: ' + prevState.targetAssignmentEpoch + ' \u2192 ' + data.targetAssignmentEpoch);
   }
 
-  // Build member maps by clientId.
   const prevMembers = {};
   for (const m of (prevState.members || [])) prevMembers[m.clientId] = m;
-  const currMembers = {};
-  for (const m of (data.members || [])) currMembers[m.clientId] = m;
 
-  // Detect member changes.
   for (const m of (data.members || [])) {
     const prev = prevMembers[m.clientId];
     if (!prev) continue;
 
-    // State change.
     if (m.state !== prev.state) {
       logEvent(m.state === 'Stopped' ? 'log-leave' : 'log-state',
-        m.clientId + ': ' + prev.state + ' -> ' + m.state);
+        m.clientId + ': ' + prev.state + ' \u2192 ' + m.state);
     }
 
-    // Member joined (had no memberId, now has one).
     if (!prev.memberId && m.memberId) {
-      logEvent('log-join', m.clientId + ' joined (memberId: ' + m.memberId.substring(0, 16) + '...)');
+      logEvent('log-join', m.clientId + ' joined (' + m.memberId.substring(0, 12) + '\u2026)');
     }
 
-    // Member left (had memberId, now doesn't).
     if (prev.memberId && !m.memberId) {
       logEvent('log-leave', m.clientId + ' left the group');
     }
 
-    // Epoch change.
     if (m.memberEpoch !== prev.memberEpoch && m.memberEpoch >= 0) {
-      logEvent('log-state', m.clientId + ': epoch ' + prev.memberEpoch + ' -> ' + m.memberEpoch);
+      logEvent('log-state', m.clientId + ': epoch ' + prev.memberEpoch + ' \u2192 ' + m.memberEpoch);
     }
 
-    // Assignment change.
     const prevAssign = new Set(prev.assignment || []);
     const currAssign = new Set(m.assignment || []);
     const gained = [...currAssign].filter(x => !prevAssign.has(x));
@@ -771,25 +1025,12 @@ function detectChanges(data) {
 
 function formatPartitionKey(key) {
   const [topic, partition] = splitPartitionKey(key);
-  // Shorten topic name for readability.
   return topic + ':' + partition;
 }
 
-// ── Rendering (in-place DOM updates) ──
+// ── Rendering ──
 
 function renderGroup(data) {
-  // Banner.
-  const banner = document.getElementById('group-banner');
-  const gs = (data.groupState || 'UNKNOWN').toUpperCase();
-  let bannerClass = 'empty';
-  if (gs === 'STABLE') bannerClass = 'stable';
-  else if (gs === 'RECONCILING' || gs === 'ASSIGNING') bannerClass = gs.toLowerCase();
-
-  banner.className = 'group-state-banner ' + bannerClass;
-  banner.innerHTML = gs +
-    ' <span class="epoch-info">Group Epoch: ' + (data.groupEpoch ?? '?') +
-    ' | Target Assignment Epoch: ' + (data.targetAssignmentEpoch ?? '?') + '</span>';
-
   if (!currentConfig) return;
 
   const topics = [];
@@ -797,7 +1038,6 @@ function renderGroup(data) {
     topics.push(currentConfig.topicPrefix + '-' + i);
   }
 
-  // Header (only build once).
   const thead = document.getElementById('matrix-head');
   if (!thead.dataset.built) {
     let headHtml = '<tr><th class="member-col-header">Member</th>';
@@ -808,7 +1048,6 @@ function renderGroup(data) {
   }
 
   const members = (data.members || []).slice().sort((a, b) => a.slotIndex - b.slotIndex);
-
   const tbody = document.getElementById('matrix-body');
 
   for (const m of members) {
@@ -824,13 +1063,8 @@ function renderGroup(data) {
       tbody.appendChild(row);
     }
 
-    // Ensure correct number of cells: 1 member + N topics.
-    while (row.cells.length < 1 + topics.length) {
-      row.insertCell();
-    }
-    while (row.cells.length > 1 + topics.length) {
-      row.deleteCell(row.cells.length - 1);
-    }
+    while (row.cells.length < 1 + topics.length) row.insertCell();
+    while (row.cells.length > 1 + topics.length) row.deleteCell(row.cells.length - 1);
 
     // ── Member cell ──
     const memberCell = row.cells[0];
@@ -844,72 +1078,78 @@ function renderGroup(data) {
     else if (isStopping) badgeClass = 'stopping';
     else if (m.state === 'Joining') badgeClass = 'joining';
 
-    // Update member info (name, badge, id, epoch) — always safe to replace.
+    // Ensure layout wrapper exists.
+    let layoutId = 'layout-' + m.slotIndex;
+    let layoutDiv = document.getElementById(layoutId);
+    if (!layoutDiv) {
+      layoutDiv = document.createElement('div');
+      layoutDiv.id = layoutId;
+      layoutDiv.className = 'member-cell-layout';
+      memberCell.innerHTML = '';
+      memberCell.appendChild(layoutDiv);
+    }
+
+    // Left: server state.
     let infoId = 'info-' + m.slotIndex;
     let infoDiv = document.getElementById(infoId);
     if (!infoDiv) {
       infoDiv = document.createElement('div');
       infoDiv.id = infoId;
-      memberCell.innerHTML = '';
-      memberCell.appendChild(infoDiv);
+      infoDiv.className = 'member-state';
+      layoutDiv.appendChild(infoDiv);
     }
 
     const infoKey = m.state + '|' + m.memberId + '|' + m.memberEpoch;
     if (infoDiv.dataset.key !== infoKey) {
       infoDiv.dataset.key = infoKey;
-      let infoHtml = '<div class="matrix-member-name">' + m.clientId +
-        ' <span class="badge ' + badgeClass + '">' + m.state + '</span></div>';
+      let infoHtml = '<div class="member-header"><span class="member-name">' + m.clientId +
+        '</span> <span class="badge ' + badgeClass + '">' + m.state + '</span></div>';
       if (m.memberId) {
-        infoHtml += '<div class="matrix-member-id">' + m.memberId + '</div>';
+        infoHtml += '<div class="member-detail">' + m.memberId + '</div>';
       }
-      infoHtml += '<div class="matrix-member-meta">Epoch: ' + (m.memberEpoch >= 0 ? m.memberEpoch : '\u2014') + '</div>';
+      infoHtml += '<div class="member-detail">epoch ' + (m.memberEpoch >= 0 ? m.memberEpoch : '\u2014') + '</div>';
       infoDiv.innerHTML = infoHtml;
     }
 
-    // Controls — only rebuild if not actively dragging this slider.
+    // Right: controls stack.
     let ctrlId = 'ctrl-' + m.slotIndex;
     let ctrlDiv = document.getElementById(ctrlId);
     if (!ctrlDiv) {
       ctrlDiv = document.createElement('div');
       ctrlDiv.id = ctrlId;
-      ctrlDiv.className = 'matrix-member-controls';
-      memberCell.appendChild(ctrlDiv);
+      ctrlDiv.className = 'member-controls';
+      layoutDiv.appendChild(ctrlDiv);
     }
 
     const displayDelay = localDelays[m.slotIndex] !== undefined ? localDelays[m.slotIndex] : m.processingDelayMs;
     const ctrlKey = m.subscribed + '|' + m.blocked + '|' + m.partitioned + '|' + displayDelay;
+    const dis = !m.subscribed ? ' disabled' : '';
 
-    if (activeSlider === m.slotIndex) {
-      // Slider is active — only update the delay label from local state.
-      const lbl = ctrlDiv.querySelector('.delay-value');
-      if (lbl && localDelays[m.slotIndex] !== undefined) {
-        lbl.textContent = (localDelays[m.slotIndex] / 1000).toFixed(0) + 's';
-      }
-    } else if (ctrlKey !== prevCtrlState[m.slotIndex]) {
+    if (ctrlKey !== prevCtrlState[m.slotIndex]) {
       prevCtrlState[m.slotIndex] = ctrlKey;
       let ctrlHtml = '';
+
+      // Start / Stop.
       if (m.subscribed) {
-        ctrlHtml += '<button class="btn-icon stop" onclick="unsubscribe(' + m.slotIndex + ')" title="Unsubscribe consumer"><svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1"/></svg></button>';
+        ctrlHtml += '<button class="ctrl-btn act-stop" onclick="unsubscribe(' + m.slotIndex + ')">stop</button>';
       } else {
-        ctrlHtml += '<button class="btn-icon play" onclick="subscribe(' + m.slotIndex + ')" title="Subscribe consumer"><svg viewBox="0 0 16 16"><polygon points="4,2 14,8 4,14"/></svg></button>';
+        ctrlHtml += '<button class="ctrl-btn act-start" onclick="subscribe(' + m.slotIndex + ')">start</button>';
       }
-      if (m.subscribed) {
-        if (m.blocked) {
-          ctrlHtml += '<button class="btn-icon blocked" onclick="unblockMember(' + m.slotIndex + ')" title="Unblock poll()"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="12" rx="1"/><rect x="9" y="2" width="5" height="12" rx="1"/></svg></button>';
-        } else {
-          ctrlHtml += '<button class="btn-icon block" onclick="blockMember(' + m.slotIndex + ')" title="Block poll()"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="12" rx="1"/><rect x="9" y="2" width="5" height="12" rx="1"/></svg></button>';
-        }
-        if (m.partitioned) {
-          ctrlHtml += '<button class="btn-icon partitioned" onclick="healMember(' + m.slotIndex + ')" title="Heal network partition"><svg viewBox="0 0 16 16"><path d="M8.9 1.5L5 8h3.5l-.9 6.5L12 8H8.5z"/></svg></button>';
-        } else {
-          ctrlHtml += '<button class="btn-icon partition" onclick="partitionMember(' + m.slotIndex + ')" title="Simulate network partition"><svg viewBox="0 0 16 16"><path d="M8.9 1.5L5 8h3.5l-.9 6.5L12 8H8.5z"/></svg></button>';
-        }
-      }
-      ctrlHtml += '<span class="delay-label">Delay</span>';
-      ctrlHtml += '<input type="range" class="delay-slider" min="0" max="60000" step="1000" value="' +
-        displayDelay + '" oninput="onSliderInput(' + m.slotIndex + ', this)" onchange="onSliderChange(' + m.slotIndex + ', this)" ' +
-        'onmousedown="activeSlider=' + m.slotIndex + '" ontouchstart="activeSlider=' + m.slotIndex + '">';
-      ctrlHtml += '<span class="delay-value">' + (displayDelay / 1000).toFixed(0) + 's</span>';
+
+      // Block poll / Block network — always shown, disabled when stopped.
+      ctrlHtml += '<button class="ctrl-btn act-block-poll' + (m.blocked ? ' on' : '') + '"' + dis +
+        ' onclick="' + (m.blocked ? 'unblockMember(' : 'blockMember(') + m.slotIndex + ')">block polling</button>';
+      ctrlHtml += '<button class="ctrl-btn act-block-net' + (m.partitioned ? ' on' : '') + '"' + dis +
+        ' onclick="' + (m.partitioned ? 'healMember(' : 'partitionMember(') + m.slotIndex + ')">block network</button>';
+
+      // Delay input.
+      ctrlHtml += '<div class="ctrl-delay' + (m.subscribed ? '' : ' disabled') + '">';
+      ctrlHtml += '<span class="ctrl-delay-label">polling delay</span>';
+      ctrlHtml += '<input class="ctrl-delay-input" type="number" min="0" max="120" value="' +
+        Math.round(displayDelay / 1000) + '" onchange="onDelayInput(' + m.slotIndex + ', this)"' + dis + '>';
+      ctrlHtml += '<span class="ctrl-delay-unit">s</span>';
+      ctrlHtml += '</div>';
+
       ctrlDiv.innerHTML = ctrlHtml;
     }
 
@@ -971,19 +1211,11 @@ function renderGroup(data) {
 
 // ── Slider handling ──
 
-function onSliderInput(index, slider) {
-  // Live feedback while dragging — update label only, don't send to server.
-  localDelays[index] = parseInt(slider.value);
-  const lbl = slider.nextElementSibling;
-  if (lbl) lbl.textContent = (slider.value / 1000).toFixed(0) + 's';
-}
-
-function onSliderChange(index, slider) {
-  // Fired on release — send to server.
-  const value = parseInt(slider.value);
-  localDelays[index] = value;
-  activeSlider = null;
-  setDelay(index, value);
+function onDelayInput(index, input) {
+  const seconds = parseInt(input.value) || 0;
+  const ms = Math.max(0, Math.min(120000, seconds * 1000));
+  localDelays[index] = ms;
+  setDelay(index, ms);
 }
 
 function splitPartitionKey(key) {
@@ -992,37 +1224,37 @@ function splitPartitionKey(key) {
 }
 
 async function subscribe(index) {
-  logEvent('log-join', 'consumer-' + index + ': subscribing...');
+  logEvent('log-join', 'consumer-' + index + ': subscribing\u2026');
   await fetch('/api/simulator/members/' + index + '/subscribe', {method: 'POST'});
 }
 
 async function unsubscribe(index) {
-  logEvent('log-leave', 'consumer-' + index + ': unsubscribing...');
+  logEvent('log-leave', 'consumer-' + index + ': unsubscribing\u2026');
   await fetch('/api/simulator/members/' + index + '/unsubscribe', {method: 'POST'});
 }
 
 async function partitionMember(index) {
-  logEvent('log-leave', 'consumer-' + index + ': simulating network partition...');
+  logEvent('log-leave', 'consumer-' + index + ': network partition\u2026');
   await fetch('/api/simulator/members/' + index + '/partition', {method: 'POST'});
 }
 
 async function healMember(index) {
-  logEvent('log-join', 'consumer-' + index + ': healing network partition...');
+  logEvent('log-join', 'consumer-' + index + ': healing partition\u2026');
   await fetch('/api/simulator/members/' + index + '/heal', {method: 'POST'});
 }
 
 async function blockMember(index) {
-  logEvent('log-state', 'consumer-' + index + ': blocking poll()...');
+  logEvent('log-state', 'consumer-' + index + ': blocking poll()\u2026');
   await fetch('/api/simulator/members/' + index + '/block', {method: 'POST'});
 }
 
 async function unblockMember(index) {
-  logEvent('log-state', 'consumer-' + index + ': unblocking poll()...');
+  logEvent('log-state', 'consumer-' + index + ': unblocking poll()\u2026');
   await fetch('/api/simulator/members/' + index + '/unblock', {method: 'POST'});
 }
 
 async function setDelay(index, value) {
-  logEvent('log-state', 'consumer-' + index + ': delay set to ' + (value / 1000).toFixed(0) + 's');
+  logEvent('log-state', 'consumer-' + index + ': delay \u2192 ' + (value / 1000).toFixed(0) + 's');
   await fetch('/api/simulator/members/' + index + '/delay', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1030,24 +1262,35 @@ async function setDelay(index, value) {
   });
 }
 
-// Check initial state on load.
+// ── Init: check if simulation is already running ──
 (async function() {
   try {
     const resp = await fetch('/api/simulator/status');
     const data = await resp.json();
     if (data.phase === 'RUNNING') {
       currentConfig = data.config;
-      document.getElementById('config-view').style.display = 'none';
-      document.getElementById('running-view').style.display = 'block';
+      // Populate config fields from running config.
+      if (currentConfig) {
+        document.getElementById('cfg-group-id').value = currentConfig.groupId || '';
+        document.getElementById('cfg-topic-prefix').value = currentConfig.topicPrefix || '';
+        document.getElementById('cfg-num-topics').value = currentConfig.numTopics || '';
+        document.getElementById('cfg-num-partitions').value = currentConfig.numPartitions || '';
+        document.getElementById('cfg-num-consumers').value = currentConfig.numConsumers || '';
+        document.getElementById('cfg-session-timeout').value = currentConfig.sessionTimeoutMs || 45000;
+        document.getElementById('cfg-heartbeat-interval').value = currentConfig.heartbeatIntervalMs || 5000;
+        document.getElementById('cfg-assignment-interval').value = currentConfig.assignmentIntervalMs || 1000;
+        document.getElementById('cfg-assignor').value = currentConfig.assignor || '';
+        document.getElementById('cfg-max-poll-interval').value = currentConfig.maxPollIntervalMs || 300000;
+        document.getElementById('cfg-static-members').value = currentConfig.staticMembers ? 'true' : 'false';
+      }
+      setSimulationUI(true);
       if (data.chaosRunning) {
-        chaosRunning = true;
-        document.getElementById('btn-chaos').textContent = 'Stop Chaos';
+        autopilotRunning = true;
+        document.getElementById('btn-autopilot').className = 'btn btn-autopilot active';
       }
       startPolling();
     }
-  } catch (e) {
-    // Ignore.
-  }
+  } catch (e) { /* ignore */ }
 })();
 </script>
 </body>
