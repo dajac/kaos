@@ -536,7 +536,8 @@ body {
 
 /* ── Right column: per-consumer controls ── */
 .member-controls {
-  flex: 0 0 auto;
+  flex: 0 0 110px;
+  width: 110px;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -686,7 +687,7 @@ body {
       </div>
       <div class="field">
         <label class="field-label">Consumers</label>
-        <input class="field-input" type="number" id="cfg-num-consumers" value="6" min="1" max="20">
+        <input class="field-input" type="number" id="cfg-num-consumers" value="4" min="1" max="20">
       </div>
     </div>
 
@@ -727,7 +728,7 @@ body {
       </div>
       <div class="field">
         <label class="field-label">Poll Delay (ms)</label>
-        <input class="field-input" type="number" id="cfg-poll-delay" value="10000" min="0" max="120000">
+        <input class="field-input" type="number" id="cfg-poll-delay" value="5000" min="0" max="120000">
       </div>
       <div class="field">
         <label class="field-label">Max Poll Interval (ms)</label>

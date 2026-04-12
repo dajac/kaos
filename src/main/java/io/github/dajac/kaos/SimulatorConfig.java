@@ -29,14 +29,14 @@ public class SimulatorConfig {
         this.topicPrefix = "kaos";
         this.numTopics = 2;
         this.numPartitions = 18;
-        this.numConsumers = 6;
+        this.numConsumers = 4;
         this.sessionTimeoutMs = 45000;
         this.heartbeatIntervalMs = 5000;
         this.assignmentIntervalMs = 1000;
         this.protocol = "consumer";
         this.assignor = "";
         this.pollTimeoutMs = 0;
-        this.pollDelayMs = 10000;
+        this.pollDelayMs = 5000;
         this.maxPollIntervalMs = 300000;
         this.staticMembers = false;
     }
