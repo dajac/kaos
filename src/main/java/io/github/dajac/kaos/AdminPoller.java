@@ -50,7 +50,7 @@ public class AdminPoller {
                     }
                 }
                 try {
-                    Thread.sleep(500);
+                    Thread.sleep(200);
                 } catch (InterruptedException e) {
                     break;
                 }

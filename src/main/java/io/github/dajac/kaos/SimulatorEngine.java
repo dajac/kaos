@@ -311,7 +311,10 @@ public class SimulatorEngine {
             }
         } else {
             props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
-            if (config.assignor != null && !config.assignor.isEmpty()) {
+            // Only set the server-side assignor if it's a valid consumer-protocol
+            // assignor. Classic assignor names (range/roundrobin/sticky/
+            // cooperative-sticky) are client-side strategies and don't apply.
+            if ("uniform".equals(config.assignor) || "range".equals(config.assignor)) {
                 props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, config.assignor);
             }
         }
