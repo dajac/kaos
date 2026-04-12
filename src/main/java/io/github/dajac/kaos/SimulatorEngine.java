@@ -156,6 +156,10 @@ public class SimulatorEngine {
             proxyManager = null;
         }
 
+        // Delete topics so the next run can recreate them with different
+        // partition counts if needed.
+        deleteTopics();
+
         phase.set(Phase.IDLE);
     }
 
@@ -219,6 +223,17 @@ public class SimulatorEngine {
                     }
                 }
             }
+        }
+    }
+
+    private void deleteTopics() {
+        if (config == null) return;
+        Properties props = new Properties();
+        props.put("bootstrap.servers", bootstrapServers);
+        try (AdminClient admin = AdminClient.create(props)) {
+            admin.deleteTopics(config.topicNames()).all().get();
+        } catch (Exception e) {
+            // Ignore — topics may not exist.
         }
     }
 

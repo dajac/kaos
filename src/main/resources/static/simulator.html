@@ -818,6 +818,7 @@ const ASSIGNORS_BY_PROTOCOL = {
     {value: 'range', label: 'range'}
   ],
   classic: [
+    {value: '', label: '(default)'},
     {value: 'range', label: 'range'},
     {value: 'roundrobin', label: 'roundrobin'},
     {value: 'sticky', label: 'sticky'},
@@ -1112,8 +1113,13 @@ function renderGroup(data) {
 
     const isStopped = m.state === 'Stopped';
     const bCls = badgeClassFor(m.state);
-    // Card root classes (state only — divergence applied below).
-    card.className = 'card ' + bCls + (isStopped ? ' stopped' : '');
+    // For classic groups, don't apply per-member state styling to the card
+    // since there is no per-member state in the classic protocol.
+    if (isClassic) {
+      card.className = 'card' + (isStopped ? ' stopped' : '');
+    } else {
+      card.className = 'card ' + bCls + (isStopped ? ' stopped' : '');
+    }
 
     // ── Metadata column ──
     const nameEl = card.querySelector('.member-name');
