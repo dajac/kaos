@@ -156,6 +156,8 @@ public class SimulatorRestServer {
             Map<String, Object> m = new HashMap<>();
             m.put("slotIndex", slot.index());
             m.put("clientId", slot.clientId());
+            m.put("protocol", slot.protocol());
+            m.put("alive", slot.alive());
             m.put("subscribed", slot.desiredSubscribed().get());
             m.put("blocked", slot.blocked().get());
             m.put("partitioned", slot.partitioned().get());
@@ -172,7 +174,6 @@ public class SimulatorRestServer {
                 m.put("memberId", adminMember.memberId);
                 m.put("instanceId", adminMember.instanceId);
                 m.put("memberEpoch", adminMember.memberEpoch);
-                // Override state to "Stopping" if unsubscribed but still in the group.
                 if (!slot.desiredSubscribed().get()) {
                     m.put("state", "Stopping");
                 } else {
@@ -254,6 +255,20 @@ public class SimulatorRestServer {
                 slot.partitioned().set(false);
                 PartitionFilter.unblock(slot.clientId());
                 sendJson(exchange, 200, Map.of("status", "healed"));
+                break;
+            case "upgrade":
+                if (slot.alive()) {
+                    PartitionFilter.unblock(slot.clientId());
+                    engine.switchProtocol(slot, "consumer");
+                }
+                sendJson(exchange, 200, Map.of("status", "upgraded", "protocol", "consumer"));
+                break;
+            case "downgrade":
+                if (slot.alive()) {
+                    PartitionFilter.unblock(slot.clientId());
+                    engine.switchProtocol(slot, "classic");
+                }
+                sendJson(exchange, 200, Map.of("status", "downgraded", "protocol", "classic"));
                 break;
             default:
                 sendJson(exchange, 400, Map.of("error", "Unknown action: " + action));

@@ -15,11 +15,14 @@ public class ConsumerSlot {
     private final AtomicBoolean partitioned = new AtomicBoolean(false);
     private final AtomicInteger generationId = new AtomicInteger(-1);
     private final Set<TopicPartition> localAssignment = ConcurrentHashMap.newKeySet();
-    private KafkaConsumer<String, String> consumer;
-    private Thread thread;
+    private volatile String protocol; // "consumer" or "classic"
+    private volatile KafkaConsumer<String, String> consumer;
+    private volatile Thread thread;
+    private volatile boolean alive; // true while the consumer loop should run
 
-    public ConsumerSlot(int index) {
+    public ConsumerSlot(int index, String protocol) {
         this.index = index;
+        this.protocol = protocol;
     }
 
     public int index() {
@@ -50,6 +53,22 @@ public class ConsumerSlot {
         return localAssignment;
     }
 
+    public String protocol() {
+        return protocol;
+    }
+
+    public void setProtocol(String protocol) {
+        this.protocol = protocol;
+    }
+
+    public boolean alive() {
+        return alive;
+    }
+
+    public void setAlive(boolean alive) {
+        this.alive = alive;
+    }
+
     public KafkaConsumer<String, String> consumer() {
         return consumer;
     }
@@ -64,5 +83,12 @@ public class ConsumerSlot {
 
     public void setThread(Thread thread) {
         this.thread = thread;
+    }
+
+    public void reset() {
+        localAssignment.clear();
+        generationId.set(-1);
+        blocked.set(false);
+        partitioned.set(false);
     }
 }

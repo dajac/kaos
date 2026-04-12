@@ -112,22 +112,9 @@ public class SimulatorEngine {
         stopChaos();
         running.set(false);
 
-        // Wait for consumer threads to exit.
+        // Destroy all consumers.
         for (ConsumerSlot slot : slots) {
-            try {
-                slot.thread().join();
-            } catch (InterruptedException e) {
-                // Ignore.
-            }
-        }
-
-        // Close consumers.
-        for (ConsumerSlot slot : slots) {
-            try {
-                slot.consumer().close();
-            } catch (Exception e) {
-                // Ignore.
-            }
+            destroyConsumer(slot);
         }
         slots.clear();
 
@@ -293,47 +280,89 @@ public class SimulatorEngine {
     }
 
     private void startConsumers() {
-        List<String> topics = config.topicNames();
         for (int i = 0; i < config.numConsumers; i++) {
-            ConsumerSlot slot = new ConsumerSlot(i);
-
-            Properties props = new Properties();
-            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, proxyManager.proxyBootstrapServers());
-            props.put(ConsumerConfig.GROUP_ID_CONFIG, config.groupId);
-            props.put(ConsumerConfig.CLIENT_ID_CONFIG, slot.clientId());
-            props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
-            props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(config.maxPollIntervalMs));
-
-            boolean classic = "classic".equals(config.protocol);
-            if (classic) {
-                // KIP-848 consumer is the default in 4.x; opt out for classic.
-                props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic");
-                if (config.assignor != null && !config.assignor.isEmpty()) {
-                    props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-                        classicAssignorClass(config.assignor));
-                }
-            } else {
-                props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
-                if (config.assignor != null && !config.assignor.isEmpty()) {
-                    props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, config.assignor);
-                }
-            }
-
-            if (config.staticMembers) {
-                props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, config.groupId + "-" + slot.clientId());
-            }
-
-            KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-            slot.setConsumer(consumer);
-
-            Thread thread = new Thread(() -> consumerLoop(slot, topics), slot.clientId());
-            slot.setThread(thread);
-            thread.start();
-
+            ConsumerSlot slot = new ConsumerSlot(i, config.protocol);
             slots.add(slot);
+            createConsumer(slot);
         }
+    }
+
+    /**
+     * Creates a new KafkaConsumer for the given slot using the slot's current
+     * protocol setting. Starts the consumer loop thread. The slot must not
+     * already have a running consumer.
+     */
+    public void createConsumer(ConsumerSlot slot) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, proxyManager.proxyBootstrapServers());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, config.groupId);
+        props.put(ConsumerConfig.CLIENT_ID_CONFIG, slot.clientId());
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(config.maxPollIntervalMs));
+
+        boolean classic = "classic".equals(slot.protocol());
+        if (classic) {
+            props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic");
+            if (config.assignor != null && !config.assignor.isEmpty()) {
+                props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+                    classicAssignorClass(config.assignor));
+            }
+        } else {
+            props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
+            if (config.assignor != null && !config.assignor.isEmpty()) {
+                props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, config.assignor);
+            }
+        }
+
+        if (config.staticMembers) {
+            props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, config.groupId + "-" + slot.clientId());
+        }
+
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+        slot.setConsumer(consumer);
+        slot.setAlive(true);
+        slot.desiredSubscribed().set(true);
+
+        List<String> topics = config.topicNames();
+        Thread thread = new Thread(() -> consumerLoop(slot, topics), slot.clientId());
+        slot.setThread(thread);
+        thread.start();
+    }
+
+    /**
+     * Stops and closes the consumer for the given slot. Blocks until the
+     * consumer thread exits.
+     */
+    public void destroyConsumer(ConsumerSlot slot) {
+        slot.setAlive(false);
+        if (slot.thread() != null) {
+            try {
+                slot.thread().join(5000);
+            } catch (InterruptedException e) {
+                // Ignore.
+            }
+        }
+        if (slot.consumer() != null) {
+            try {
+                slot.consumer().close();
+            } catch (Exception e) {
+                // Ignore.
+            }
+        }
+        slot.setConsumer(null);
+        slot.setThread(null);
+        slot.reset();
+    }
+
+    /**
+     * Switches a consumer's protocol by destroying and recreating it.
+     */
+    public void switchProtocol(ConsumerSlot slot, String newProtocol) {
+        destroyConsumer(slot);
+        slot.setProtocol(newProtocol);
+        createConsumer(slot);
     }
 
     private static String classicAssignorClass(String name) {
@@ -355,9 +384,6 @@ public class SimulatorEngine {
         KafkaConsumer<String, String> consumer = slot.consumer();
         boolean currentlySubscribed = false;
 
-        // Rebalance listener tracks the consumer's local view of its assignment.
-        // Fires on the polling thread during poll(), so it accurately reflects
-        // when the consumer client perceives reconciliation events.
         ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
@@ -375,7 +401,7 @@ public class SimulatorEngine {
             }
         };
 
-        while (running.get()) {
+        while (slot.alive()) {
             boolean desired = slot.desiredSubscribed().get();
             if (desired && !currentlySubscribed) {
                 consumer.subscribe(topics, listener);
@@ -392,8 +418,6 @@ public class SimulatorEngine {
             }
 
             if (slot.blocked().get()) {
-                // Blocked — skip poll() so the member stays in the group
-                // (heartbeats continue) but doesn't process rebalance callbacks.
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException e) {
@@ -405,14 +429,12 @@ public class SimulatorEngine {
             try {
                 consumer.poll(Duration.ofMillis(config.pollTimeoutMs));
             } catch (Exception e) {
-                if (running.get()) {
+                if (slot.alive()) {
                     // Ignore transient errors.
                 }
             }
 
-            // Capture the current group generation. For the consumer protocol
-            // this is the member epoch; for the classic protocol it is the
-            // group generation id.
+            // Capture the current group generation.
             try {
                 slot.generationId().set(consumer.groupMetadata().generationId());
             } catch (Exception e) {
@@ -421,7 +443,7 @@ public class SimulatorEngine {
 
             // Poll delay — time between poll() calls.
             long delayStart = System.currentTimeMillis();
-            while (running.get()) {
+            while (slot.alive()) {
                 long elapsed = System.currentTimeMillis() - delayStart;
                 if (elapsed >= config.pollDelayMs) break;
                 try {

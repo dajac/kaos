@@ -1093,6 +1093,10 @@ function renderGroup(data) {
             '<span class="member-name"></span>' +
             '<span class="badge"></span>' +
           '</div>' +
+          '<div class="meta-line meta-line-protocol">' +
+            '<span class="meta-line-label">protocol</span>' +
+            '<span class="meta-line-value"></span>' +
+          '</div>' +
           '<div class="meta-line meta-line-id">' +
             '<span class="meta-line-label">id</span>' +
             '<span class="meta-line-value"></span>' +
@@ -1113,25 +1117,26 @@ function renderGroup(data) {
 
     const isStopped = m.state === 'Stopped';
     const bCls = badgeClassFor(m.state);
-    // For classic groups, don't apply per-member state styling to the card
-    // since there is no per-member state in the classic protocol.
-    if (isClassic) {
-      card.className = 'card' + (isStopped ? ' stopped' : '');
-    } else {
-      card.className = 'card ' + bCls + (isStopped ? ' stopped' : '');
-    }
+    const memberIsClassic = m.protocol === 'classic';
+
+    card.className = 'card ' + bCls + (isStopped ? ' stopped' : '');
 
     // ── Metadata column ──
     const nameEl = card.querySelector('.member-name');
     const badgeEl = card.querySelector('.badge');
+    const protocolValEl = card.querySelector('.meta-line-protocol .meta-line-value');
     const idValEl = card.querySelector('.meta-line-id .meta-line-value');
     const instanceValEl = card.querySelector('.meta-line-instance .meta-line-value');
     const epochValEl = card.querySelector('.meta-line-epoch .meta-line-value');
 
     if (nameEl.textContent !== m.clientId) nameEl.textContent = m.clientId;
 
-    // Classic groups have no per-member state or epoch — hide those fields.
-    if (isClassic) {
+    // Protocol label.
+    const protoTxt = m.protocol || '\u2014';
+    if (protocolValEl.textContent !== protoTxt) protocolValEl.textContent = protoTxt;
+
+    // Classic members have no per-member state or epoch.
+    if (memberIsClassic) {
       badgeEl.style.display = 'none';
       card.querySelector('.meta-line-epoch').style.display = 'none';
     } else {
@@ -1214,16 +1219,21 @@ function renderGroup(data) {
 
     // ── Controls ──
     const ctrlDiv = card.querySelector('.member-controls');
-    const ctrlKey = m.subscribed + '|' + m.blocked + '|' + m.partitioned;
+    const ctrlKey = m.subscribed + '|' + m.blocked + '|' + m.partitioned + '|' + m.protocol;
     const dis = !m.subscribed ? ' disabled' : '';
 
     if (ctrlKey !== prevCtrlState[m.slotIndex]) {
       prevCtrlState[m.slotIndex] = ctrlKey;
       let html = '';
       if (m.subscribed) {
-        html += '<button class="ctrl-btn act-stop" onclick="unsubscribe(' + m.slotIndex + ')">stop</button>';
+        html += '<button class="ctrl-btn act-stop" onclick="stopConsumer(' + m.slotIndex + ')">stop</button>';
       } else {
-        html += '<button class="ctrl-btn act-start" onclick="subscribe(' + m.slotIndex + ')">start</button>';
+        html += '<button class="ctrl-btn act-start" onclick="startConsumer(' + m.slotIndex + ')">start</button>';
+      }
+      if (m.protocol === 'classic') {
+        html += '<button class="ctrl-btn act-start"' + dis + ' onclick="upgradeConsumer(' + m.slotIndex + ')">upgrade</button>';
+      } else {
+        html += '<button class="ctrl-btn act-stop"' + dis + ' onclick="downgradeConsumer(' + m.slotIndex + ')">downgrade</button>';
       }
       html += '<button class="ctrl-btn act-fault' + (m.blocked ? ' on' : '') + '"' + dis +
         ' onclick="' + (m.blocked ? 'unblockMember(' : 'blockMember(') + m.slotIndex + ')">' +
@@ -1302,12 +1312,20 @@ function setsEqual(a, b) {
 
 // ── Member control handlers ──
 
-async function subscribe(index) {
+async function startConsumer(index) {
   await fetch('/api/simulator/members/' + index + '/subscribe', {method: 'POST'});
 }
 
-async function unsubscribe(index) {
+async function stopConsumer(index) {
   await fetch('/api/simulator/members/' + index + '/unsubscribe', {method: 'POST'});
+}
+
+async function upgradeConsumer(index) {
+  await fetch('/api/simulator/members/' + index + '/upgrade', {method: 'POST'});
+}
+
+async function downgradeConsumer(index) {
+  await fetch('/api/simulator/members/' + index + '/downgrade', {method: 'POST'});
 }
 
 async function partitionMember(index) {
