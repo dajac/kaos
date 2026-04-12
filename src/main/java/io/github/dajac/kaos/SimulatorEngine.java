@@ -305,15 +305,16 @@ public class SimulatorEngine {
         boolean classic = "classic".equals(slot.protocol());
         if (classic) {
             props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic");
-            if (config.assignor != null && !config.assignor.isEmpty()) {
-                props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-                    classicAssignorClass(config.assignor));
+            // Only set the client-side strategy if it's a valid classic assignor.
+            // Server-side names (uniform) don't apply to the classic protocol.
+            String classicClass = classicAssignorClass(config.assignor);
+            if (classicClass != null) {
+                props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classicClass);
             }
         } else {
             props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
             // Only set the server-side assignor if it's a valid consumer-protocol
-            // assignor. Classic assignor names (range/roundrobin/sticky/
-            // cooperative-sticky) are client-side strategies and don't apply.
+            // assignor. Classic assignor names don't apply.
             if ("uniform".equals(config.assignor) || "range".equals(config.assignor)) {
                 props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, config.assignor);
             }
@@ -369,6 +370,7 @@ public class SimulatorEngine {
     }
 
     private static String classicAssignorClass(String name) {
+        if (name == null || name.isEmpty()) return null;
         switch (name) {
             case "range":
                 return "org.apache.kafka.clients.consumer.RangeAssignor";
@@ -379,7 +381,7 @@ public class SimulatorEngine {
             case "cooperative-sticky":
                 return "org.apache.kafka.clients.consumer.CooperativeStickyAssignor";
             default:
-                return name; // assume fully qualified class name
+                return null; // not a classic assignor (e.g. "uniform")
         }
     }
 
