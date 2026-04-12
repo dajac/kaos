@@ -579,46 +579,6 @@ body {
   background: var(--fault-dim);
 }
 
-.ctrl-delay {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 4px;
-}
-
-.ctrl-delay.disabled { opacity: 0.3; }
-
-.ctrl-delay-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-dim);
-  letter-spacing: 0.3px;
-}
-
-.ctrl-delay-input {
-  width: 50px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 3px 5px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  text-align: left;
-}
-
-.ctrl-delay-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.ctrl-delay-unit {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-dim);
-}
 
 /* ── Legend (inline in main header area) ── */
 .main-header {
@@ -762,6 +722,14 @@ body {
         <select class="field-input" id="cfg-assignor"></select>
       </div>
       <div class="field">
+        <label class="field-label">Poll Timeout (ms)</label>
+        <input class="field-input" type="number" id="cfg-poll-timeout" value="0" min="0" max="60000">
+      </div>
+      <div class="field">
+        <label class="field-label">Poll Delay (ms)</label>
+        <input class="field-input" type="number" id="cfg-poll-delay" value="10000" min="0" max="120000">
+      </div>
+      <div class="field">
         <label class="field-label">Max Poll Interval (ms)</label>
         <input class="field-input" type="number" id="cfg-max-poll-interval" value="300000" min="1000" max="600000">
       </div>
@@ -821,7 +789,6 @@ let pollInterval = null;
 let autopilotRunning = false;
 let currentConfig = null;
 let prevState = null;
-let localDelays = {};
 let prevCtrlState = {};
 let simulationRunning = false;
 
@@ -829,7 +796,7 @@ const LOCKED_FIELDS = [
   'cfg-group-id', 'cfg-topic-prefix', 'cfg-num-topics', 'cfg-num-partitions',
   'cfg-num-consumers', 'cfg-session-timeout', 'cfg-heartbeat-interval',
   'cfg-assignment-interval', 'cfg-protocol', 'cfg-assignor',
-  'cfg-max-poll-interval', 'cfg-static-members'
+  'cfg-poll-timeout', 'cfg-poll-delay', 'cfg-max-poll-interval', 'cfg-static-members'
 ];
 
 function lockConfig() {
@@ -994,8 +961,9 @@ async function startSimulation() {
     assignmentIntervalMs: parseInt(document.getElementById('cfg-assignment-interval').value),
     protocol: document.getElementById('cfg-protocol').value,
     assignor: document.getElementById('cfg-assignor').value,
+    pollTimeoutMs: parseInt(document.getElementById('cfg-poll-timeout').value),
+    pollDelayMs: parseInt(document.getElementById('cfg-poll-delay').value),
     maxPollIntervalMs: parseInt(document.getElementById('cfg-max-poll-interval').value),
-    defaultProcessingDelayMs: 10000,
     staticMembers: document.getElementById('cfg-static-members').value === 'true'
   };
 
@@ -1014,7 +982,6 @@ async function startSimulation() {
     }
     currentConfig = config;
     prevState = null;
-    localDelays = {};
     prevCtrlState = {};
     setSimulationUI(true);
     startPolling();
@@ -1133,7 +1100,7 @@ function renderGroup(data) {
             '<span class="meta-line-value"></span>' +
           '</div>' +
           '<div class="meta-line meta-line-epoch">' +
-            '<span class="meta-line-label meta-line-label-epoch">epoch</span>' +
+            '<span class="meta-line-label">epoch</span>' +
             '<span class="meta-line-value"></span>' +
           '</div>' +
         '</div>' +
@@ -1155,9 +1122,23 @@ function renderGroup(data) {
     const epochValEl = card.querySelector('.meta-line-epoch .meta-line-value');
 
     if (nameEl.textContent !== m.clientId) nameEl.textContent = m.clientId;
-    if (badgeEl.textContent !== m.state) {
-      badgeEl.textContent = m.state;
-      badgeEl.className = 'badge ' + bCls;
+
+    // Classic groups have no per-member state or epoch — hide those fields.
+    if (isClassic) {
+      badgeEl.style.display = 'none';
+      card.querySelector('.meta-line-epoch').style.display = 'none';
+    } else {
+      badgeEl.style.display = '';
+      if (badgeEl.textContent !== m.state) {
+        badgeEl.textContent = m.state;
+        badgeEl.className = 'badge ' + bCls;
+      }
+      card.querySelector('.meta-line-epoch').style.display = '';
+      const epochTxt = (m.memberEpoch >= 0 ? String(m.memberEpoch) : '\u2014');
+      if (epochValEl.textContent !== epochTxt) {
+        epochValEl.textContent = epochTxt;
+        epochValEl.className = 'meta-line-value' + (m.memberEpoch >= 0 ? '' : ' dim');
+      }
     }
 
     const idTxt = m.memberId || '\u2014';
@@ -1170,20 +1151,6 @@ function renderGroup(data) {
     if (instanceValEl.textContent !== instanceTxt) {
       instanceValEl.textContent = instanceTxt;
       instanceValEl.className = 'meta-line-value' + (m.instanceId ? '' : ' dim');
-    }
-
-    // For classic groups show "generation" sourced from the consumer's
-    // groupMetadata(). For consumer-protocol groups show "epoch" sourced
-    // from the admin API memberEpoch.
-    const epochLabelEl = card.querySelector('.meta-line-label-epoch');
-    const labelTxt = isClassic ? 'generation' : 'epoch';
-    if (epochLabelEl.textContent !== labelTxt) epochLabelEl.textContent = labelTxt;
-    const rawValue = isClassic ? m.generationId : m.memberEpoch;
-    const has = rawValue != null && rawValue >= 0;
-    const epochTxt = has ? String(rawValue) : '\u2014';
-    if (epochValEl.textContent !== epochTxt) {
-      epochValEl.textContent = epochTxt;
-      epochValEl.className = 'meta-line-value' + (has ? '' : ' dim');
     }
 
     // ── Zones ──
@@ -1240,8 +1207,7 @@ function renderGroup(data) {
 
     // ── Controls ──
     const ctrlDiv = card.querySelector('.member-controls');
-    const displayDelay = localDelays[m.slotIndex] !== undefined ? localDelays[m.slotIndex] : m.processingDelayMs;
-    const ctrlKey = m.subscribed + '|' + m.blocked + '|' + m.partitioned + '|' + displayDelay;
+    const ctrlKey = m.subscribed + '|' + m.blocked + '|' + m.partitioned;
     const dis = !m.subscribed ? ' disabled' : '';
 
     if (ctrlKey !== prevCtrlState[m.slotIndex]) {
@@ -1258,11 +1224,6 @@ function renderGroup(data) {
       html += '<button class="ctrl-btn act-fault' + (m.partitioned ? ' on' : '') + '"' + dis +
         ' onclick="' + (m.partitioned ? 'healMember(' : 'partitionMember(') + m.slotIndex + ')">' +
         (m.partitioned ? 'restore' : 'partition') + '</button>';
-      html += '<div class="ctrl-delay' + (m.subscribed ? '' : ' disabled') + '">';
-      html += '<span class="ctrl-delay-label">delay</span>';
-      html += '<input class="ctrl-delay-input" type="number" min="0" max="120" value="' +
-        Math.round(displayDelay / 1000) + '" onchange="onDelayInput(' + m.slotIndex + ', this)"' + dis + '>';
-      html += '<span class="ctrl-delay-unit">s</span>';
       html += '</div>';
       ctrlDiv.innerHTML = html;
     }
@@ -1334,13 +1295,6 @@ function setsEqual(a, b) {
 
 // ── Member control handlers ──
 
-function onDelayInput(index, input) {
-  const seconds = parseInt(input.value) || 0;
-  const ms = Math.max(0, Math.min(120000, seconds * 1000));
-  localDelays[index] = ms;
-  setDelay(index, ms);
-}
-
 async function subscribe(index) {
   await fetch('/api/simulator/members/' + index + '/subscribe', {method: 'POST'});
 }
@@ -1363,14 +1317,6 @@ async function blockMember(index) {
 
 async function unblockMember(index) {
   await fetch('/api/simulator/members/' + index + '/unblock', {method: 'POST'});
-}
-
-async function setDelay(index, value) {
-  await fetch('/api/simulator/members/' + index + '/delay', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({delayMs: value})
-  });
 }
 
 // ── Init: check if simulation is already running ──
@@ -1396,6 +1342,8 @@ async function setDelay(index, value) {
         const protocol = currentConfig.protocol || 'consumer';
         document.getElementById('cfg-protocol').value = protocol;
         populateAssignors(protocol, currentConfig.assignor || '');
+        document.getElementById('cfg-poll-timeout').value = currentConfig.pollTimeoutMs || 0;
+        document.getElementById('cfg-poll-delay').value = currentConfig.pollDelayMs || 10000;
         document.getElementById('cfg-max-poll-interval').value = currentConfig.maxPollIntervalMs || 300000;
         document.getElementById('cfg-static-members').value = currentConfig.staticMembers ? 'true' : 'false';
       }

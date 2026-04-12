@@ -159,7 +159,6 @@ public class SimulatorRestServer {
             m.put("subscribed", slot.desiredSubscribed().get());
             m.put("blocked", slot.blocked().get());
             m.put("partitioned", slot.partitioned().get());
-            m.put("processingDelayMs", slot.processingDelayMs().get());
             m.put("generationId", slot.generationId().get());
 
             // Consumer's local view of its assignment, captured via rebalance listener.
@@ -255,12 +254,6 @@ public class SimulatorRestServer {
                 slot.partitioned().set(false);
                 PartitionFilter.unblock(slot.clientId());
                 sendJson(exchange, 200, Map.of("status", "healed"));
-                break;
-            case "delay":
-                JsonNode body = mapper.readTree(exchange.getRequestBody());
-                int delayMs = body.get("delayMs").asInt();
-                slot.processingDelayMs().set(delayMs);
-                sendJson(exchange, 200, Map.of("status", "delay set", "delayMs", delayMs));
                 break;
             default:
                 sendJson(exchange, 400, Map.of("error", "Unknown action: " + action));

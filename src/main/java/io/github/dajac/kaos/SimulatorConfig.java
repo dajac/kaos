@@ -19,8 +19,9 @@ public class SimulatorConfig {
     // Consumer.
     public String protocol; // "consumer" or "classic"
     public String assignor;
+    public int pollTimeoutMs;
+    public int pollDelayMs;
     public int maxPollIntervalMs;
-    public int defaultProcessingDelayMs;
     public boolean staticMembers;
 
     public SimulatorConfig() {
@@ -34,8 +35,9 @@ public class SimulatorConfig {
         this.assignmentIntervalMs = 1000;
         this.protocol = "consumer";
         this.assignor = "";
+        this.pollTimeoutMs = 0;
+        this.pollDelayMs = 10000;
         this.maxPollIntervalMs = 300000;
-        this.defaultProcessingDelayMs = 10000;
         this.staticMembers = false;
     }
 

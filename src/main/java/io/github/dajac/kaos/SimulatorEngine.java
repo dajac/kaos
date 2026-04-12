@@ -280,7 +280,7 @@ public class SimulatorEngine {
     private void startConsumers() {
         List<String> topics = config.topicNames();
         for (int i = 0; i < config.numConsumers; i++) {
-            ConsumerSlot slot = new ConsumerSlot(i, config.defaultProcessingDelayMs);
+            ConsumerSlot slot = new ConsumerSlot(i);
 
             Properties props = new Properties();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, proxyManager.proxyBootstrapServers());
@@ -388,16 +388,7 @@ public class SimulatorEngine {
             }
 
             try {
-                // poll(0) is non-blocking: it sends pending requests and reads
-                // any ready responses, but doesn't loop waiting for new I/O.
-                // This means a multi-step rebalance (e.g. classic eager:
-                // revoke → JoinGroup → SyncGroup → assign) advances by one
-                // network round-trip per call instead of completing entirely
-                // in one consumer.poll() invocation. External observers (the
-                // simulator's REST polling) can then sample the in-between
-                // states — including the empty assignment between revoke and
-                // assign.
-                consumer.poll(Duration.ofMillis(0));
+                consumer.poll(Duration.ofMillis(config.pollTimeoutMs));
             } catch (Exception e) {
                 if (running.get()) {
                     // Ignore transient errors.
@@ -413,18 +404,13 @@ public class SimulatorEngine {
                 // Ignore.
             }
 
-            // Processing delay — simulates slow record processing. The
-            // delay also paces multi-step rebalances: with poll(0), each
-            // outer iteration advances the protocol by at most one network
-            // round-trip, so the in-between states stay visible for the
-            // entire delay window.
+            // Poll delay — time between poll() calls.
             long delayStart = System.currentTimeMillis();
             while (running.get()) {
-                int delayMs = slot.processingDelayMs().get();
                 long elapsed = System.currentTimeMillis() - delayStart;
-                if (elapsed >= delayMs) break;
+                if (elapsed >= config.pollDelayMs) break;
                 try {
-                    Thread.sleep(Math.min(500, Math.max(1, delayMs - elapsed)));
+                    Thread.sleep(Math.min(500, Math.max(1, config.pollDelayMs - elapsed)));
                 } catch (InterruptedException e) {
                     break;
                 }
