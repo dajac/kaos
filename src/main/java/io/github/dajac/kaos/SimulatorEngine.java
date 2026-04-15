@@ -265,11 +265,15 @@ public class SimulatorEngine {
         producerThread = new Thread(() -> {
             long seq = 0;
             while (running.get()) {
-                String topic = topics.get((int) (seq % topics.size()));
-                producer.send(new ProducerRecord<>(topic, "key-" + (seq % config.numPartitions), "value-" + seq));
-                seq++;
+                // Send one record to every partition, then sleep.
+                for (String topic : topics) {
+                    for (int p = 0; p < config.numPartitions; p++) {
+                        producer.send(new ProducerRecord<>(topic, p, "key-" + p, "value-" + seq));
+                        seq++;
+                    }
+                }
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(500);
                 } catch (InterruptedException e) {
                     break;
                 }

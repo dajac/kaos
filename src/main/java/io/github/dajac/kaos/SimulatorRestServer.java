@@ -128,6 +128,9 @@ public class SimulatorRestServer {
             result.put("groupEpoch", adminState.groupEpoch);
             result.put("targetAssignmentEpoch", adminState.targetAssignmentEpoch);
             result.put("groupState", adminState.groupState);
+            if (adminState.partitionLag != null) {
+                result.put("partitionLag", adminState.partitionLag);
+            }
         } else {
             result.put("groupState", "UNKNOWN");
         }

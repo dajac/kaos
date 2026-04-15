@@ -2,7 +2,10 @@ package io.github.dajac.kaos;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import java.time.LocalTime;
@@ -128,8 +131,57 @@ public class AdminPoller {
         }
         state.members = members;
 
+        // Compute per-partition lag: logEndOffset - committedOffset.
+        state.partitionLag = computePartitionLag(desc);
+
         logChanges(lastState, state);
         lastState = state;
+    }
+
+    private Map<String, Long> computePartitionLag(ConsumerGroupDescription desc) {
+        Map<String, Long> lag = new HashMap<>();
+        try {
+            // Collect all assigned topic-partitions across all members.
+            Set<TopicPartition> allPartitions = new HashSet<>();
+            for (MemberDescription member : desc.members()) {
+                allPartitions.addAll(member.assignment().topicPartitions());
+                member.targetAssignment().ifPresent(a -> allPartitions.addAll(a.topicPartitions()));
+            }
+            if (allPartitions.isEmpty()) return lag;
+
+            // Fetch committed offsets for the group.
+            Map<TopicPartition, OffsetAndMetadata> committed = admin
+                .listConsumerGroupOffsets(groupId)
+                .partitionsToOffsetAndMetadata()
+                .get();
+
+            // Fetch log end offsets (latest) for all assigned partitions.
+            Map<TopicPartition, OffsetSpec> offsetSpecs = new HashMap<>();
+            for (TopicPartition tp : allPartitions) {
+                offsetSpecs.put(tp, OffsetSpec.latest());
+            }
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets = admin
+                .listOffsets(offsetSpecs)
+                .all()
+                .get();
+
+            // Compute lag per partition.
+            for (TopicPartition tp : allPartitions) {
+                ListOffsetsResult.ListOffsetsResultInfo endInfo = endOffsets.get(tp);
+                if (endInfo == null) continue;
+                long endOffset = endInfo.offset();
+                OffsetAndMetadata committedMeta = committed.get(tp);
+                long committedOffset = committedMeta != null ? committedMeta.offset() : 0;
+                long partitionLag = Math.max(0, endOffset - committedOffset);
+                lag.put(tp.topic() + "-" + tp.partition(), partitionLag);
+            }
+        } catch (Exception e) {
+            // Lag computation is best-effort; don't fail the entire poll.
+            if (running.get()) {
+                System.err.println("[admin-poller] Lag computation error: " + e.getMessage());
+            }
+        }
+        return lag;
     }
 
     private void logChanges(SimulatorGroupState prev, SimulatorGroupState curr) {

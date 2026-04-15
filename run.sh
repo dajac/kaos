@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+cd "$(dirname "$0")"
 
 BOOTSTRAP_SERVER="${1:-localhost:9092}"
 PORT="${2:-8081}"

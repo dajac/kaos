@@ -1,6 +1,7 @@
 package io.github.dajac.kaos;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class SimulatorGroupState {
@@ -9,6 +10,7 @@ public class SimulatorGroupState {
     public int targetAssignmentEpoch;
     public String groupState;
     public List<MemberState> members;
+    public Map<String, Long> partitionLag; // keyed by "topic-partition"
 
     public static class MemberState {
         public int slotIndex;

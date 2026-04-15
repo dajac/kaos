@@ -516,6 +516,29 @@ body {
   box-sizing: border-box;
 }
 
+/* CSS tooltip — shows instantly on hover, no native title delay. */
+.partition-chip[data-lag] {
+  position: relative;
+}
+
+.partition-chip[data-lag]:hover::after {
+  content: "lag: " attr(data-lag);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface3);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+  border: 1px solid var(--border);
+}
+
 .partition-chip.assigned {
   background: var(--green-dim);
   color: var(--green);
@@ -777,6 +800,16 @@ body {
           </div>
           <div class="legend-item">
             <div class="legend-swatch" style="background:var(--yellow-dim); border:1px solid rgba(251,191,36,0.35);"></div> Revoking
+          </div>
+          <div class="legend-item" style="margin-left:8px; gap:3px;">
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:0.3px;">LAG</span>
+            <div style="display:flex;align-items:center;gap:1px;">
+              <div class="legend-swatch" style="width:8px;background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.20);"></div>
+              <div class="legend-swatch" style="width:8px;background:rgba(52,211,153,0.25); border:1px solid rgba(52,211,153,0.35);"></div>
+              <div class="legend-swatch" style="width:8px;background:rgba(52,211,153,0.40); border:1px solid rgba(52,211,153,0.50);"></div>
+              <div class="legend-swatch" style="width:8px;background:rgba(52,211,153,0.55); border:1px solid rgba(52,211,153,0.70);"></div>
+            </div>
+            <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);">low..high</span>
           </div>
         </div>
       </div>
@@ -1072,6 +1105,7 @@ function renderGroup(data) {
   }
   const numPartitions = currentConfig.numPartitions;
   const isClassic = (data.groupType || '').toLowerCase() === 'classic';
+  const partitionLag = data.partitionLag || {};
 
   const grid = document.getElementById('card-grid');
   const members = (data.members || []).slice().sort((a, b) => a.slotIndex - b.slotIndex);
@@ -1187,14 +1221,15 @@ function renderGroup(data) {
         const inCurrent = coordCurrent.has(key);
         const inTarget = coordTarget.has(key);
         const inLocal = consumerLocal.has(key);
+        const lag = partitionLag[key];
         if (inCurrent && inTarget) {
-          serverByTopic[t].push({p: p, cls: 'assigned'});
+          serverByTopic[t].push({p: p, cls: 'assigned', lag: lag});
           serverCount++;
         } else if (inTarget) {
-          serverByTopic[t].push({p: p, cls: 'pending-assignment'});
+          serverByTopic[t].push({p: p, cls: 'pending-assignment', lag: lag});
           serverCount++;
         } else if (inCurrent) {
-          serverByTopic[t].push({p: p, cls: 'pending-revocation'});
+          serverByTopic[t].push({p: p, cls: 'pending-revocation', lag: lag});
           serverCount++;
         }
         if (inLocal) {
@@ -1208,7 +1243,7 @@ function renderGroup(data) {
 
     // Signature key spans the whole grid; rebuild as a unit when anything moves.
     const zonesKey = serverCount + '|' + consumerCount + '|' + topics.map(t =>
-      t + ':' + serverByTopic[t].map(c => c.p + c.cls[0]).join(',') +
+      t + ':' + serverByTopic[t].map(c => c.p + c.cls[0] + (c.lag != null ? 'L' + c.lag : '')).join(',') +
       ':' + consumerByTopic[t].map(c => c.p).join(',')
     ).join('|');
 
@@ -1260,9 +1295,46 @@ function renderGroup(data) {
   }
 }
 
+// Compute a lag-based intensity multiplier in [0.0, 1.0].
+// Uses a logarithmic scale so small lags are visually distinct from zero,
+// and very large lags don't blow out the scale.
+// 0 lag => 0.0,  1 => ~0.15,  10 => ~0.38,  100 => ~0.62,  1000 => ~0.85,  10000+ => 1.0
+function lagIntensity(lag) {
+  if (lag == null || lag < 10) return 0;
+  // Linear scale from 10 to 100, capped at 1.0.
+  return Math.min(1.0, (lag - 10) / 90);
+}
+
+// Return inline style string for a coordinator chip given its CSS class and lag.
+// Varies background opacity/saturation based on lag intensity.
+function lagStyle(cls, lag) {
+  const t = lagIntensity(lag);
+  if (t === 0 && lag != null) {
+    // Lag is exactly 0 — use the dimmest variant (the existing default is already dim).
+    return '';
+  }
+  if (lag == null) return ''; // No lag data available.
+
+  // Map intensity to alpha channels. The base (dim) values from CSS are around 0.12 alpha.
+  // We scale from the base (0.12) to a bright value (~0.55) for background,
+  // and from 0.25 to 0.7 for border.
+  const bgAlphaMin = 0.12, bgAlphaMax = 0.55;
+  const borderAlphaMin = 0.25, borderAlphaMax = 0.7;
+  const bgAlpha = (bgAlphaMin + t * (bgAlphaMax - bgAlphaMin)).toFixed(3);
+  const borderAlpha = (borderAlphaMin + t * (borderAlphaMax - borderAlphaMin)).toFixed(3);
+
+  if (cls === 'assigned') {
+    return 'background:rgba(52,211,153,' + bgAlpha + ');border-color:rgba(52,211,153,' + borderAlpha + ');';
+  } else if (cls === 'pending-assignment') {
+    return 'background:rgba(76,154,255,' + bgAlpha + ');border-color:rgba(76,154,255,' + borderAlpha + ');';
+  } else if (cls === 'pending-revocation') {
+    return 'background:rgba(251,191,36,' + bgAlpha + ');border-color:rgba(251,191,36,' + borderAlpha + ');';
+  }
+  return '';
+}
+
 function buildZonesGrid(topics, serverByTopic, consumerByTopic, serverCount, consumerCount) {
-  // 4-column grid: topic name | coordinator chips | divider | consumer chips.
-  // The divider is a single element spanning all rows for a continuous line.
+  // 3-column grid: topic name | coordinator chips | consumer chips.
   let html = '';
 
   // Header row.
@@ -1284,7 +1356,10 @@ function buildZonesGrid(topics, serverByTopic, consumerByTopic, serverCount, con
 
     html += '<div class="zone-cell zone-row zone-cell-server"><div class="zone-chips">';
     for (const c of serverByTopic[t]) {
-      html += '<span class="partition-chip ' + c.cls + '">' + c.p + '</span>';
+      const style = lagStyle(c.cls, c.lag);
+      const title = c.lag != null ? ' data-lag=\"' + c.lag + '\"' : '';
+      html += '<span class="partition-chip ' + c.cls + '"' + title +
+        (style ? ' style="' + style + '"' : '') + '>' + c.p + '</span>';
     }
     html += '</div></div>';
 
