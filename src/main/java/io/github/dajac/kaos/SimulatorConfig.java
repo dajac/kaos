@@ -25,10 +25,10 @@ public class SimulatorConfig {
     public boolean staticMembers;
 
     public SimulatorConfig() {
-        this.groupId = "simulator-group";
+        this.groupId = "kaos";
         this.topicPrefix = "kaos";
-        this.numTopics = 2;
-        this.numPartitions = 18;
+        this.numTopics = 1;
+        this.numPartitions = 36;
         this.numConsumers = 4;
         this.sessionTimeoutMs = 45000;
         this.heartbeatIntervalMs = 5000;
@@ -36,7 +36,7 @@ public class SimulatorConfig {
         this.protocol = "consumer";
         this.assignor = "";
         this.pollTimeoutMs = 0;
-        this.pollDelayMs = 5000;
+        this.pollDelayMs = 1000;
         this.maxPollIntervalMs = 300000;
         this.staticMembers = false;
     }
