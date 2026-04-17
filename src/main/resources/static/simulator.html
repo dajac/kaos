@@ -30,7 +30,7 @@
   --fault-dim: rgba(92,213,255,0.12);
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
   --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --sidebar-w: 280px;
+  --sidebar-w: 340px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -47,7 +47,7 @@ body {
   line-height: 1.5;
 }
 
-/* ── Layout shell ── */
+/* -- Layout shell -- */
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
@@ -56,36 +56,20 @@ body {
   gap: 0;
 }
 
-/* ── Sidebar ── */
+/* -- Sidebar -- */
 .sidebar {
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-height: 0;
+  height: 100vh;
 }
-
-.sidebar-scroll {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  overflow-x: hidden;
-  min-height: 0;
-}
-
-.sidebar-scroll::-webkit-scrollbar { width: 4px; }
-.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-.sidebar-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .sidebar-header {
   flex: 0 0 auto;
   padding: 16px 16px 12px;
   border-bottom: 1px solid var(--border);
-}
-
-.sidebar-footer {
-  flex: 0 0 auto;
-  border-top: 1px solid var(--border);
 }
 
 .sidebar-brand {
@@ -104,26 +88,315 @@ body {
   letter-spacing: 0.3px;
 }
 
-.sidebar-section {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+/* -- Config mode container -- */
+#config-mode {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.sidebar-section:last-child {
-  border-bottom: none;
+/* -- Scrollable config area -- */
+.config-scroll {
+  flex: 1 1 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 }
 
-.section-label {
+.config-scroll::-webkit-scrollbar { width: 4px; }
+.config-scroll::-webkit-scrollbar-track { background: transparent; }
+.config-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* -- Collapsible sections -- */
+.config-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  gap: 8px;
+  font-family: var(--font-mono);
+  transition: background 0.1s;
+  user-select: none;
+}
+.section-toggle:hover { background: var(--surface2); }
+
+.section-chevron {
+  font-size: 9px;
+  color: var(--text-dim);
+  transition: transform 0.2s ease;
+  flex: 0 0 auto;
+  width: 12px;
+  text-align: center;
+}
+.config-section.expanded .section-chevron { transform: rotate(90deg); }
+
+.section-title {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1.5px;
   color: var(--text-dim);
-  margin-bottom: 10px;
+}
+.config-section.expanded .section-title { color: var(--text-muted); }
+
+.section-tag {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  font-family: var(--font-mono);
+  margin-left: 4px;
 }
 
-/* ── Status line (in main header) ── */
+.tag-consumer {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid rgba(76,154,255,0.2);
+}
+
+.tag-classic {
+  background: var(--yellow-dim);
+  color: var(--yellow);
+  border: 1px solid rgba(251,191,36,0.2);
+}
+
+.section-summary {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  font-family: var(--font-mono);
+}
+
+.section-remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.1s, color 0.1s;
+  opacity: 0;
+}
+.section-toggle:hover .section-remove { opacity: 1; }
+.section-remove:hover { background: var(--red-dim); color: var(--red); }
+
+.section-body {
+  display: none;
+  padding: 0 16px 14px;
+}
+.config-section.expanded .section-body { display: block; }
+
+/* -- Running state: config stays visible but grayed out -- */
+#config-mode.locked .config-scroll {
+  opacity: 0.45;
+}
+#config-mode.locked .field-input,
+#config-mode.locked .btn-add-consumer {
+  pointer-events: none;
+}
+#config-mode.locked .btn-add-consumer { display: none; }
+#config-mode.locked .section-remove { display: none; }
+
+/* -- Form fields -- */
+.field {
+  margin-bottom: 8px;
+}
+.field:last-child { margin-bottom: 0; }
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.field-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  letter-spacing: 0.3px;
+}
+
+.field-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  transition: border-color 0.15s;
+}
+.field-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.field-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--surface2);
+}
+
+.field-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 3px;
+  margin-bottom: 8px;
+  letter-spacing: 0.2px;
+  font-style: italic;
+}
+
+/* -- Add consumer row -- */
+.add-consumer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.btn-add-consumer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface3);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.btn-add-consumer:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(76,154,255,0.3);
+}
+
+/* -- Buttons -- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.12s, background 0.12s;
+  flex: 1;
+}
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn:active { transform: scale(0.98); }
+
+.btn-start { background: var(--green); color: #0a0e14; }
+.btn-stop { background: var(--red); color: #0a0e14; }
+
+.btn-autopilot {
+  width: 100%;
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.btn-autopilot:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.btn-autopilot.active {
+  background: var(--yellow-dim);
+  border-color: rgba(251,191,36,0.3);
+  color: var(--yellow);
+}
+
+/* -- Sidebar footer -- */
+.sidebar-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* -- Running mode sidebar -- */
+.running-controls {
+  display: none;
+  padding: 0;
+}
+
+.running-controls.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.running-info {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.running-info-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.running-info-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.running-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* -- Status line (in main header) -- */
 .header-status {
   display: flex;
   align-items: center;
@@ -169,112 +442,17 @@ body {
   border: 1px solid var(--border);
 }
 
-/* ── Form fields ── */
-.field {
-  margin-bottom: 8px;
-}
-
-.field:last-child { margin-bottom: 0; }
-
-.field-label {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-bottom: 4px;
-  letter-spacing: 0.3px;
-}
-
-.field-input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 5px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  transition: border-color 0.15s;
-}
-
-.field-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.field-input:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  background: var(--surface2);
-}
-
-.field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-/* ── Buttons ── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  border: none;
-  cursor: pointer;
-  transition: opacity 0.12s, background 0.12s;
-  width: 100%;
-}
-
-.btn:hover { opacity: 0.85; }
-.btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.btn:active { transform: scale(0.98); }
-
-.btn-start { background: var(--green); color: #0a0e14; }
-.btn-stop { background: var(--red); color: #0a0e14; }
-
-/* ── Auto-Pilot ── */
-.btn-autopilot {
-  width: 100%;
-  background: var(--surface3);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-}
-
-.btn-autopilot:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.btn-autopilot.active {
-  background: var(--yellow-dim);
-  border-color: rgba(251,191,36,0.3);
-  color: var(--yellow);
-}
-
-/* ── Main area ── */
+/* -- Main area -- */
 .main {
   overflow: auto;
   padding: 0;
   background: var(--bg);
 }
-
 .main::-webkit-scrollbar { width: 6px; height: 6px; }
 .main::-webkit-scrollbar-track { background: transparent; }
 .main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* ──────────────────────────────────────────────────────────────
-   Bento card grid — each consumer is a self-contained card with
-   a stacked "coordinator zone" (top) and "consumer zone" (bottom).
-   The visible gap between zones makes server/consumer divergence
-   a primary visual axis instead of a table-cell detail.
-   ────────────────────────────────────────────────────────────── */
+/* -- Bento card grid -- */
 .card-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -304,13 +482,10 @@ body {
 .card.joining { border-color: rgba(76,154,255,0.45); }
 .card.stopped { opacity: 0.45; }
 
-/* Accent stripe down the left edge mirrors the member state. */
 .card::before {
   content: "";
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
+  left: 0; top: 0; bottom: 0;
   width: 4px;
   background: var(--text-dim);
   transition: background 0.2s;
@@ -322,7 +497,6 @@ body {
 .card.joining::before   { background: var(--accent); }
 .card.stopped::before   { background: var(--text-dim); }
 
-/* ── Left column: consumer metadata ── */
 .card-meta {
   flex: 0 0 260px;
   padding: 14px 16px 14px 20px;
@@ -361,14 +535,12 @@ body {
   letter-spacing: 0.6px;
   flex-shrink: 0;
 }
-
 .badge.stable { background: var(--green-dim); color: var(--green); }
 .badge.reconciling { background: var(--yellow-dim); color: var(--yellow); }
 .badge.stopping { background: var(--red-dim); color: var(--red); }
 .badge.stopped { background: rgba(107,122,141,0.12); color: var(--text-dim); }
 .badge.joining { background: var(--accent-dim); color: var(--accent); }
 
-/* Labeled metadata line: "label  value" — used for id, instance, epoch. */
 .meta-line {
   display: flex;
   align-items: baseline;
@@ -399,17 +571,12 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .meta-line-value.dim {
   color: var(--text-dim);
   opacity: 0.6;
   font-weight: 400;
 }
 
-/* ── Middle: shared-topic grid with coordinator + consumer columns ──
-   Three columns: topic name | coordinator chips | consumer chips.
-   A wider gap before the coordinator column visually separates the
-   metadata section from the partition views. */
 .zones {
   display: grid;
   grid-template-columns: auto 1fr 1fr;
@@ -428,21 +595,10 @@ body {
   display: flex;
   align-items: flex-start;
 }
+.zone-cell.zone-cell-name { grid-column: 1; padding-right: 24px; }
+.zone-cell.zone-cell-server { grid-column: 2; }
+.zone-cell.zone-cell-consumer { grid-column: 3; }
 
-.zone-cell.zone-cell-name {
-  grid-column: 1;
-  padding-right: 24px;
-}
-
-.zone-cell.zone-cell-server {
-  grid-column: 2;
-}
-
-.zone-cell.zone-cell-consumer {
-  grid-column: 3;
-}
-
-/* Header cells (one per column, in the first row of the grid). */
 .zone-cell.zone-header {
   align-items: center;
   padding-top: 0;
@@ -467,10 +623,7 @@ body {
   letter-spacing: 0.3px;
 }
 
-/* Subtle row separators between topics (not on the header row). */
-.zone-cell.zone-row {
-  border-top: 1px solid var(--border-subtle);
-}
+.zone-cell.zone-row { border-top: 1px solid var(--border-subtle); }
 
 .zone-topic-name {
   font-family: var(--font-mono);
@@ -516,11 +669,7 @@ body {
   box-sizing: border-box;
 }
 
-/* CSS tooltip — shows instantly on hover, no native title delay. */
-.partition-chip[data-lag] {
-  position: relative;
-}
-
+.partition-chip[data-lag] { position: relative; }
 .partition-chip[data-lag]:hover::after {
   content: "lag: " attr(data-lag);
   position: absolute;
@@ -544,20 +693,18 @@ body {
   color: var(--green);
   border: 1px solid rgba(52,211,153,0.25);
 }
-
 .partition-chip.pending-assignment {
   background: var(--accent-dim);
   color: var(--accent);
   border: 1px solid rgba(76,154,255,0.3);
 }
-
 .partition-chip.pending-revocation {
   background: var(--yellow-dim);
   color: var(--yellow);
   border: 1px solid rgba(251,191,36,0.35);
 }
 
-/* ── Right column: per-consumer controls ── */
+/* -- Right column: per-consumer controls -- */
 .member-controls {
   flex: 0 0 140px;
   width: 140px;
@@ -585,13 +732,8 @@ body {
   white-space: nowrap;
   text-align: center;
 }
-
 .ctrl-btn:hover { background: var(--surface3); color: var(--text); }
-.ctrl-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-  pointer-events: none;
-}
+.ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
 .ctrl-btn.act-start { color: var(--green); border-color: rgba(52,211,153,0.3); }
 .ctrl-btn.act-stop { color: var(--red); border-color: rgba(248,113,113,0.3); }
@@ -603,8 +745,7 @@ body {
   background: var(--fault-dim);
 }
 
-
-/* ── Legend (inline in main header area) ── */
+/* -- Legend -- */
 .main-header {
   position: sticky;
   top: 0;
@@ -639,7 +780,7 @@ body {
   border-radius: 2px;
 }
 
-/* ── Empty state ── */
+/* -- Empty state -- */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -660,123 +801,118 @@ body {
   font-size: 13px;
   letter-spacing: 0.5px;
 }
-
-/* ── Resize handle ── */
-.resize-handle {
-  grid-column: 2;
-  height: 4px;
-  background: transparent;
-  cursor: ns-resize;
-  position: relative;
-  z-index: 5;
-}
-
-.resize-handle:hover,
-.resize-handle.active {
-  background: var(--accent);
-  opacity: 0.4;
-}
 </style>
 </head>
 <body>
 
 <div class="app">
-  <!-- ── Sidebar ── -->
+  <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-brand">Kaos</div>
       <div class="sidebar-subtitle">Kafka Consumer Group Simulator</div>
     </div>
 
-    <div class="sidebar-scroll">
-    <!-- Setup -->
-    <div class="sidebar-section">
-      <div class="section-label">Setup</div>
-      <div class="field">
-        <label class="field-label">Group ID</label>
-        <input class="field-input" type="text" id="cfg-group-id" value="kaos">
+    <!-- Config mode (shown when not running) -->
+    <div id="config-mode">
+      <div class="config-scroll" id="config-scroll">
+
+        <!-- Section: Group (merged with former Cluster settings) -->
+        <div class="config-section expanded" id="section-group">
+          <button class="section-toggle" onclick="toggleSection('section-group')" type="button">
+            <span class="section-chevron">&#9654;</span>
+            <span class="section-title">Group</span>
+          </button>
+          <div class="section-body">
+            <div class="field">
+              <label class="field-label">Group ID</label>
+              <input class="field-input" type="text" id="cfg-group-id" value="kaos">
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">Subscribed Topics</label>
+                <input class="field-input" type="number" id="cfg-num-topics" value="1" min="1" max="20">
+              </div>
+              <div class="field">
+                <label class="field-label">Partitions / Topic</label>
+                <input class="field-input" type="number" id="cfg-num-partitions" value="36" min="1" max="100">
+              </div>
+            </div>
+            <div class="field-hint">Each topic will be named {groupId}-1, {groupId}-2, etc.</div>
+            <div class="field">
+              <label class="field-label">Session Timeout (ms)</label>
+              <input class="field-input" type="number" id="cfg-session-timeout" value="45000" min="1000" max="300000">
+            </div>
+            <div class="field">
+              <label class="field-label">Heartbeat Interval (ms)</label>
+              <input class="field-input" type="number" id="cfg-heartbeat-interval" value="5000" min="500" max="60000">
+            </div>
+            <div class="field">
+              <label class="field-label">Assignment Interval (ms)</label>
+              <input class="field-input" type="number" id="cfg-assignment-interval" value="1000" min="0" max="60000">
+            </div>
+            <div class="field">
+              <label class="field-label">Poll Timeout (ms)</label>
+              <input class="field-input" type="number" id="cfg-default-poll-timeout" value="0" min="0" max="60000">
+            </div>
+            <div class="field">
+              <label class="field-label">Poll Delay (ms)</label>
+              <input class="field-input" type="number" id="cfg-default-poll-delay" value="1000" min="0" max="120000">
+            </div>
+            <div class="field">
+              <label class="field-label">Max Poll Interval (ms)</label>
+              <input class="field-input" type="number" id="cfg-default-max-poll-interval" value="300000" min="1000" max="600000">
+            </div>
+            <div class="field">
+              <label class="field-label">Static Members</label>
+              <input class="field-input" type="text" id="cfg-default-static-member" value="false" list="static-member-suggestions">
+              <datalist id="static-member-suggestions">
+                <option value="false">
+                <option value="true">
+              </datalist>
+            </div>
+            <div class="field">
+              <label class="field-label">Consumer Assignor</label>
+              <select class="field-input" id="cfg-default-consumer-assignor">
+                <option value="">(default)</option>
+                <option value="uniform">uniform</option>
+                <option value="range">range</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">Classic Assignor</label>
+              <select class="field-input" id="cfg-default-classic-assignor">
+                <option value="">(default)</option>
+                <option value="range">range</option>
+                <option value="roundrobin">roundrobin</option>
+                <option value="sticky">sticky</option>
+                <option value="cooperative-sticky">cooperative-sticky</option>
+              </select>
+            </div>
+            <div class="field-hint">These defaults pre-populate new consumers.</div>
+          </div>
+        </div>
+
+        <!-- Consumer sections are rendered dynamically here -->
+        <div id="consumer-sections"></div>
+
+        <!-- Add Consumer row -->
+        <div class="add-consumer-row">
+          <button class="btn-add-consumer" onclick="addConsumer()" type="button">+ Add Consumer</button>
+        </div>
+
       </div>
-      <div class="field">
-        <label class="field-label">Topic Prefix</label>
-        <input class="field-input" type="text" id="cfg-topic-prefix" value="kaos">
-      </div>
-      <div class="field">
-        <label class="field-label">Topics</label>
-        <input class="field-input" type="number" id="cfg-num-topics" value="1" min="1" max="20">
-      </div>
-      <div class="field">
-        <label class="field-label">Partitions</label>
-        <input class="field-input" type="number" id="cfg-num-partitions" value="36" min="1" max="100">
-      </div>
-      <div class="field">
-        <label class="field-label">Consumers</label>
-        <input class="field-input" type="number" id="cfg-num-consumers" value="4" min="1" max="20">
+
+      <!-- Footer with Start / Auto-Pilot -->
+      <div class="sidebar-footer" id="config-footer">
+        <button class="btn btn-start" id="btn-start-sim" onclick="toggleSimulation()">Start</button>
+        <button class="btn btn-autopilot" id="btn-autopilot-config" onclick="toggleAutopilot()" disabled>Auto-Pilot</button>
       </div>
     </div>
 
-    <!-- Group -->
-    <div class="sidebar-section">
-      <div class="section-label">Group</div>
-      <div class="field">
-        <label class="field-label">Session Timeout (ms)</label>
-        <input class="field-input" type="number" id="cfg-session-timeout" value="45000" min="1000" max="300000">
-      </div>
-      <div class="field">
-        <label class="field-label">Heartbeat Interval (ms)</label>
-        <input class="field-input" type="number" id="cfg-heartbeat-interval" value="5000" min="500" max="60000">
-      </div>
-      <div class="field">
-        <label class="field-label">Assignment Interval (ms)</label>
-        <input class="field-input" type="number" id="cfg-assignment-interval" value="1000" min="0" max="60000">
-      </div>
-    </div>
-
-    <!-- Consumer -->
-    <div class="sidebar-section">
-      <div class="section-label">Consumer</div>
-      <div class="field">
-        <label class="field-label">Protocol</label>
-        <select class="field-input" id="cfg-protocol" onchange="onProtocolChange()">
-          <option value="consumer">consumer</option>
-          <option value="classic">classic</option>
-        </select>
-      </div>
-      <div class="field">
-        <label class="field-label">Assignor</label>
-        <select class="field-input" id="cfg-assignor"></select>
-      </div>
-      <div class="field">
-        <label class="field-label">Poll Timeout (ms)</label>
-        <input class="field-input" type="number" id="cfg-poll-timeout" value="0" min="0" max="60000">
-      </div>
-      <div class="field">
-        <label class="field-label">Poll Delay (ms)</label>
-        <input class="field-input" type="number" id="cfg-poll-delay" value="1000" min="0" max="120000">
-      </div>
-      <div class="field">
-        <label class="field-label">Max Poll Interval (ms)</label>
-        <input class="field-input" type="number" id="cfg-max-poll-interval" value="300000" min="1000" max="600000">
-      </div>
-      <div class="field">
-        <label class="field-label">Static Members</label>
-        <select class="field-input" id="cfg-static-members">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
-      </div>
-    </div>
-
-    </div>
-
-    <div class="sidebar-footer">
-      <div class="sidebar-section">
-        <button class="btn btn-start" id="btn-start" onclick="startSimulation()">Start</button>
-        <button class="btn btn-autopilot" id="btn-autopilot" onclick="toggleAutopilot()" disabled style="margin-top:6px;">Auto-Pilot</button>
-      </div>
-    </div>
   </aside>
 
-  <!-- ── Main: card grid ── -->
+  <!-- Main: card grid -->
   <main class="main" id="main-area">
     <div class="empty-state" id="empty-state">
       <div class="empty-state-icon">&#9654;</div>
@@ -826,97 +962,247 @@ let prevState = null;
 let prevCtrlState = {};
 let simulationRunning = false;
 
-const LOCKED_FIELDS = [
-  'cfg-group-id', 'cfg-topic-prefix', 'cfg-num-topics', 'cfg-num-partitions',
-  'cfg-num-consumers', 'cfg-session-timeout', 'cfg-heartbeat-interval',
-  'cfg-assignment-interval', 'cfg-protocol', 'cfg-assignor',
-  'cfg-poll-timeout', 'cfg-poll-delay', 'cfg-max-poll-interval', 'cfg-static-members'
-];
+// -- Consumer entries state --
+let consumerEntries = [];
+let nextConsumerId = 0;
 
-function lockConfig() {
-  LOCKED_FIELDS.forEach(id => document.getElementById(id).disabled = true);
-}
-
-function unlockConfig() {
-  LOCKED_FIELDS.forEach(id => document.getElementById(id).disabled = false);
-  // Re-apply protocol-dependent disabling for fields that don't apply
-  // to the classic protocol.
-  applyProtocolDisabling();
-}
-
-const ASSIGNORS_BY_PROTOCOL = {
-  consumer: [
-    {value: '', label: '(default)'},
-    {value: 'uniform', label: 'uniform'},
-    {value: 'range', label: 'range'}
-  ],
-  classic: [
-    {value: '', label: '(default)'},
-    {value: 'range', label: 'range'},
-    {value: 'roundrobin', label: 'roundrobin'},
-    {value: 'sticky', label: 'sticky'},
-    {value: 'cooperative-sticky', label: 'cooperative-sticky'}
-  ]
+// Datalist suggestions per protocol (for the assignor text input).
+const ASSIGNOR_SUGGESTIONS = {
+  consumer: ['uniform', 'range'],
+  classic: ['range', 'roundrobin', 'sticky', 'cooperative-sticky']
 };
 
-// Group-level configs only apply to the consumer protocol.
-const CONSUMER_ONLY_FIELDS = [
-  'cfg-session-timeout', 'cfg-heartbeat-interval', 'cfg-assignment-interval'
-];
+// -- Section collapse/expand --
+function toggleSection(sectionId) {
+  var el = document.getElementById(sectionId);
+  if (el) el.classList.toggle('expanded');
+}
 
-function populateAssignors(protocol, preferredValue) {
-  const sel = document.getElementById('cfg-assignor');
-  const opts = ASSIGNORS_BY_PROTOCOL[protocol] || ASSIGNORS_BY_PROTOCOL.consumer;
-  sel.innerHTML = '';
-  for (const o of opts) {
-    const opt = document.createElement('option');
-    opt.value = o.value;
-    opt.textContent = o.label;
-    sel.appendChild(opt);
+// -- Read Group-level defaults --
+function getDefaults() {
+  return {
+    pollTimeoutMs:     parseInt(document.getElementById('cfg-default-poll-timeout').value) || 0,
+    pollDelayMs:       parseInt(document.getElementById('cfg-default-poll-delay').value) || 1000,
+    maxPollIntervalMs: parseInt(document.getElementById('cfg-default-max-poll-interval').value) || 300000,
+    staticMember:      document.getElementById('cfg-default-static-member').value || 'false',
+    consumerAssignor:  document.getElementById('cfg-default-consumer-assignor').value || '',
+    classicAssignor:   document.getElementById('cfg-default-classic-assignor').value || '',
+  };
+}
+
+// -- Consumer CRUD --
+function addConsumer() {
+  var protocol = 'consumer';
+  var defaults = getDefaults();
+  var id = nextConsumerId++;
+  var name = 'consumer-' + (consumerEntries.length);
+  var assignor = (protocol === 'consumer') ? defaults.consumerAssignor : defaults.classicAssignor;
+  consumerEntries.push({
+    id: id,
+    expanded: false,
+    name: name,
+    protocol: protocol,
+    assignor: assignor,
+    pollTimeoutMs: defaults.pollTimeoutMs,
+    pollDelayMs: defaults.pollDelayMs,
+    maxPollIntervalMs: defaults.maxPollIntervalMs,
+    staticMember: defaults.staticMember,
+  });
+  renderConsumerSections();
+}
+
+function removeConsumer(id) {
+  consumerEntries = consumerEntries.filter(function(e) { return e.id !== id; });
+  renderConsumerSections();
+}
+
+function toggleConsumerSection(id) {
+  var entry = consumerEntries.find(function(e) { return e.id === id; });
+  if (entry) entry.expanded = !entry.expanded;
+  renderConsumerSections();
+}
+
+function onConsumerFieldChange(consumerId, key, value) {
+  var entry = consumerEntries.find(function(e) { return e.id === consumerId; });
+  if (!entry) return;
+  // When the protocol changes, update the assignor to the corresponding default.
+  if (key === 'protocol') {
+    var defaults = getDefaults();
+    entry.assignor = (value === 'consumer') ? defaults.consumerAssignor : defaults.classicAssignor;
   }
-  // Try to keep the previous selection if still valid; otherwise pick the first.
-  if (preferredValue !== undefined && opts.some(o => o.value === preferredValue)) {
-    sel.value = preferredValue;
+  entry[key] = value;
+  renderConsumerSections();
+}
+
+function getConsumerSummary(entry) {
+  var defaults = getDefaults();
+  var diffs = [];
+  if (entry.assignor) {
+    diffs.push('assignor=' + entry.assignor);
+  }
+  if (parseInt(entry.pollTimeoutMs) !== defaults.pollTimeoutMs) {
+    diffs.push('pollTimeout=' + entry.pollTimeoutMs);
+  }
+  if (parseInt(entry.pollDelayMs) !== defaults.pollDelayMs) {
+    diffs.push('pollDelay=' + entry.pollDelayMs);
+  }
+  if (parseInt(entry.maxPollIntervalMs) !== defaults.maxPollIntervalMs) {
+    diffs.push('maxPoll=' + entry.maxPollIntervalMs);
+  }
+  if (entry.staticMember !== defaults.staticMember) {
+    diffs.push('static=' + (entry.staticMember === 'true' ? 'yes' : 'no'));
+  }
+  return diffs.length > 0 ? diffs.join(', ') : '';
+}
+
+function renderConsumerSections() {
+  var container = document.getElementById('consumer-sections');
+  if (consumerEntries.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  var html = '';
+  consumerEntries.forEach(function(entry) {
+    var expandedCls = entry.expanded ? ' expanded' : '';
+    var isConsumerProto = entry.protocol === 'consumer';
+    var tagCls = isConsumerProto ? 'tag-consumer' : 'tag-classic';
+    var tagText = isConsumerProto ? 'consumer' : 'classic';
+    var summary = getConsumerSummary(entry);
+    var suggestions = ASSIGNOR_SUGGESTIONS[entry.protocol] || ASSIGNOR_SUGGESTIONS.consumer;
+    var datalistId = 'assignor-dl-' + entry.id;
+    var sectionId = 'section-consumer-' + entry.id;
+
+    html += '<div class="config-section' + expandedCls + '" id="' + sectionId + '">';
+
+    // Toggle bar
+    html += '<button class="section-toggle" onclick="toggleConsumerSection(' + entry.id + ')" type="button">';
+    html += '<span class="section-chevron">&#9654;</span>';
+    html += '<span class="section-title">' + escapeHtml(entry.name) + '</span>';
+    html += '<span class="section-tag ' + tagCls + '">' + tagText + '</span>';
+    if (!entry.expanded && summary) {
+      html += '<span class="section-summary">' + escapeHtml(summary) + '</span>';
+    }
+    if (consumerEntries.length > 1) {
+      html += '<span class="section-remove" onclick="event.stopPropagation(); removeConsumer(' + entry.id + ')" title="Remove consumer">&times;</span>';
+    }
+    html += '</button>';
+
+    // Body with all fields -- one field per line (no field-row)
+    html += '<div class="section-body">';
+
+    // Name
+    html += '<div class="field">';
+    html += '<label class="field-label">Name</label>';
+    html += '<input type="text" class="field-input" value="' + escapeHtml(entry.name) + '"' +
+      ' onchange="onConsumerFieldChange(' + entry.id + ', \'name\', this.value)">';
+    html += '</div>';
+
+    // Protocol
+    html += '<div class="field">';
+    html += '<label class="field-label">Protocol</label>';
+    html += '<select class="field-input" onchange="onConsumerFieldChange(' + entry.id + ', \'protocol\', this.value)">';
+    html += '<option value="consumer"' + (entry.protocol === 'consumer' ? ' selected' : '') + '>consumer</option>';
+    html += '<option value="classic"' + (entry.protocol === 'classic' ? ' selected' : '') + '>classic</option>';
+    html += '</select>';
+    html += '</div>';
+
+    // Assignor (select dropdown)
+    html += '<div class="field">';
+    html += '<label class="field-label">Assignor</label>';
+    html += '<select class="field-input" onchange="onConsumerFieldChange(' + entry.id + ', \'assignor\', this.value)">';
+    html += '<option value=""' + (entry.assignor === '' ? ' selected' : '') + '>(default)</option>';
+    for (var i = 0; i < suggestions.length; i++) {
+      html += '<option value="' + suggestions[i] + '"' + (entry.assignor === suggestions[i] ? ' selected' : '') + '>' + suggestions[i] + '</option>';
+    }
+    html += '</select>';
+    html += '</div>';
+
+    // Poll Timeout
+    html += '<div class="field">';
+    html += '<label class="field-label">Poll Timeout (ms)</label>';
+    html += '<input type="number" class="field-input" value="' + entry.pollTimeoutMs + '" min="0" max="60000"' +
+      ' onchange="onConsumerFieldChange(' + entry.id + ', \'pollTimeoutMs\', this.value)">';
+    html += '</div>';
+
+    // Poll Delay
+    html += '<div class="field">';
+    html += '<label class="field-label">Poll Delay (ms)</label>';
+    html += '<input type="number" class="field-input" value="' + entry.pollDelayMs + '" min="0" max="120000"' +
+      ' onchange="onConsumerFieldChange(' + entry.id + ', \'pollDelayMs\', this.value)">';
+    html += '</div>';
+
+    // Max Poll Interval
+    html += '<div class="field">';
+    html += '<label class="field-label">Max Poll Interval (ms)</label>';
+    html += '<input type="number" class="field-input" value="' + entry.maxPollIntervalMs + '" min="1000" max="600000"' +
+      ' onchange="onConsumerFieldChange(' + entry.id + ', \'maxPollIntervalMs\', this.value)">';
+    html += '</div>';
+
+    // Static Member
+    html += '<div class="field">';
+    html += '<label class="field-label">Static Member</label>';
+    html += '<input type="text" class="field-input" value="' + escapeHtml(entry.staticMember) + '"' +
+      ' list="static-member-dl-' + entry.id + '"' +
+      ' onchange="onConsumerFieldChange(' + entry.id + ', \'staticMember\', this.value)">';
+    html += '<datalist id="static-member-dl-' + entry.id + '">';
+    html += '<option value="false"><option value="true">';
+    html += '</datalist>';
+    html += '</div>';
+
+    html += '</div></div>';
+  });
+
+  container.innerHTML = html;
+}
+
+// -- Collect per-consumer configs for logging --
+function collectConsumerConfigs() {
+  return consumerEntries.map(function(entry, idx) {
+    return {
+      index: idx,
+      name: entry.name,
+      protocol: entry.protocol,
+      assignor: entry.assignor,
+      pollTimeoutMs: parseInt(entry.pollTimeoutMs),
+      pollDelayMs: parseInt(entry.pollDelayMs),
+      maxPollIntervalMs: parseInt(entry.maxPollIntervalMs),
+      staticMember: entry.staticMember === 'true' || entry.staticMember === true,
+    };
+  });
+}
+
+// -- Simulation lifecycle --
+
+function toggleSimulation() {
+  if (simulationRunning) {
+    stopSimulation();
   } else {
-    sel.value = opts[0].value;
+    startSimulation();
   }
-}
-
-function applyProtocolDisabling() {
-  const protocol = document.getElementById('cfg-protocol').value;
-  const isConsumer = protocol === 'consumer';
-  for (const id of CONSUMER_ONLY_FIELDS) {
-    document.getElementById(id).disabled = !isConsumer || simulationRunning;
-  }
-}
-
-function onProtocolChange() {
-  const protocol = document.getElementById('cfg-protocol').value;
-  populateAssignors(protocol);
-  applyProtocolDisabling();
 }
 
 function setSimulationUI(running) {
   simulationRunning = running;
-  const btn = document.getElementById('btn-start');
+  var configMode = document.getElementById('config-mode');
+  var btn = document.getElementById('btn-start-sim');
+  var autopilotBtn = document.getElementById('btn-autopilot-config');
 
   if (running) {
-    lockConfig();
+    configMode.classList.add('locked');
     btn.textContent = 'Stop';
     btn.className = 'btn btn-stop';
-    btn.onclick = stopSimulation;
     btn.disabled = false;
-    document.getElementById('btn-autopilot').disabled = false;
+    autopilotBtn.disabled = false;
     document.getElementById('empty-state').style.display = 'none';
     document.getElementById('view-wrapper').style.display = '';
   } else {
-    unlockConfig();
+    configMode.classList.remove('locked');
     btn.textContent = 'Start';
     btn.className = 'btn btn-start';
-    btn.onclick = startSimulation;
     btn.disabled = false;
-    document.getElementById('btn-autopilot').disabled = true;
-    document.getElementById('btn-autopilot').className = 'btn btn-autopilot';
+    autopilotBtn.disabled = true;
+    autopilotBtn.className = 'btn btn-autopilot';
     document.getElementById('empty-state').style.display = '';
     document.getElementById('view-wrapper').style.display = 'none';
     document.getElementById('card-grid').innerHTML = '';
@@ -925,14 +1211,14 @@ function setSimulationUI(running) {
 }
 
 function updateStatus(data) {
-  const stateEl = document.getElementById('status-state');
-  const typeEl = document.getElementById('status-type');
-  const epochEl = document.getElementById('status-epoch');
-  const targetEl = document.getElementById('status-target-epoch');
-  const generationEl = document.getElementById('status-generation');
-  const epochItem = document.getElementById('status-item-epoch');
-  const targetItem = document.getElementById('status-item-target');
-  const generationItem = document.getElementById('status-item-generation');
+  var stateEl = document.getElementById('status-state');
+  var typeEl = document.getElementById('status-type');
+  var epochEl = document.getElementById('status-epoch');
+  var targetEl = document.getElementById('status-target-epoch');
+  var generationEl = document.getElementById('status-generation');
+  var epochItem = document.getElementById('status-item-epoch');
+  var targetItem = document.getElementById('status-item-target');
+  var generationItem = document.getElementById('status-item-generation');
 
   if (!data || !data.groupState) {
     stateEl.textContent = simulationRunning ? 'STARTING' : 'IDLE';
@@ -947,11 +1233,9 @@ function updateStatus(data) {
     return;
   }
 
-  const rawGs = data.groupState || 'UNKNOWN';
-  // Insert a space before each capital letter (except the first) so
-  // PreparingRebalance / CompletingRebalance read with a space.
-  const gs = rawGs.replace(/([a-z])([A-Z])/g, '$1 $2').toUpperCase();
-  let badgeCls = 's-empty';
+  var rawGs = data.groupState || 'UNKNOWN';
+  var gs = rawGs.replace(/([a-z])([A-Z])/g, '$1 $2').toUpperCase();
+  var badgeCls = 's-empty';
   if (rawGs === 'Stable') badgeCls = 's-stable';
   else if (rawGs === 'Reconciling' || rawGs === 'Assigning' ||
            rawGs === 'PreparingRebalance' || rawGs === 'CompletingRebalance') badgeCls = 's-reconciling';
@@ -959,12 +1243,10 @@ function updateStatus(data) {
   stateEl.textContent = gs;
   stateEl.className = 'status-badge ' + badgeCls;
 
-  const gtype = data.groupType || '\u2014';
+  var gtype = data.groupType || '\u2014';
   typeEl.textContent = gtype.toUpperCase();
 
-  // Classic groups don't have group epoch / target epoch but do have a
-  // group generation. Swap which fields are visible.
-  const isClassic = gtype.toLowerCase() === 'classic';
+  var isClassic = gtype.toLowerCase() === 'classic';
   if (isClassic) {
     epochItem.style.display = 'none';
     targetItem.style.display = 'none';
@@ -981,35 +1263,50 @@ function updateStatus(data) {
 }
 
 async function startSimulation() {
-  const btn = document.getElementById('btn-start');
-  btn.disabled = true;
-  btn.textContent = 'Starting\u2026';
+  if (consumerEntries.length === 0) {
+    alert('Add at least one consumer before starting.');
+    return;
+  }
 
-  const config = {
-    groupId: document.getElementById('cfg-group-id').value,
-    topicPrefix: document.getElementById('cfg-topic-prefix').value,
+  var btn = document.getElementById('btn-start-sim');
+  btn.disabled = true;
+  btn.textContent = 'Starting...';
+
+  // Collect per-consumer configs and log them.
+  var perConsumerConfigs = collectConsumerConfigs();
+  console.log('[Kaos] Per-consumer configs:', JSON.stringify(perConsumerConfigs, null, 2));
+
+  // Use group ID as topic prefix.
+  var groupId = document.getElementById('cfg-group-id').value;
+
+  // Build the flat config for the backend using the first consumer's values
+  // as representative (or consumer-protocol defaults as fallback).
+  var first = consumerEntries[0];
+  var config = {
+    groupId: groupId,
+    topicPrefix: groupId,
     numTopics: parseInt(document.getElementById('cfg-num-topics').value),
     numPartitions: parseInt(document.getElementById('cfg-num-partitions').value),
-    numConsumers: parseInt(document.getElementById('cfg-num-consumers').value),
+    numConsumers: consumerEntries.length,
     sessionTimeoutMs: parseInt(document.getElementById('cfg-session-timeout').value),
     heartbeatIntervalMs: parseInt(document.getElementById('cfg-heartbeat-interval').value),
     assignmentIntervalMs: parseInt(document.getElementById('cfg-assignment-interval').value),
-    protocol: document.getElementById('cfg-protocol').value,
-    assignor: document.getElementById('cfg-assignor').value,
-    pollTimeoutMs: parseInt(document.getElementById('cfg-poll-timeout').value),
-    pollDelayMs: parseInt(document.getElementById('cfg-poll-delay').value),
-    maxPollIntervalMs: parseInt(document.getElementById('cfg-max-poll-interval').value),
-    staticMembers: document.getElementById('cfg-static-members').value === 'true'
+    protocol: first.protocol,
+    assignor: first.assignor,
+    pollTimeoutMs: parseInt(first.pollTimeoutMs),
+    pollDelayMs: parseInt(first.pollDelayMs),
+    maxPollIntervalMs: parseInt(first.maxPollIntervalMs),
+    staticMembers: first.staticMember === 'true'
   };
 
   try {
-    const resp = await fetch('/api/simulator/start', {
+    var resp = await fetch('/api/simulator/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(config)
     });
     if (!resp.ok) {
-      const err = await resp.json();
+      var err = await resp.json();
       alert('Failed to start: ' + (err.error || resp.statusText));
       btn.disabled = false;
       btn.textContent = 'Start';
@@ -1028,7 +1325,7 @@ async function startSimulation() {
 }
 
 async function stopSimulation() {
-  const btn = document.getElementById('btn-start');
+  var btn = document.getElementById('btn-start-sim');
   btn.disabled = true;
   btn.textContent = 'Stopping\u2026';
   stopPolling();
@@ -1037,12 +1334,11 @@ async function stopSimulation() {
   } catch (e) { /* ignore */ }
   autopilotRunning = false;
   prevState = null;
-  document.getElementById('btn-autopilot').className = 'btn-autopilot';
   setSimulationUI(false);
 }
 
 async function toggleAutopilot() {
-  const btn = document.getElementById('btn-autopilot');
+  var btn = document.getElementById('btn-autopilot-config');
   if (autopilotRunning) {
     await fetch('/api/simulator/chaos/stop', {method: 'POST'});
     autopilotRunning = false;
@@ -1072,8 +1368,8 @@ function stopPolling() {
 
 async function pollGroup() {
   try {
-    const resp = await fetch('/api/simulator/group');
-    const data = await resp.json();
+    var resp = await fetch('/api/simulator/group');
+    var data = await resp.json();
     if (data.phase !== 'RUNNING') return;
     updateStatus(data);
     renderGroup(data);
@@ -1082,11 +1378,11 @@ async function pollGroup() {
 }
 
 function splitPartitionKey(key) {
-  const lastDash = key.lastIndexOf('-');
+  var lastDash = key.lastIndexOf('-');
   return [key.substring(0, lastDash), key.substring(lastDash + 1)];
 }
 
-// ── Rendering: bento cards ──
+// -- Rendering: bento cards --
 
 function badgeClassFor(state) {
   if (state === 'Stable') return 'stable';
@@ -1099,23 +1395,24 @@ function badgeClassFor(state) {
 function renderGroup(data) {
   if (!currentConfig) return;
 
-  const topics = [];
-  for (let i = 1; i <= currentConfig.numTopics; i++) {
+  var topics = [];
+  for (var i = 1; i <= currentConfig.numTopics; i++) {
     topics.push(currentConfig.topicPrefix + '-' + i);
   }
-  const numPartitions = currentConfig.numPartitions;
-  const isClassic = (data.groupType || '').toLowerCase() === 'classic';
-  const partitionLag = data.partitionLag || {};
+  var numPartitions = currentConfig.numPartitions;
+  var isClassic = (data.groupType || '').toLowerCase() === 'classic';
+  var partitionLag = data.partitionLag || {};
 
-  const grid = document.getElementById('card-grid');
-  const members = (data.members || []).slice().sort((a, b) => a.slotIndex - b.slotIndex);
+  var grid = document.getElementById('card-grid');
+  var members = (data.members || []).slice().sort(function(a, b) { return a.slotIndex - b.slotIndex; });
 
-  const validIds = new Set();
+  var validIds = new Set();
 
-  for (const m of members) {
-    const cardId = 'card-' + m.slotIndex;
+  for (var mi = 0; mi < members.length; mi++) {
+    var m = members[mi];
+    var cardId = 'card-' + m.slotIndex;
     validIds.add(cardId);
-    let card = document.getElementById(cardId);
+    var card = document.getElementById(cardId);
 
     if (!card) {
       card = document.createElement('div');
@@ -1149,27 +1446,24 @@ function renderGroup(data) {
       grid.appendChild(card);
     }
 
-    const isStopped = m.state === 'Stopped';
-    const bCls = badgeClassFor(m.state);
-    const memberIsClassic = m.protocol === 'classic';
+    var isStopped = m.state === 'Stopped';
+    var bCls = badgeClassFor(m.state);
+    var memberIsClassic = m.protocol === 'classic';
 
     card.className = 'card ' + bCls + (isStopped ? ' stopped' : '');
 
-    // ── Metadata column ──
-    const nameEl = card.querySelector('.member-name');
-    const badgeEl = card.querySelector('.badge');
-    const protocolValEl = card.querySelector('.meta-line-protocol .meta-line-value');
-    const idValEl = card.querySelector('.meta-line-id .meta-line-value');
-    const instanceValEl = card.querySelector('.meta-line-instance .meta-line-value');
-    const epochValEl = card.querySelector('.meta-line-epoch .meta-line-value');
+    var nameEl = card.querySelector('.member-name');
+    var badgeEl = card.querySelector('.badge');
+    var protocolValEl = card.querySelector('.meta-line-protocol .meta-line-value');
+    var idValEl = card.querySelector('.meta-line-id .meta-line-value');
+    var instanceValEl = card.querySelector('.meta-line-instance .meta-line-value');
+    var epochValEl = card.querySelector('.meta-line-epoch .meta-line-value');
 
     if (nameEl.textContent !== m.clientId) nameEl.textContent = m.clientId;
 
-    // Protocol label.
-    const protoTxt = m.protocol || '\u2014';
+    var protoTxt = m.protocol || '\u2014';
     if (protocolValEl.textContent !== protoTxt) protocolValEl.textContent = protoTxt;
 
-    // Classic members have no per-member state or epoch.
     if (memberIsClassic) {
       badgeEl.style.display = 'none';
       card.querySelector('.meta-line-epoch').style.display = 'none';
@@ -1180,48 +1474,48 @@ function renderGroup(data) {
         badgeEl.className = 'badge ' + bCls;
       }
       card.querySelector('.meta-line-epoch').style.display = '';
-      const epochTxt = (m.memberEpoch >= 0 ? String(m.memberEpoch) : '\u2014');
+      var epochTxt = (m.memberEpoch >= 0 ? String(m.memberEpoch) : '\u2014');
       if (epochValEl.textContent !== epochTxt) {
         epochValEl.textContent = epochTxt;
         epochValEl.className = 'meta-line-value' + (m.memberEpoch >= 0 ? '' : ' dim');
       }
     }
 
-    const idTxt = m.memberId || '\u2014';
+    var idTxt = m.memberId || '\u2014';
     if (idValEl.textContent !== idTxt) {
       idValEl.textContent = idTxt;
       idValEl.className = 'meta-line-value' + (m.memberId ? '' : ' dim');
     }
 
-    const instanceTxt = m.instanceId || '\u2014';
+    var instanceTxt = m.instanceId || '\u2014';
     if (instanceValEl.textContent !== instanceTxt) {
       instanceValEl.textContent = instanceTxt;
       instanceValEl.className = 'meta-line-value' + (m.instanceId ? '' : ' dim');
     }
 
-    // ── Zones ──
-    const coordCurrent = new Set(m.assignment || []);
-    const coordTarget = new Set(m.targetAssignment || []);
-    const consumerLocal = new Set(m.localAssignment || []);
+    // Zones
+    var coordCurrent = new Set(m.assignment || []);
+    var coordTarget = new Set(m.targetAssignment || []);
+    var consumerLocal = new Set(m.localAssignment || []);
 
-    // Coordinator-view (server) chips by topic, merging current + target.
-    const serverByTopic = {};
-    const consumerByTopic = {};
-    let serverCount = 0;
-    let consumerCount = 0;
+    var serverByTopic = {};
+    var consumerByTopic = {};
+    var serverCount = 0;
+    var consumerCount = 0;
 
-    for (const t of topics) {
-      serverByTopic[t] = [];
-      consumerByTopic[t] = [];
+    for (var ti = 0; ti < topics.length; ti++) {
+      serverByTopic[topics[ti]] = [];
+      consumerByTopic[topics[ti]] = [];
     }
 
-    for (const t of topics) {
-      for (let p = 0; p < numPartitions; p++) {
-        const key = t + '-' + p;
-        const inCurrent = coordCurrent.has(key);
-        const inTarget = coordTarget.has(key);
-        const inLocal = consumerLocal.has(key);
-        const lag = partitionLag[key];
+    for (var ti2 = 0; ti2 < topics.length; ti2++) {
+      var t = topics[ti2];
+      for (var p = 0; p < numPartitions; p++) {
+        var key = t + '-' + p;
+        var inCurrent = coordCurrent.has(key);
+        var inTarget = coordTarget.has(key);
+        var inLocal = consumerLocal.has(key);
+        var lag = partitionLag[key];
         if (inCurrent && inTarget) {
           serverByTopic[t].push({p: p, cls: 'assigned', lag: lag});
           serverCount++;
@@ -1239,89 +1533,73 @@ function renderGroup(data) {
       }
     }
 
-    const zonesEl = card.querySelector('.zones');
+    var zonesEl = card.querySelector('.zones');
 
-    // Signature key spans the whole grid; rebuild as a unit when anything moves.
-    const zonesKey = serverCount + '|' + consumerCount + '|' + topics.map(t =>
-      t + ':' + serverByTopic[t].map(c => c.p + c.cls[0] + (c.lag != null ? 'L' + c.lag : '')).join(',') +
-      ':' + consumerByTopic[t].map(c => c.p).join(',')
-    ).join('|');
+    var zonesKey = serverCount + '|' + consumerCount + '|' + topics.map(function(t) {
+      return t + ':' + serverByTopic[t].map(function(c) { return c.p + c.cls[0] + (c.lag != null ? 'L' + c.lag : ''); }).join(',') +
+        ':' + consumerByTopic[t].map(function(c) { return c.p; }).join(',');
+    }).join('|');
 
     if (zonesEl.dataset.key !== zonesKey) {
       zonesEl.dataset.key = zonesKey;
       zonesEl.innerHTML = buildZonesGrid(topics, serverByTopic, consumerByTopic, serverCount, consumerCount);
     }
 
-    // ── Controls ──
-    const ctrlDiv = card.querySelector('.member-controls');
-    const ctrlKey = m.subscribed + '|' + m.blocked + '|' + m.partitioned + '|' + m.protocol;
-    const dis = !m.subscribed ? ' disabled' : '';
+    // Controls
+    var ctrlDiv = card.querySelector('.member-controls');
+    var ctrlKey = m.subscribed + '|' + m.blocked + '|' + m.partitioned + '|' + m.protocol;
+    var dis = !m.subscribed ? ' disabled' : '';
 
     if (ctrlKey !== prevCtrlState[m.slotIndex]) {
       prevCtrlState[m.slotIndex] = ctrlKey;
-      let html = '';
+      var ctrlHtml = '';
       if (m.subscribed) {
-        html += '<button class="ctrl-btn act-stop" onclick="stopConsumer(' + m.slotIndex + ')">stop</button>';
+        ctrlHtml += '<button class="ctrl-btn act-stop" onclick="stopConsumer(' + m.slotIndex + ')">stop</button>';
       } else {
-        html += '<button class="ctrl-btn act-start" onclick="startConsumer(' + m.slotIndex + ')">start</button>';
+        ctrlHtml += '<button class="ctrl-btn act-start" onclick="startConsumer(' + m.slotIndex + ')">start</button>';
       }
       if (m.protocol === 'classic') {
-        html += '<button class="ctrl-btn act-start"' + dis + ' onclick="upgradeConsumer(' + m.slotIndex + ')">upgrade</button>';
+        ctrlHtml += '<button class="ctrl-btn act-start"' + dis + ' onclick="upgradeConsumer(' + m.slotIndex + ')">upgrade</button>';
       } else {
-        html += '<button class="ctrl-btn act-stop"' + dis + ' onclick="downgradeConsumer(' + m.slotIndex + ')">downgrade</button>';
+        ctrlHtml += '<button class="ctrl-btn act-stop"' + dis + ' onclick="downgradeConsumer(' + m.slotIndex + ')">downgrade</button>';
       }
-      html += '<button class="ctrl-btn act-fault' + (m.blocked ? ' on' : '') + '"' + dis +
+      ctrlHtml += '<button class="ctrl-btn act-fault' + (m.blocked ? ' on' : '') + '"' + dis +
         ' onclick="' + (m.blocked ? 'unblockMember(' : 'blockMember(') + m.slotIndex + ')">' +
         (m.blocked ? 'resume' : 'freeze') + '</button>';
-      html += '<button class="ctrl-btn act-fault' + (m.partitioned ? ' on' : '') + '"' + dis +
+      ctrlHtml += '<button class="ctrl-btn act-fault' + (m.partitioned ? ' on' : '') + '"' + dis +
         ' onclick="' + (m.partitioned ? 'healMember(' : 'partitionMember(') + m.slotIndex + ')">' +
         (m.partitioned ? 'restore' : 'partition') + '</button>';
-      html += '</div>';
-      ctrlDiv.innerHTML = html;
+      ctrlDiv.innerHTML = ctrlHtml;
     }
   }
 
-  // Remove stale cards (consumer count shrank).
-  for (let i = grid.children.length - 1; i >= 0; i--) {
-    const child = grid.children[i];
+  // Remove stale cards.
+  for (var ci = grid.children.length - 1; ci >= 0; ci--) {
+    var child = grid.children[ci];
     if (!validIds.has(child.id)) {
       grid.removeChild(child);
-      const m = child.id.match(/^card-(\d+)$/);
-      if (m) {
-        delete prevCtrlState[parseInt(m[1])];
-        delete localDelays[parseInt(m[1])];
+      var match = child.id.match(/^card-(\d+)$/);
+      if (match) {
+        delete prevCtrlState[parseInt(match[1])];
       }
     }
   }
 }
 
-// Compute a lag-based intensity multiplier in [0.0, 1.0].
-// Uses a logarithmic scale so small lags are visually distinct from zero,
-// and very large lags don't blow out the scale.
-// 0 lag => 0.0,  1 => ~0.15,  10 => ~0.38,  100 => ~0.62,  1000 => ~0.85,  10000+ => 1.0
 function lagIntensity(lag) {
   if (lag == null || lag < 10) return 0;
-  // Linear scale from 10 to 100, capped at 1.0.
   return Math.min(1.0, (lag - 10) / 90);
 }
 
-// Return inline style string for a coordinator chip given its CSS class and lag.
-// Varies background opacity/saturation based on lag intensity.
 function lagStyle(cls, lag) {
-  const t = lagIntensity(lag);
-  if (t === 0 && lag != null) {
-    // Lag is exactly 0 — use the dimmest variant (the existing default is already dim).
-    return '';
-  }
-  if (lag == null) return ''; // No lag data available.
+  var t = lagIntensity(lag);
+  if (t === 0 && lag != null) return '';
+  if (lag == null) return '';
 
-  // Map intensity to alpha channels. The base (dim) values from CSS are around 0.12 alpha.
-  // We scale from the base (0.12) to a bright value (~0.55) for background,
-  // and from 0.25 to 0.7 for border.
-  const bgAlphaMin = 0.12, bgAlphaMax = 0.55;
-  const borderAlphaMin = 0.25, borderAlphaMax = 0.7;
-  const bgAlpha = (bgAlphaMin + t * (bgAlphaMax - bgAlphaMin)).toFixed(3);
-  const borderAlpha = (borderAlphaMin + t * (borderAlphaMax - borderAlphaMin)).toFixed(3);
+  var bgAlphaMin = 0.12, bgAlphaMax = 0.55;
+  var borderAlphaMin = 0.25, borderAlphaMax = 0.7;
+  var bgAlpha = (bgAlphaMin + t * (bgAlphaMax - bgAlphaMin)).toFixed(3);
+  var borderAlpha = (borderAlphaMin + t * (borderAlphaMax - borderAlphaMin)).toFixed(3);
 
   if (cls === 'assigned') {
     return 'background:rgba(52,211,153,' + bgAlpha + ');border-color:rgba(52,211,153,' + borderAlpha + ');';
@@ -1334,10 +1612,8 @@ function lagStyle(cls, lag) {
 }
 
 function buildZonesGrid(topics, serverByTopic, consumerByTopic, serverCount, consumerCount) {
-  // 3-column grid: topic name | coordinator chips | consumer chips.
-  let html = '';
+  var html = '';
 
-  // Header row.
   html += '<div class="zone-cell zone-header zone-cell-name"></div>';
   html += '<div class="zone-cell zone-header zone-cell-server">' +
     '<span class="zone-label">Coordinator view</span>' +
@@ -1348,24 +1624,26 @@ function buildZonesGrid(topics, serverByTopic, consumerByTopic, serverCount, con
     '<span class="zone-count">' + consumerCount + ' part' + (consumerCount === 1 ? '' : 's') + '</span>' +
     '</div>';
 
-  // One row per topic — three cells each.
-  for (const t of topics) {
+  for (var ti = 0; ti < topics.length; ti++) {
+    var t = topics[ti];
     html += '<div class="zone-cell zone-row zone-cell-name">' +
       '<span class="zone-topic-name" title="' + escapeHtml(t) + '">' + escapeHtml(t) + '</span>' +
       '</div>';
 
     html += '<div class="zone-cell zone-row zone-cell-server"><div class="zone-chips">';
-    for (const c of serverByTopic[t]) {
-      const style = lagStyle(c.cls, c.lag);
-      const title = c.lag != null ? ' data-lag=\"' + c.lag + '\"' : '';
+    for (var si = 0; si < serverByTopic[t].length; si++) {
+      var c = serverByTopic[t][si];
+      var style = lagStyle(c.cls, c.lag);
+      var title = c.lag != null ? ' data-lag="' + c.lag + '"' : '';
       html += '<span class="partition-chip ' + c.cls + '"' + title +
         (style ? ' style="' + style + '"' : '') + '>' + c.p + '</span>';
     }
     html += '</div></div>';
 
     html += '<div class="zone-cell zone-row zone-cell-consumer"><div class="zone-chips">';
-    for (const c of consumerByTopic[t]) {
-      html += '<span class="partition-chip ' + c.cls + '">' + c.p + '</span>';
+    for (var ci2 = 0; ci2 < consumerByTopic[t].length; ci2++) {
+      var c2 = consumerByTopic[t][ci2];
+      html += '<span class="partition-chip ' + c2.cls + '">' + c2.p + '</span>';
     }
     html += '</div></div>';
   }
@@ -1379,13 +1657,7 @@ function escapeHtml(s) {
   });
 }
 
-function setsEqual(a, b) {
-  if (a.size !== b.size) return false;
-  for (const v of a) if (!b.has(v)) return false;
-  return true;
-}
-
-// ── Member control handlers ──
+// -- Member control handlers --
 
 async function startConsumer(index) {
   await fetch('/api/simulator/members/' + index + '/subscribe', {method: 'POST'});
@@ -1419,38 +1691,35 @@ async function unblockMember(index) {
   await fetch('/api/simulator/members/' + index + '/unblock', {method: 'POST'});
 }
 
-// ── Init: check if simulation is already running ──
+// -- Init: auto-add 4 consumers, check if already running --
 (async function() {
-  // Default the assignor dropdown for the consumer protocol.
-  populateAssignors('consumer');
-  applyProtocolDisabling();
+  // Auto-add 4 default consumers.
+  for (var i = 0; i < 4; i++) addConsumer();
+  renderConsumerSections();
 
   try {
-    const resp = await fetch('/api/simulator/status');
-    const data = await resp.json();
+    var resp = await fetch('/api/simulator/status');
+    var data = await resp.json();
     if (data.phase === 'RUNNING') {
       currentConfig = data.config;
       if (currentConfig) {
         document.getElementById('cfg-group-id').value = currentConfig.groupId || '';
-        document.getElementById('cfg-topic-prefix').value = currentConfig.topicPrefix || '';
         document.getElementById('cfg-num-topics').value = currentConfig.numTopics || '';
         document.getElementById('cfg-num-partitions').value = currentConfig.numPartitions || '';
-        document.getElementById('cfg-num-consumers').value = currentConfig.numConsumers || '';
         document.getElementById('cfg-session-timeout').value = currentConfig.sessionTimeoutMs || 45000;
         document.getElementById('cfg-heartbeat-interval').value = currentConfig.heartbeatIntervalMs || 5000;
         document.getElementById('cfg-assignment-interval').value = currentConfig.assignmentIntervalMs || 1000;
-        const protocol = currentConfig.protocol || 'consumer';
-        document.getElementById('cfg-protocol').value = protocol;
-        populateAssignors(protocol, currentConfig.assignor || '');
-        document.getElementById('cfg-poll-timeout').value = currentConfig.pollTimeoutMs || 0;
-        document.getElementById('cfg-poll-delay').value = currentConfig.pollDelayMs || 10000;
-        document.getElementById('cfg-max-poll-interval').value = currentConfig.maxPollIntervalMs || 300000;
-        document.getElementById('cfg-static-members').value = currentConfig.staticMembers ? 'true' : 'false';
+        // Restore consumer count from running config.
+        var numConsumers = currentConfig.numConsumers || 4;
+        consumerEntries = [];
+        nextConsumerId = 0;
+        for (var j = 0; j < numConsumers; j++) addConsumer();
+        renderConsumerSections();
       }
       setSimulationUI(true);
       if (data.chaosRunning) {
         autopilotRunning = true;
-        document.getElementById('btn-autopilot').className = 'btn btn-autopilot active';
+        document.getElementById('btn-autopilot-config').className = 'btn btn-autopilot active';
       }
       startPolling();
     }
