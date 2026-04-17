@@ -1109,9 +1109,7 @@ function renderConsumerSections() {
     if (!entry.expanded && summary) {
       html += '<span class="section-summary">' + escapeHtml(summary) + '</span>';
     }
-    if (consumerEntries.length > 1) {
-      html += '<span class="section-remove" onclick="event.stopPropagation(); removeConsumer(' + entry.id + ')" title="Remove consumer">&times;</span>';
-    }
+    html += '<span class="section-remove" onclick="event.stopPropagation(); removeConsumer(' + entry.id + ')" title="Remove consumer">&times;</span>';
     html += '</button>';
 
     // Body with all fields -- one field per line (no field-row)
