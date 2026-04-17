@@ -899,6 +899,7 @@ body {
         <!-- Add Consumer row -->
         <div class="add-consumer-row">
           <button class="btn-add-consumer" onclick="addConsumer()" type="button">+ Add Consumer</button>
+          <button class="btn-add-consumer" onclick="duplicateLastConsumer()" type="button">+ Duplicate Last</button>
         </div>
 
       </div>
@@ -999,7 +1000,7 @@ function addConsumer() {
   var assignor = (protocol === 'consumer') ? defaults.consumerAssignor : defaults.classicAssignor;
   consumerEntries.push({
     id: id,
-    expanded: false,
+    expanded: true,
     name: name,
     protocol: protocol,
     assignor: assignor,
@@ -1009,6 +1010,31 @@ function addConsumer() {
     staticMember: defaults.staticMember,
   });
   renderConsumerSections();
+  scrollToConsumer(id);
+}
+
+function duplicateLastConsumer() {
+  if (consumerEntries.length === 0) { addConsumer(); return; }
+  var last = consumerEntries[consumerEntries.length - 1];
+  var id = nextConsumerId++;
+  consumerEntries.push({
+    id: id,
+    expanded: true,
+    name: 'consumer-' + consumerEntries.length,
+    protocol: last.protocol,
+    assignor: last.assignor,
+    pollTimeoutMs: last.pollTimeoutMs,
+    pollDelayMs: last.pollDelayMs,
+    maxPollIntervalMs: last.maxPollIntervalMs,
+    staticMember: last.staticMember,
+  });
+  renderConsumerSections();
+  scrollToConsumer(id);
+}
+
+function scrollToConsumer(id) {
+  var el = document.getElementById('section-consumer-' + id);
+  if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 function removeConsumer(id) {
@@ -1704,8 +1730,7 @@ async function unblockMember(index) {
 
 // -- Init: auto-add 4 consumers, check if already running --
 (async function() {
-  // Auto-add 4 default consumers.
-  for (var i = 0; i < 4; i++) addConsumer();
+  // Start with zero consumers — user adds what they need.
   renderConsumerSections();
 
   try {
