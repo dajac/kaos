@@ -1279,8 +1279,7 @@ async function startSimulation() {
   // Use group ID as topic prefix.
   var groupId = document.getElementById('cfg-group-id').value;
 
-  // Build the flat config for the backend using the first consumer's values
-  // as representative (or consumer-protocol defaults as fallback).
+  // Build config with per-consumer array.
   var first = consumerEntries[0];
   var config = {
     groupId: groupId,
@@ -1291,12 +1290,24 @@ async function startSimulation() {
     sessionTimeoutMs: parseInt(document.getElementById('cfg-session-timeout').value),
     heartbeatIntervalMs: parseInt(document.getElementById('cfg-heartbeat-interval').value),
     assignmentIntervalMs: parseInt(document.getElementById('cfg-assignment-interval').value),
+    // Defaults (used as fallback).
     protocol: first.protocol,
     assignor: first.assignor,
     pollTimeoutMs: parseInt(first.pollTimeoutMs),
     pollDelayMs: parseInt(first.pollDelayMs),
     maxPollIntervalMs: parseInt(first.maxPollIntervalMs),
-    staticMembers: first.staticMember === 'true'
+    staticMembers: first.staticMember === 'true',
+    // Per-consumer configs.
+    consumers: perConsumerConfigs.map(function(c) {
+      return {
+        protocol: c.protocol,
+        assignor: c.assignor,
+        pollTimeoutMs: parseInt(c.pollTimeoutMs),
+        pollDelayMs: parseInt(c.pollDelayMs),
+        maxPollIntervalMs: parseInt(c.maxPollIntervalMs),
+        staticMember: c.staticMember === 'true'
+      };
+    })
   };
 
   try {

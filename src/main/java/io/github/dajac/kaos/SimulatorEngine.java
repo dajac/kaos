@@ -285,7 +285,16 @@ public class SimulatorEngine {
 
     private void startConsumers() {
         for (int i = 0; i < config.numConsumers; i++) {
-            ConsumerSlot slot = new ConsumerSlot(i, config.protocol);
+            String protocol = config.protocol;
+            int pollTimeoutMs = config.pollTimeoutMs;
+            int pollDelayMs = config.pollDelayMs;
+            if (config.consumers != null && i < config.consumers.size()) {
+                SimulatorConfig.ConsumerConfig cc = config.consumers.get(i);
+                protocol = cc.protocol;
+                pollTimeoutMs = cc.pollTimeoutMs;
+                pollDelayMs = cc.pollDelayMs;
+            }
+            ConsumerSlot slot = new ConsumerSlot(i, protocol, pollTimeoutMs, pollDelayMs);
             slots.add(slot);
             createConsumer(slot);
         }
@@ -297,6 +306,15 @@ public class SimulatorEngine {
      * already have a running consumer.
      */
     public void createConsumer(ConsumerSlot slot) {
+        // Resolve per-consumer config, falling back to global defaults.
+        SimulatorConfig.ConsumerConfig cc = null;
+        if (config.consumers != null && slot.index() < config.consumers.size()) {
+            cc = config.consumers.get(slot.index());
+        }
+        String assignor = cc != null ? cc.assignor : config.assignor;
+        int maxPollIntervalMs = cc != null ? cc.maxPollIntervalMs : config.maxPollIntervalMs;
+        boolean staticMember = cc != null ? cc.staticMember : config.staticMembers;
+
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, proxyManager.proxyBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, config.groupId);
@@ -304,27 +322,23 @@ public class SimulatorEngine {
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
-        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(config.maxPollIntervalMs));
+        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(maxPollIntervalMs));
 
         boolean classic = "classic".equals(slot.protocol());
         if (classic) {
             props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic");
-            // Only set the client-side strategy if it's a valid classic assignor.
-            // Server-side names (uniform) don't apply to the classic protocol.
-            String classicClass = classicAssignorClass(config.assignor);
+            String classicClass = classicAssignorClass(assignor);
             if (classicClass != null) {
                 props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classicClass);
             }
         } else {
             props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer");
-            // Only set the server-side assignor if it's a valid consumer-protocol
-            // assignor. Classic assignor names don't apply.
-            if ("uniform".equals(config.assignor) || "range".equals(config.assignor)) {
-                props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, config.assignor);
+            if (assignor != null && !assignor.isEmpty()) {
+                props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, assignor);
             }
         }
 
-        if (config.staticMembers) {
+        if (staticMember) {
             props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, config.groupId + "-" + slot.clientId());
         }
 
@@ -436,7 +450,7 @@ public class SimulatorEngine {
             }
 
             try {
-                consumer.poll(Duration.ofMillis(config.pollTimeoutMs));
+                consumer.poll(Duration.ofMillis(slot.pollTimeoutMs()));
             } catch (Exception e) {
                 if (slot.alive()) {
                     // Ignore transient errors.
@@ -454,9 +468,9 @@ public class SimulatorEngine {
             long delayStart = System.currentTimeMillis();
             while (slot.alive()) {
                 long elapsed = System.currentTimeMillis() - delayStart;
-                if (elapsed >= config.pollDelayMs) break;
+                if (elapsed >= slot.pollDelayMs()) break;
                 try {
-                    Thread.sleep(Math.min(500, Math.max(1, config.pollDelayMs - elapsed)));
+                    Thread.sleep(Math.min(500, Math.max(1, slot.pollDelayMs() - elapsed)));
                 } catch (InterruptedException e) {
                     break;
                 }

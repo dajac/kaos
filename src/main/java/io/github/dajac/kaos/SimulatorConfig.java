@@ -16,13 +16,25 @@ public class SimulatorConfig {
     public int heartbeatIntervalMs;
     public int assignmentIntervalMs;
 
-    // Consumer.
+    // Consumer defaults (used when no per-consumer config is provided).
     public String protocol; // "consumer" or "classic"
     public String assignor;
     public int pollTimeoutMs;
     public int pollDelayMs;
     public int maxPollIntervalMs;
     public boolean staticMembers;
+
+    // Per-consumer configs (optional — overrides the defaults above).
+    public List<ConsumerConfig> consumers;
+
+    public static class ConsumerConfig {
+        public String protocol;
+        public String assignor;
+        public int pollTimeoutMs;
+        public int pollDelayMs;
+        public int maxPollIntervalMs;
+        public boolean staticMember;
+    }
 
     public SimulatorConfig() {
         this.groupId = "kaos";

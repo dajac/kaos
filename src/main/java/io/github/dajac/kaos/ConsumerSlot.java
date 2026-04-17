@@ -16,13 +16,17 @@ public class ConsumerSlot {
     private final AtomicInteger generationId = new AtomicInteger(-1);
     private final Set<TopicPartition> localAssignment = ConcurrentHashMap.newKeySet();
     private volatile String protocol; // "consumer" or "classic"
+    private volatile int pollTimeoutMs;
+    private volatile int pollDelayMs;
     private volatile KafkaConsumer<String, String> consumer;
     private volatile Thread thread;
     private volatile boolean alive; // true while the consumer loop should run
 
-    public ConsumerSlot(int index, String protocol) {
+    public ConsumerSlot(int index, String protocol, int pollTimeoutMs, int pollDelayMs) {
         this.index = index;
         this.protocol = protocol;
+        this.pollTimeoutMs = pollTimeoutMs;
+        this.pollDelayMs = pollDelayMs;
     }
 
     public int index() {
@@ -59,6 +63,14 @@ public class ConsumerSlot {
 
     public void setProtocol(String protocol) {
         this.protocol = protocol;
+    }
+
+    public int pollTimeoutMs() {
+        return pollTimeoutMs;
+    }
+
+    public int pollDelayMs() {
+        return pollDelayMs;
     }
 
     public boolean alive() {
