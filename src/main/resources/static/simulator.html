@@ -184,6 +184,7 @@ body {
 
 .section-remove {
   flex: 0 0 auto;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -210,7 +211,7 @@ body {
 }
 .config-section.expanded .section-body { display: block; }
 
-/* -- Running state: config stays visible but grayed out -- */
+/* -- Running state: config stays fully visible but grayed out & non-interactive -- */
 #config-mode.locked .config-scroll {
   opacity: 0.45;
 }
@@ -218,8 +219,6 @@ body {
 #config-mode.locked .btn-add-consumer {
   pointer-events: none;
 }
-#config-mode.locked .btn-add-consumer { display: none; }
-#config-mode.locked .section-remove { display: none; }
 
 /* -- Form fields -- */
 .field {
@@ -801,6 +800,217 @@ body {
   font-size: 13px;
   letter-spacing: 0.5px;
 }
+
+/* -- Inline field layout (label left, control right) -- */
+.field.field-inline {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.field.field-inline .field-label {
+  margin-bottom: 0;
+  line-height: 1.25;
+}
+.field-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.field-control > *:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+
+/* -- Consumers list header -- */
+.consumers-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px 6px;
+}
+.consumers-header-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+}
+.consumers-header-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* -- Override chip pills (under collapsed consumer row) -- */
+.consumer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 16px 10px 36px;
+  margin-top: -4px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid rgba(76,154,255,0.22);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2px;
+  line-height: 1.55;
+}
+
+/* -- Remove-override × button -- */
+.field-remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+  opacity: 0.55;
+}
+.field-remove:hover {
+  opacity: 1;
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+/* -- Inherit note inside an expanded consumer with no overrides -- */
+.inherit-note {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-style: italic;
+  margin: 2px 0 8px;
+  letter-spacing: 0.2px;
+}
+
+/* -- Unified dropdown component (.dd) -- */
+.dd {
+  position: relative;
+  min-width: 0;
+}
+.dd-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 5px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+  min-height: 28px;
+}
+.dd-btn:hover,
+.dd.open .dd-btn { border-color: var(--accent); }
+
+/* "+ Add" variant: dashed border, action semantics */
+.dd-btn.dd-btn-add {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11px;
+}
+.dd-btn.dd-btn-add:hover,
+.dd.open .dd-btn.dd-btn-add {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(76,154,255,0.4);
+  border-style: solid;
+}
+
+.dd-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dd-chevron {
+  font-size: 8px;
+  color: var(--text-dim);
+  margin-left: 8px;
+  transition: transform 0.2s ease, color 0.12s;
+  flex: 0 0 auto;
+}
+.dd-btn:hover .dd-chevron,
+.dd.open .dd-chevron { color: inherit; }
+.dd.open .dd-chevron { transform: rotate(180deg); }
+
+.dd-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  z-index: 20;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.dd.open .dd-menu { display: block; }
+.dd-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  text-align: left;
+}
+.dd-item + .dd-item { border-top: 1px solid var(--border-subtle); }
+.dd-item:hover { background: var(--accent-dim); color: var(--accent); }
+.dd-item.selected {
+  color: var(--accent);
+  background: rgba(76,154,255,0.05);
+}
+.dd-item-hint {
+  color: var(--text-dim);
+  font-size: 10px;
+  flex: 0 0 auto;
+}
+.dd-item:hover .dd-item-hint { color: var(--accent); opacity: 0.8; }
+
+/* Running state locks dropdowns & remove buttons (keep them visible) */
+#config-mode.locked .dd-btn,
+#config-mode.locked .dd-item,
+#config-mode.locked .field-remove,
+#config-mode.locked .section-remove { pointer-events: none; }
 </style>
 </head>
 <body>
@@ -817,80 +1027,55 @@ body {
     <div id="config-mode">
       <div class="config-scroll" id="config-scroll">
 
-        <!-- Section: Group (merged with former Cluster settings) -->
+        <!-- Section: Group -->
         <div class="config-section expanded" id="section-group">
           <button class="section-toggle" onclick="toggleSection('section-group')" type="button">
             <span class="section-chevron">&#9654;</span>
             <span class="section-title">Group</span>
           </button>
           <div class="section-body">
-            <div class="field">
+            <div class="field field-inline">
               <label class="field-label">Group ID</label>
               <input class="field-input" type="text" id="cfg-group-id" value="kaos">
             </div>
-            <div class="field-row">
-              <div class="field">
-                <label class="field-label">Subscribed Topics</label>
-                <input class="field-input" type="number" id="cfg-num-topics" value="1" min="1" max="20">
-              </div>
-              <div class="field">
-                <label class="field-label">Partitions / Topic</label>
-                <input class="field-input" type="number" id="cfg-num-partitions" value="36" min="1" max="100">
-              </div>
+
+            <div class="field field-inline">
+              <label class="field-label">Protocol</label>
+              <div id="cfg-protocol-dd"></div>
             </div>
-            <div class="field-hint">Each topic will be named {groupId}-1, {groupId}-2, etc.</div>
-            <div class="field">
-              <label class="field-label">Session Timeout (ms)</label>
-              <input class="field-input" type="number" id="cfg-session-timeout" value="45000" min="1000" max="300000">
+
+            <div class="field field-inline">
+              <label class="field-label">Assignor</label>
+              <div id="cfg-assignor-dd"></div>
             </div>
-            <div class="field">
-              <label class="field-label">Heartbeat Interval (ms)</label>
-              <input class="field-input" type="number" id="cfg-heartbeat-interval" value="5000" min="500" max="60000">
+
+            <div class="field field-inline">
+              <label class="field-label">Static Membership</label>
+              <div id="cfg-static-dd"></div>
             </div>
-            <div class="field">
-              <label class="field-label">Assignment Interval (ms)</label>
-              <input class="field-input" type="number" id="cfg-assignment-interval" value="1000" min="0" max="60000">
+
+            <div class="field field-inline">
+              <label class="field-label">Subscribed Topics</label>
+              <input class="field-input" type="number" id="cfg-num-topics" value="1" min="1" max="20">
             </div>
-            <div class="field">
-              <label class="field-label">Poll Timeout (ms)</label>
-              <input class="field-input" type="number" id="cfg-default-poll-timeout" value="0" min="0" max="60000">
+            <div class="field field-inline">
+              <label class="field-label">Partitions per Topic</label>
+              <input class="field-input" type="number" id="cfg-num-partitions" value="36" min="1" max="100">
             </div>
-            <div class="field">
-              <label class="field-label">Poll Delay (ms)</label>
-              <input class="field-input" type="number" id="cfg-default-poll-delay" value="1000" min="0" max="120000">
-            </div>
-            <div class="field">
-              <label class="field-label">Max Poll Interval (ms)</label>
-              <input class="field-input" type="number" id="cfg-default-max-poll-interval" value="300000" min="1000" max="600000">
-            </div>
-            <div class="field">
-              <label class="field-label">Static Members</label>
-              <input class="field-input" type="text" id="cfg-default-static-member" value="false" list="static-member-suggestions">
-              <datalist id="static-member-suggestions">
-                <option value="false">
-                <option value="true">
-              </datalist>
-            </div>
-            <div class="field">
-              <label class="field-label">Consumer Assignor</label>
-              <select class="field-input" id="cfg-default-consumer-assignor">
-                <option value="">(default)</option>
-                <option value="uniform">uniform</option>
-                <option value="range">range</option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="field-label">Classic Assignor</label>
-              <select class="field-input" id="cfg-default-classic-assignor">
-                <option value="">(default)</option>
-                <option value="range">range</option>
-                <option value="roundrobin">roundrobin</option>
-                <option value="sticky">sticky</option>
-                <option value="cooperative-sticky">cooperative-sticky</option>
-              </select>
-            </div>
-            <div class="field-hint">These defaults pre-populate new consumers.</div>
+
+            <!-- Group-level optional settings (rendered by JS) -->
+            <div id="group-optional-fields"></div>
+
+            <!-- "+ Add setting" menu (rendered by JS) -->
+            <div id="add-group-setting-container"></div>
           </div>
+        </div>
+
+
+        <!-- Consumers list header -->
+        <div class="consumers-header">
+          <span class="consumers-header-label">Consumers</span>
+          <span class="consumers-header-count" id="consumers-count">(0)</span>
         </div>
 
         <!-- Consumer sections are rendered dynamically here -->
@@ -898,8 +1083,8 @@ body {
 
         <!-- Add Consumer row -->
         <div class="add-consumer-row">
-          <button class="btn-add-consumer" onclick="addConsumer()" type="button">+ Add Consumer</button>
-          <button class="btn-add-consumer" onclick="duplicateLastConsumer()" type="button">+ Duplicate Last</button>
+          <button class="btn-add-consumer" onclick="addConsumer()" type="button">+ Add</button>
+          <button class="btn-add-consumer" onclick="duplicateLastConsumer()" type="button">+ Duplicate</button>
         </div>
 
       </div>
@@ -963,14 +1148,56 @@ let prevState = null;
 let prevCtrlState = {};
 let simulationRunning = false;
 
-// -- Consumer entries state --
+// -- State --
+// Each consumer entry: { id, expanded, overrides: { [key]: value } }
+// Overridable keys: protocol, assignor, staticMember, pollTimeoutMs, pollDelayMs, maxPollIntervalMs
 let consumerEntries = [];
 let nextConsumerId = 0;
 
-// Datalist suggestions per protocol (for the assignor text input).
-const ASSIGNOR_SUGGESTIONS = {
+// Group-level state (protocol/assignor/static are always visible; others are optional).
+let groupState = {
+  protocol: 'consumer',
+  assignor: 'uniform',
+  staticMember: 'false',
+};
+let groupOptionalSettings = {};  // e.g. { sessionTimeoutMs: 45000 }
+
+// Assignor options per protocol.
+const ASSIGNOR_OPTIONS = {
   consumer: ['uniform', 'range'],
   classic: ['range', 'roundrobin', 'sticky', 'cooperative-sticky']
+};
+
+// Group-level optional settings (rendered inline when added).
+const GROUP_OPTIONAL_FIELDS = [
+  { key: 'sessionTimeoutMs',    label: 'Session Timeout (ms)',    default: 45000,  min: 1000, max: 300000 },
+  { key: 'heartbeatIntervalMs', label: 'Heartbeat Interval (ms)', default: 5000,   min: 500,  max: 60000 },
+  { key: 'assignmentIntervalMs',label: 'Assignment Interval (ms)',default: 1000,   min: 0,    max: 60000 },
+  { key: 'pollTimeoutMs',       label: 'Poll Timeout (ms)',       default: 0,      min: 0,    max: 60000 },
+  { key: 'pollDelayMs',         label: 'Poll Delay (ms)',         default: 1000,   min: 0,    max: 120000 },
+  { key: 'maxPollIntervalMs',   label: 'Max Poll Interval (ms)',  default: 300000, min: 1000, max: 600000 },
+];
+
+function groupFieldMeta(key) { return GROUP_OPTIONAL_FIELDS.find(function(f) { return f.key === key; }); }
+
+// Per-consumer override field metadata (order = menu order + render order).
+const OVERRIDE_FIELDS = [
+  { key: 'protocol',           label: 'Protocol',               type: 'enum',   options: ['consumer', 'classic'] },
+  { key: 'assignor',           label: 'Assignor',               type: 'enum-dynamic' },
+  { key: 'staticMember',       label: 'Static Membership',      type: 'enum',   options: ['false', 'true'], optionLabels: ['off', 'on'] },
+  { key: 'pollTimeoutMs',      label: 'Poll Timeout (ms)',      type: 'number', min: 0,    max: 60000  },
+  { key: 'pollDelayMs',        label: 'Poll Delay (ms)',        type: 'number', min: 0,    max: 120000 },
+  { key: 'maxPollIntervalMs',  label: 'Max Poll Interval (ms)', type: 'number', min: 1000, max: 600000 },
+];
+
+// Short key labels for chips.
+const CHIP_KEY_LABELS = {
+  protocol: 'protocol',
+  assignor: 'assignor',
+  staticMember: 'static',
+  pollTimeoutMs: 'pollTimeout',
+  pollDelayMs: 'pollDelay',
+  maxPollIntervalMs: 'maxPoll',
 };
 
 // -- Section collapse/expand --
@@ -979,36 +1206,215 @@ function toggleSection(sectionId) {
   if (el) el.classList.toggle('expanded');
 }
 
-// -- Read Group-level defaults --
+// -- Unified dropdown (.dd) --
+// renderDropdown({ id, value, options: [{value,label,hint?}], onChangeExpr: "js expression using $value" })
+function renderDropdown(opts) {
+  var selectedLabel = '';
+  for (var i = 0; i < opts.options.length; i++) {
+    if (String(opts.options[i].value) === String(opts.value)) {
+      selectedLabel = opts.options[i].label;
+      break;
+    }
+  }
+  if (!selectedLabel) selectedLabel = String(opts.value);
+
+  var html = '<div class="dd" id="' + opts.id + '">';
+  html += '<button type="button" class="dd-btn' + (opts.addVariant ? ' dd-btn-add' : '') + '" onclick="toggleDd(\'' + opts.id + '\')">';
+  html += '<span class="dd-value">' + escapeHtml(selectedLabel) + '</span>';
+  html += '<span class="dd-chevron">&#9662;</span>';
+  html += '</button>';
+  html += '<div class="dd-menu">';
+  for (var j = 0; j < opts.options.length; j++) {
+    var o = opts.options[j];
+    var sel = String(o.value) === String(opts.value);
+    var handler = opts.onChangeExpr.replace(/\$value/g, '\'' + String(o.value).replace(/'/g, "\\'") + '\'');
+    html += '<button type="button" class="dd-item' + (sel ? ' selected' : '') + '" onclick="closeAllDd(); ' + handler + '">';
+    html += '<span>' + escapeHtml(o.label) + '</span>';
+    if (o.hint != null) {
+      html += '<span class="dd-item-hint">' + escapeHtml(String(o.hint)) + '</span>';
+    }
+    html += '</button>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function toggleDd(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var wasOpen = el.classList.contains('open');
+  closeAllDd();
+  if (!wasOpen) el.classList.add('open');
+}
+
+function closeAllDd() {
+  var list = document.querySelectorAll('.dd.open');
+  for (var i = 0; i < list.length; i++) list[i].classList.remove('open');
+}
+
+// Close open dropdowns when clicking outside.
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.dd')) closeAllDd();
+}, true);
+
+// -- Group-level handlers --
+function setGroupProtocol(value) {
+  groupState.protocol = value;
+  // Ensure assignor remains valid for new protocol; else reset to first option.
+  var validAssignors = ASSIGNOR_OPTIONS[value] || ASSIGNOR_OPTIONS.consumer;
+  if (validAssignors.indexOf(groupState.assignor) === -1) {
+    groupState.assignor = validAssignors[0];
+  }
+  renderAll();
+}
+
+function setGroupAssignor(value) {
+  groupState.assignor = value;
+  renderAll();
+}
+
+function setGroupStatic(value) {
+  groupState.staticMember = value;
+  renderAll();
+}
+
+function renderGroupDropdowns() {
+  document.getElementById('cfg-protocol-dd').outerHTML = renderDropdown({
+    id: 'cfg-protocol-dd',
+    value: groupState.protocol,
+    options: [
+      { value: 'consumer', label: 'consumer' },
+      { value: 'classic',  label: 'classic'  },
+    ],
+    onChangeExpr: 'setGroupProtocol($value)'
+  });
+  var assignorOpts = (ASSIGNOR_OPTIONS[groupState.protocol] || ASSIGNOR_OPTIONS.consumer).map(function(v) {
+    return { value: v, label: v };
+  });
+  document.getElementById('cfg-assignor-dd').outerHTML = renderDropdown({
+    id: 'cfg-assignor-dd',
+    value: groupState.assignor,
+    options: assignorOpts,
+    onChangeExpr: 'setGroupAssignor($value)'
+  });
+  document.getElementById('cfg-static-dd').outerHTML = renderDropdown({
+    id: 'cfg-static-dd',
+    value: groupState.staticMember,
+    options: [
+      { value: 'false', label: 'off' },
+      { value: 'true',  label: 'on'  },
+    ],
+    onChangeExpr: 'setGroupStatic($value)'
+  });
+}
+
+// -- Group optional settings (the former "Advanced" fields) --
+function addGroupSetting(key) {
+  var f = groupFieldMeta(key);
+  if (!f) return;
+  groupOptionalSettings[key] = f.default;
+  renderAll();
+}
+
+function setGroupSetting(key, value) {
+  var n = parseInt(value);
+  if (isNaN(n)) n = 0;
+  groupOptionalSettings[key] = n;
+  // Poll defaults affect override hints; re-render consumers too.
+  renderConsumerSections();
+}
+
+function removeGroupSetting(key) {
+  delete groupOptionalSettings[key];
+  renderAll();
+}
+
+function renderGroupOptional() {
+  var container = document.getElementById('group-optional-fields');
+  if (!container) return;
+  var html = '';
+  // Render in the order settings were added (Object.keys preserves insertion order).
+  Object.keys(groupOptionalSettings).forEach(function(key) {
+    var f = groupFieldMeta(key);
+    if (!f) return;
+    var val = groupOptionalSettings[key];
+    html += '<div class="field field-inline">';
+    html += '<label class="field-label">' + escapeHtml(f.label) + '</label>';
+    html += '<div class="field-control">';
+    html += '<input type="number" class="field-input" value="' + escapeHtml(String(val)) + '"' +
+      ' min="' + f.min + '" max="' + f.max + '"' +
+      ' onchange="setGroupSetting(\'' + f.key + '\', this.value)">';
+    html += '<button type="button" class="field-remove" title="Remove — revert to default"' +
+      ' onclick="removeGroupSetting(\'' + f.key + '\')">&times;</button>';
+    html += '</div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+
+  // "+ Add setting" menu
+  var available = GROUP_OPTIONAL_FIELDS.filter(function(f) { return groupOptionalSettings[f.key] === undefined; });
+  var addContainer = document.getElementById('add-group-setting-container');
+  if (!addContainer) return;
+  if (available.length === 0) {
+    addContainer.innerHTML = '';
+    return;
+  }
+  var options = available.map(function(f) {
+    return { value: f.key, label: f.label, hint: String(f.default) };
+  });
+  addContainer.innerHTML = renderDropdown({
+    id: 'add-group-setting-dd',
+    value: '__label__',
+    options: options,
+    addVariant: true,
+    onChangeExpr: 'addGroupSetting($value)'
+  });
+  // Replace the button's label with "+ Add setting" (renderDropdown defaults to the selected value).
+  var valueEl = document.querySelector('#add-group-setting-dd .dd-value');
+  if (valueEl) valueEl.textContent = '+ Add setting';
+}
+
+// -- Effective group defaults (used by consumer inheritance) --
 function getDefaults() {
   return {
-    pollTimeoutMs:     parseInt(document.getElementById('cfg-default-poll-timeout').value) || 0,
-    pollDelayMs:       parseInt(document.getElementById('cfg-default-poll-delay').value) || 1000,
-    maxPollIntervalMs: parseInt(document.getElementById('cfg-default-max-poll-interval').value) || 300000,
-    staticMember:      document.getElementById('cfg-default-static-member').value || 'false',
-    consumerAssignor:  document.getElementById('cfg-default-consumer-assignor').value || '',
-    classicAssignor:   document.getElementById('cfg-default-classic-assignor').value || '',
+    protocol:          groupState.protocol,
+    assignor:          groupState.assignor,
+    staticMember:      groupState.staticMember,
+    pollTimeoutMs:     groupOptionalSettings.pollTimeoutMs     != null ? groupOptionalSettings.pollTimeoutMs     : 0,
+    pollDelayMs:       groupOptionalSettings.pollDelayMs       != null ? groupOptionalSettings.pollDelayMs       : 1000,
+    maxPollIntervalMs: groupOptionalSettings.maxPollIntervalMs != null ? groupOptionalSettings.maxPollIntervalMs : 300000,
   };
+}
+
+// Effective group coordination settings (for the POST payload).
+function getCoordinationDefaults() {
+  return {
+    sessionTimeoutMs:     groupOptionalSettings.sessionTimeoutMs     != null ? groupOptionalSettings.sessionTimeoutMs     : 45000,
+    heartbeatIntervalMs:  groupOptionalSettings.heartbeatIntervalMs  != null ? groupOptionalSettings.heartbeatIntervalMs  : 5000,
+    assignmentIntervalMs: groupOptionalSettings.assignmentIntervalMs != null ? groupOptionalSettings.assignmentIntervalMs : 1000,
+  };
+}
+
+// Resolve the effective config for a given consumer (group defaults + overrides).
+function effectiveFor(entry) {
+  var defaults = getDefaults();
+  var eff = {};
+  for (var k in defaults) eff[k] = defaults[k];
+  if (entry && entry.overrides) {
+    for (var kk in entry.overrides) eff[kk] = entry.overrides[kk];
+  }
+  return eff;
+}
+
+function consumerName(entry) {
+  var idx = consumerEntries.indexOf(entry);
+  return 'consumer-' + (idx >= 0 ? idx : entry.id);
 }
 
 // -- Consumer CRUD --
 function addConsumer() {
-  var protocol = 'consumer';
-  var defaults = getDefaults();
   var id = nextConsumerId++;
-  var name = 'consumer-' + (consumerEntries.length);
-  var assignor = (protocol === 'consumer') ? defaults.consumerAssignor : defaults.classicAssignor;
-  consumerEntries.push({
-    id: id,
-    expanded: true,
-    name: name,
-    protocol: protocol,
-    assignor: assignor,
-    pollTimeoutMs: defaults.pollTimeoutMs,
-    pollDelayMs: defaults.pollDelayMs,
-    maxPollIntervalMs: defaults.maxPollIntervalMs,
-    staticMember: defaults.staticMember,
-  });
+  consumerEntries.push({ id: id, expanded: false, overrides: {} });
   renderConsumerSections();
   scrollToConsumer(id);
 }
@@ -1017,17 +1423,9 @@ function duplicateLastConsumer() {
   if (consumerEntries.length === 0) { addConsumer(); return; }
   var last = consumerEntries[consumerEntries.length - 1];
   var id = nextConsumerId++;
-  consumerEntries.push({
-    id: id,
-    expanded: true,
-    name: 'consumer-' + consumerEntries.length,
-    protocol: last.protocol,
-    assignor: last.assignor,
-    pollTimeoutMs: last.pollTimeoutMs,
-    pollDelayMs: last.pollDelayMs,
-    maxPollIntervalMs: last.maxPollIntervalMs,
-    staticMember: last.staticMember,
-  });
+  var cloned = {};
+  for (var k in last.overrides) cloned[k] = last.overrides[k];
+  consumerEntries.push({ id: id, expanded: false, overrides: cloned });
   renderConsumerSections();
   scrollToConsumer(id);
 }
@@ -1048,40 +1446,123 @@ function toggleConsumerSection(id) {
   renderConsumerSections();
 }
 
-function onConsumerFieldChange(consumerId, key, value) {
+// -- Override management --
+function addOverride(consumerId, key) {
   var entry = consumerEntries.find(function(e) { return e.id === consumerId; });
   if (!entry) return;
-  // When the protocol changes, update the assignor to the corresponding default.
+  var eff = effectiveFor(entry);
+  entry.overrides[key] = eff[key];
   if (key === 'protocol') {
-    var defaults = getDefaults();
-    entry.assignor = (value === 'consumer') ? defaults.consumerAssignor : defaults.classicAssignor;
+    var valid = ASSIGNOR_OPTIONS[entry.overrides.protocol] || ASSIGNOR_OPTIONS.consumer;
+    var cur = entry.overrides.assignor != null ? entry.overrides.assignor : eff.assignor;
+    if (valid.indexOf(cur) === -1) entry.overrides.assignor = valid[0];
   }
-  entry[key] = value;
   renderConsumerSections();
 }
 
-function getConsumerSummary(entry) {
-  var defaults = getDefaults();
-  var diffs = [];
-  if (entry.assignor) {
-    diffs.push('assignor=' + entry.assignor);
+function removeOverride(consumerId, key) {
+  var entry = consumerEntries.find(function(e) { return e.id === consumerId; });
+  if (!entry) return;
+  delete entry.overrides[key];
+  renderConsumerSections();
+}
+
+function setOverride(consumerId, key, value) {
+  var entry = consumerEntries.find(function(e) { return e.id === consumerId; });
+  if (!entry) return;
+  entry.overrides[key] = value;
+  if (key === 'protocol') {
+    var valid = ASSIGNOR_OPTIONS[value] || ASSIGNOR_OPTIONS.consumer;
+    var eff = effectiveFor(entry);
+    var cur = entry.overrides.assignor != null ? entry.overrides.assignor : eff.assignor;
+    if (valid.indexOf(cur) === -1) entry.overrides.assignor = valid[0];
   }
-  if (parseInt(entry.pollTimeoutMs) !== defaults.pollTimeoutMs) {
-    diffs.push('pollTimeout=' + entry.pollTimeoutMs);
+  renderConsumerSections();
+}
+
+// Format a value for display in a chip.
+function chipValue(key, value) {
+  if (key === 'staticMember') return value === 'true' || value === true ? 'on' : 'off';
+  return value;
+}
+
+function renderConsumerChips(entry) {
+  var keys = OVERRIDE_FIELDS.map(function(f) { return f.key; }).filter(function(k) {
+    return entry.overrides[k] !== undefined;
+  });
+  if (keys.length === 0) return '';
+  var html = '<div class="consumer-chips">';
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var v = chipValue(k, entry.overrides[k]);
+    var label = CHIP_KEY_LABELS[k] || k;
+    html += '<span class="chip">' + escapeHtml(label) + '=' + escapeHtml(String(v)) + '</span>';
   }
-  if (parseInt(entry.pollDelayMs) !== defaults.pollDelayMs) {
-    diffs.push('pollDelay=' + entry.pollDelayMs);
+  html += '</div>';
+  return html;
+}
+
+function renderOverrideField(entry, f) {
+  var consumerId = entry.id;
+  var val = entry.overrides[f.key];
+  var html = '<div class="field field-inline">';
+  html += '<label class="field-label">' + escapeHtml(f.label) + '</label>';
+  html += '<div class="field-control">';
+
+  if (f.type === 'enum') {
+    var options = f.options.map(function(opt, i) {
+      return { value: opt, label: (f.optionLabels && f.optionLabels[i]) || opt };
+    });
+    html += renderDropdown({
+      id: 'c-' + consumerId + '-' + f.key + '-dd',
+      value: String(val),
+      options: options,
+      onChangeExpr: 'setOverride(' + consumerId + ', \'' + f.key + '\', $value)'
+    });
+  } else if (f.type === 'enum-dynamic' && f.key === 'assignor') {
+    var eff = effectiveFor(entry);
+    var opts = (ASSIGNOR_OPTIONS[eff.protocol] || ASSIGNOR_OPTIONS.consumer).map(function(v) {
+      return { value: v, label: v };
+    });
+    html += renderDropdown({
+      id: 'c-' + consumerId + '-assignor-dd',
+      value: String(val),
+      options: opts,
+      onChangeExpr: 'setOverride(' + consumerId + ', \'assignor\', $value)'
+    });
+  } else if (f.type === 'number') {
+    html += '<input type="number" class="field-input" value="' + escapeHtml(String(val)) + '"' +
+      ' min="' + f.min + '" max="' + f.max + '"' +
+      ' onchange="setOverride(' + consumerId + ', \'' + f.key + '\', this.value)">';
   }
-  if (parseInt(entry.maxPollIntervalMs) !== defaults.maxPollIntervalMs) {
-    diffs.push('maxPoll=' + entry.maxPollIntervalMs);
-  }
-  if (entry.staticMember !== defaults.staticMember) {
-    diffs.push('static=' + (entry.staticMember === 'true' ? 'yes' : 'no'));
-  }
-  return diffs.length > 0 ? diffs.join(', ') : '';
+
+  html += '<button type="button" class="field-remove" title="Remove override — inherit from group"' +
+    ' onclick="removeOverride(' + consumerId + ', \'' + f.key + '\')">&times;</button>';
+  html += '</div></div>';
+  return html;
+}
+
+function renderAddOverrideDropdown(entry) {
+  var eff = effectiveFor(entry);
+  var available = OVERRIDE_FIELDS.filter(function(f) { return entry.overrides[f.key] === undefined; });
+  if (available.length === 0) return '';
+  var options = available.map(function(f) {
+    return { value: f.key, label: f.label, hint: String(chipValue(f.key, eff[f.key])) };
+  });
+  var html = renderDropdown({
+    id: 'c-' + entry.id + '-add-dd',
+    value: '__label__',
+    options: options,
+    addVariant: true,
+    onChangeExpr: 'addOverride(' + entry.id + ', $value)'
+  });
+  return html;
 }
 
 function renderConsumerSections() {
+  var countEl = document.getElementById('consumers-count');
+  if (countEl) countEl.textContent = '(' + consumerEntries.length + ')';
+
   var container = document.getElementById('consumer-sections');
   if (consumerEntries.length === 0) {
     container.innerHTML = '';
@@ -1090,108 +1571,72 @@ function renderConsumerSections() {
 
   var html = '';
   consumerEntries.forEach(function(entry) {
+    var eff = effectiveFor(entry);
     var expandedCls = entry.expanded ? ' expanded' : '';
-    var isConsumerProto = entry.protocol === 'consumer';
+    var isConsumerProto = eff.protocol === 'consumer';
     var tagCls = isConsumerProto ? 'tag-consumer' : 'tag-classic';
     var tagText = isConsumerProto ? 'consumer' : 'classic';
-    var summary = getConsumerSummary(entry);
-    var suggestions = ASSIGNOR_SUGGESTIONS[entry.protocol] || ASSIGNOR_SUGGESTIONS.consumer;
-    var datalistId = 'assignor-dl-' + entry.id;
     var sectionId = 'section-consumer-' + entry.id;
+    var name = consumerName(entry);
+    var hasOverrides = Object.keys(entry.overrides).length > 0;
 
     html += '<div class="config-section' + expandedCls + '" id="' + sectionId + '">';
 
-    // Toggle bar
     html += '<button class="section-toggle" onclick="toggleConsumerSection(' + entry.id + ')" type="button">';
     html += '<span class="section-chevron">&#9654;</span>';
-    html += '<span class="section-title">' + escapeHtml(entry.name) + '</span>';
+    html += '<span class="section-title">' + escapeHtml(name) + '</span>';
     html += '<span class="section-tag ' + tagCls + '">' + tagText + '</span>';
-    if (!entry.expanded && summary) {
-      html += '<span class="section-summary">' + escapeHtml(summary) + '</span>';
-    }
     html += '<span class="section-remove" onclick="event.stopPropagation(); removeConsumer(' + entry.id + ')" title="Remove consumer">&times;</span>';
     html += '</button>';
 
-    // Body with all fields -- one field per line (no field-row)
+    if (!entry.expanded) html += renderConsumerChips(entry);
+
     html += '<div class="section-body">';
-
-    // Name
-    html += '<div class="field">';
-    html += '<label class="field-label">Name</label>';
-    html += '<input type="text" class="field-input" value="' + escapeHtml(entry.name) + '"' +
-      ' onchange="onConsumerFieldChange(' + entry.id + ', \'name\', this.value)">';
-    html += '</div>';
-
-    // Protocol
-    html += '<div class="field">';
-    html += '<label class="field-label">Protocol</label>';
-    html += '<select class="field-input" onchange="onConsumerFieldChange(' + entry.id + ', \'protocol\', this.value)">';
-    html += '<option value="consumer"' + (entry.protocol === 'consumer' ? ' selected' : '') + '>consumer</option>';
-    html += '<option value="classic"' + (entry.protocol === 'classic' ? ' selected' : '') + '>classic</option>';
-    html += '</select>';
-    html += '</div>';
-
-    // Assignor (select dropdown)
-    html += '<div class="field">';
-    html += '<label class="field-label">Assignor</label>';
-    html += '<select class="field-input" onchange="onConsumerFieldChange(' + entry.id + ', \'assignor\', this.value)">';
-    html += '<option value=""' + (entry.assignor === '' ? ' selected' : '') + '>(default)</option>';
-    for (var i = 0; i < suggestions.length; i++) {
-      html += '<option value="' + suggestions[i] + '"' + (entry.assignor === suggestions[i] ? ' selected' : '') + '>' + suggestions[i] + '</option>';
+    if (!hasOverrides) {
+      html += '<div class="inherit-note">Inherits all settings from group.</div>';
+    } else {
+      // Render overrides in the order they were added.
+      Object.keys(entry.overrides).forEach(function(key) {
+        var f = OVERRIDE_FIELDS.find(function(fld) { return fld.key === key; });
+        if (f) html += renderOverrideField(entry, f);
+      });
     }
-    html += '</select>';
-    html += '</div>';
-
-    // Poll Timeout
-    html += '<div class="field">';
-    html += '<label class="field-label">Poll Timeout (ms)</label>';
-    html += '<input type="number" class="field-input" value="' + entry.pollTimeoutMs + '" min="0" max="60000"' +
-      ' onchange="onConsumerFieldChange(' + entry.id + ', \'pollTimeoutMs\', this.value)">';
-    html += '</div>';
-
-    // Poll Delay
-    html += '<div class="field">';
-    html += '<label class="field-label">Poll Delay (ms)</label>';
-    html += '<input type="number" class="field-input" value="' + entry.pollDelayMs + '" min="0" max="120000"' +
-      ' onchange="onConsumerFieldChange(' + entry.id + ', \'pollDelayMs\', this.value)">';
-    html += '</div>';
-
-    // Max Poll Interval
-    html += '<div class="field">';
-    html += '<label class="field-label">Max Poll Interval (ms)</label>';
-    html += '<input type="number" class="field-input" value="' + entry.maxPollIntervalMs + '" min="1000" max="600000"' +
-      ' onchange="onConsumerFieldChange(' + entry.id + ', \'maxPollIntervalMs\', this.value)">';
-    html += '</div>';
-
-    // Static Member
-    html += '<div class="field">';
-    html += '<label class="field-label">Static Member</label>';
-    html += '<input type="text" class="field-input" value="' + escapeHtml(entry.staticMember) + '"' +
-      ' list="static-member-dl-' + entry.id + '"' +
-      ' onchange="onConsumerFieldChange(' + entry.id + ', \'staticMember\', this.value)">';
-    html += '<datalist id="static-member-dl-' + entry.id + '">';
-    html += '<option value="false"><option value="true">';
-    html += '</datalist>';
-    html += '</div>';
-
+    var addHtml = renderAddOverrideDropdown(entry);
+    if (addHtml) html += addHtml;
+    // Rename the default dropdown button label "__label__" to "+ Add override".
     html += '</div></div>';
   });
 
   container.innerHTML = html;
+
+  // Post-process: relabel each "+ Add override" button and close any open dropdowns by default.
+  consumerEntries.forEach(function(entry) {
+    var el = document.querySelector('#c-' + entry.id + '-add-dd .dd-value');
+    if (el) el.textContent = '+ Add override';
+  });
+
 }
 
-// -- Collect per-consumer configs for logging --
+// -- Top-level render orchestrator --
+function renderAll() {
+  renderGroupDropdowns();
+  renderGroupOptional();
+  renderConsumerSections();
+}
+
+// -- Collect per-consumer configs for POST --
 function collectConsumerConfigs() {
   return consumerEntries.map(function(entry, idx) {
+    var eff = effectiveFor(entry);
     return {
       index: idx,
-      name: entry.name,
-      protocol: entry.protocol,
-      assignor: entry.assignor,
-      pollTimeoutMs: parseInt(entry.pollTimeoutMs),
-      pollDelayMs: parseInt(entry.pollDelayMs),
-      maxPollIntervalMs: parseInt(entry.maxPollIntervalMs),
-      staticMember: entry.staticMember === 'true' || entry.staticMember === true,
+      name: consumerName(entry),
+      protocol: eff.protocol,
+      assignor: eff.assignor,
+      pollTimeoutMs: parseInt(eff.pollTimeoutMs),
+      pollDelayMs: parseInt(eff.pollDelayMs),
+      maxPollIntervalMs: parseInt(eff.maxPollIntervalMs),
+      staticMember: eff.staticMember === 'true' || eff.staticMember === true,
     };
   });
 }
@@ -1296,40 +1741,37 @@ async function startSimulation() {
   btn.disabled = true;
   btn.textContent = 'Starting...';
 
-  // Collect per-consumer configs and log them.
+  // Collect per-consumer configs (inheritance resolved) and log them.
   var perConsumerConfigs = collectConsumerConfigs();
   console.log('[Kaos] Per-consumer configs:', JSON.stringify(perConsumerConfigs, null, 2));
 
-  // Use group ID as topic prefix.
   var groupId = document.getElementById('cfg-group-id').value;
+  var groupDefaults = getDefaults();
+  var coord = getCoordinationDefaults();
 
-  // Build config with per-consumer array.
-  var first = consumerEntries[0];
   var config = {
     groupId: groupId,
     topicPrefix: groupId,
     numTopics: parseInt(document.getElementById('cfg-num-topics').value),
     numPartitions: parseInt(document.getElementById('cfg-num-partitions').value),
     numConsumers: consumerEntries.length,
-    sessionTimeoutMs: parseInt(document.getElementById('cfg-session-timeout').value),
-    heartbeatIntervalMs: parseInt(document.getElementById('cfg-heartbeat-interval').value),
-    assignmentIntervalMs: parseInt(document.getElementById('cfg-assignment-interval').value),
-    // Defaults (used as fallback).
-    protocol: first.protocol,
-    assignor: first.assignor,
-    pollTimeoutMs: parseInt(first.pollTimeoutMs),
-    pollDelayMs: parseInt(first.pollDelayMs),
-    maxPollIntervalMs: parseInt(first.maxPollIntervalMs),
-    staticMembers: first.staticMember === 'true',
-    // Per-consumer configs.
+    sessionTimeoutMs: coord.sessionTimeoutMs,
+    heartbeatIntervalMs: coord.heartbeatIntervalMs,
+    assignmentIntervalMs: coord.assignmentIntervalMs,
+    protocol: groupDefaults.protocol,
+    assignor: groupDefaults.assignor,
+    pollTimeoutMs: groupDefaults.pollTimeoutMs,
+    pollDelayMs: groupDefaults.pollDelayMs,
+    maxPollIntervalMs: groupDefaults.maxPollIntervalMs,
+    staticMembers: groupDefaults.staticMember === 'true',
     consumers: perConsumerConfigs.map(function(c) {
       return {
         protocol: c.protocol,
         assignor: c.assignor,
-        pollTimeoutMs: parseInt(c.pollTimeoutMs),
-        pollDelayMs: parseInt(c.pollDelayMs),
-        maxPollIntervalMs: parseInt(c.maxPollIntervalMs),
-        staticMember: c.staticMember === 'true'
+        pollTimeoutMs: c.pollTimeoutMs,
+        pollDelayMs: c.pollDelayMs,
+        maxPollIntervalMs: c.maxPollIntervalMs,
+        staticMember: c.staticMember
       };
     })
   };
@@ -1726,10 +2168,13 @@ async function unblockMember(index) {
   await fetch('/api/simulator/members/' + index + '/unblock', {method: 'POST'});
 }
 
-// -- Init: auto-add 4 consumers, check if already running --
+// -- Init: pre-seed 3 inheriting consumers, check if already running --
 (async function() {
-  // Start with zero consumers — user adds what they need.
-  renderConsumerSections();
+  // Pre-seed 3 consumers inheriting everything so the user can hit Start immediately.
+  for (var i = 0; i < 3; i++) {
+    consumerEntries.push({ id: nextConsumerId++, expanded: false, overrides: {} });
+  }
+  renderAll();
 
   try {
     var resp = await fetch('/api/simulator/status');
@@ -1740,15 +2185,30 @@ async function unblockMember(index) {
         document.getElementById('cfg-group-id').value = currentConfig.groupId || '';
         document.getElementById('cfg-num-topics').value = currentConfig.numTopics || '';
         document.getElementById('cfg-num-partitions').value = currentConfig.numPartitions || '';
-        document.getElementById('cfg-session-timeout').value = currentConfig.sessionTimeoutMs || 45000;
-        document.getElementById('cfg-heartbeat-interval').value = currentConfig.heartbeatIntervalMs || 5000;
-        document.getElementById('cfg-assignment-interval').value = currentConfig.assignmentIntervalMs || 1000;
-        // Restore consumer count from running config.
-        var numConsumers = currentConfig.numConsumers || 4;
+
+        // Restore group protocol, assignor, static.
+        if (currentConfig.protocol) groupState.protocol = currentConfig.protocol;
+        if (currentConfig.assignor) {
+          var valid = ASSIGNOR_OPTIONS[groupState.protocol] || ASSIGNOR_OPTIONS.consumer;
+          groupState.assignor = valid.indexOf(currentConfig.assignor) !== -1 ? currentConfig.assignor : valid[0];
+        }
+        groupState.staticMember = currentConfig.staticMembers ? 'true' : 'false';
+
+        // Rehydrate group optional settings only when they differ from defaults.
+        groupOptionalSettings = {};
+        GROUP_OPTIONAL_FIELDS.forEach(function(f) {
+          var v = currentConfig[f.key];
+          if (v != null && v !== f.default) groupOptionalSettings[f.key] = v;
+        });
+
+        // Restore consumer count (no overrides — per-consumer diffs aren't persisted server-side).
+        var numConsumers = currentConfig.numConsumers || 3;
         consumerEntries = [];
         nextConsumerId = 0;
-        for (var j = 0; j < numConsumers; j++) addConsumer();
-        renderConsumerSections();
+        for (var j = 0; j < numConsumers; j++) {
+          consumerEntries.push({ id: nextConsumerId++, expanded: false, overrides: {} });
+        }
+        renderAll();
       }
       setSimulationUI(true);
       if (data.chaosRunning) {
