@@ -28,6 +28,8 @@
   --red-dim: rgba(248,113,113,0.10);
   --fault: #5cd5ff;
   --fault-dim: rgba(92,213,255,0.12);
+  --orange: #f97316;
+  --orange-dim: rgba(249,115,22,0.14);
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
   --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --sidebar-w: 340px;
@@ -1011,6 +1013,346 @@ body {
 #config-mode.locked .dd-item,
 #config-mode.locked .field-remove,
 #config-mode.locked .section-remove { pointer-events: none; }
+
+/* -- View switcher (main header) -- */
+.view-switch {
+  display: flex;
+  margin-left: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.view-switch-btn {
+  padding: 4px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  text-transform: lowercase;
+  letter-spacing: 0.3px;
+}
+.view-switch-btn + .view-switch-btn { border-left: 1px solid var(--border); }
+.view-switch-btn:hover:not(.selected) {
+  background: var(--surface2);
+  color: var(--text-muted);
+}
+.view-switch-btn.selected {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* -- Rows view container -- */
+.rows-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+/* -- Row panel (per-consumer) -- */
+.row-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.25s, opacity 0.25s, box-shadow 0.3s;
+  position: relative;
+  z-index: 1;
+}
+/* Lift the panel that has an open Chaos dropdown so the menu renders above
+   subsequent panels. */
+.row-panel:has(.dd.open) { z-index: 20; }
+.row-panel.stable      { border-color: rgba(52,211,153,0.35); }
+.row-panel.reconciling {
+  border-color: rgba(251,191,36,0.45);
+  box-shadow: 0 0 0 1px rgba(251,191,36,0.12), 0 0 22px -8px rgba(251,191,36,0.4);
+}
+.row-panel.stopping { border-color: rgba(248,113,113,0.4); }
+.row-panel.joining  { border-color: rgba(76,154,255,0.45); }
+.row-panel.stopped  { opacity: 0.45; }
+
+/* Left accent bar — a thicker colored border respects border-radius. */
+.row-panel {
+  border-left-width: 4px;
+  border-left-color: var(--text-dim);
+  transition: border-color 0.25s, border-left-color 0.25s, opacity 0.25s, box-shadow 0.3s;
+}
+.row-panel.stable      { border-left-color: var(--green); }
+.row-panel.reconciling { border-left-color: var(--yellow); }
+.row-panel.stopping    { border-left-color: var(--red); }
+.row-panel.joining     { border-left-color: var(--accent); }
+.row-panel.stopped     { border-left-color: var(--text-dim); }
+
+/* -- Row header (single line: name + meta + icons + state) -- */
+.row-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 6px 14px 6px 18px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 7px 7px 0 0;
+  min-width: 0;
+}
+.row-header .member-name {
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+.row-header .row-state {
+  flex: 0 0 auto;
+  margin-left: auto;     /* always right-align state even when meta is short */
+}
+.row-header-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.2px;
+}
+.row-header-meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+.row-header-meta-label {
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.9px;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+.row-header-meta-value {
+  color: var(--text-muted);
+  font-weight: 600;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-header-meta-value.dim {
+  color: var(--text-dim);
+  opacity: 0.55;
+  font-weight: 400;
+}
+.row-header-meta-sep {
+  color: var(--text-dim);
+  opacity: 0.4;
+}
+.row-header-icons {
+  display: inline-flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.row-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.row-icon.frozen      { color: var(--fault); }
+.row-icon.partitioned { color: var(--yellow); }
+
+/* -- Partition strip (body: between header and footer, full width) -- */
+.row-strip {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 20px 16px;
+  background: var(--bg);
+  min-width: 0;
+  box-sizing: border-box;
+}
+.row-strip-topic {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.row-strip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  min-width: 0;
+}
+.strip-topic-name {
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.strip-topic-meta {
+  color: var(--text-dim);
+  opacity: 0.85;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+.row-strip-cells {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 36px;                /* fixed cell height */
+  flex-shrink: 0;
+}
+.pcell {
+  flex: 1 1 0;
+  min-width: 4px;
+  position: relative;
+  border-radius: 3px 3px 2px 2px;
+  background: rgba(255,255,255,0.03);
+  transition: background 0.2s, filter 0.15s;
+}
+
+/* Empty — barely-there track */
+.pcell.empty { background: rgba(255,255,255,0.03); }
+
+/* Assigned — calm green track + gradient fill rising from bottom */
+.pcell.assigned { background: rgba(52,211,153,0.09); }
+.pcell.assigned::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--fill, 0%);
+  background: linear-gradient(to top, var(--green), rgba(52,211,153,0.72));
+  border-radius: 0 0 2px 2px;
+  transition: height 0.3s ease-out;
+  box-shadow: 0 -1px 4px rgba(52,211,153,0.3);
+}
+
+/* Pending — solid soft blue, no hatching */
+.pcell.pending { background: rgba(76,154,255,0.30); }
+
+/* Revoking — solid amber track + amber gradient fill for the lag that's still accruing */
+.pcell.revoking { background: rgba(251,191,36,0.22); }
+.pcell.revoking::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--fill, 0%);
+  background: linear-gradient(to top, var(--yellow), rgba(251,191,36,0.72));
+  border-radius: 0 0 2px 2px;
+  transition: height 0.3s ease-out;
+}
+
+.pcell:hover { filter: brightness(1.3); z-index: 3; }
+
+/* Instant CSS tooltip on cells with data-tip */
+.pcell[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface3);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 40;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.pcell[data-tip]:hover::after { opacity: 1; }
+
+/* -- Extra badge tints for chaos-driven states (merged with group state) -- */
+.badge.frozen      { background: var(--fault-dim);  color: var(--fault); }
+.badge.partitioned { background: var(--orange-dim); color: var(--orange); }
+.row-panel.frozen      { border-left-color: var(--fault); }
+.row-panel.partitioned { border-left-color: var(--orange); }
+
+/* -- Compact "Actions" dropdown trigger in the header -- */
+.row-actions-btn {
+  padding: 2px 8px !important;
+  font-size: 11px !important;
+  min-height: auto !important;
+}
+.chaos-btn {
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 6px 10px;
+}
+.chaos-btn:hover,
+.dd.open .chaos-btn {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(76,154,255,0.4);
+}
+.chaos-menu {
+  min-width: 200px;
+  right: 0;
+  left: auto;
+}
+.chaos-group-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+.chaos-group-label:first-child { border-top: none; }
+.chaos-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.chaos-item:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.chaos-item.destructive {
+  color: var(--red);
+}
+.chaos-item.destructive:hover {
+  background: var(--red-dim);
+  color: var(--red);
+}
+.chaos-item:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 </style>
 </head>
 <body>
@@ -1134,8 +1476,13 @@ body {
             <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);">low..high</span>
           </div>
         </div>
+        <div class="view-switch" id="view-switch">
+          <button type="button" class="view-switch-btn selected" data-view="bento" onclick="switchView('bento')">Bento</button>
+          <button type="button" class="view-switch-btn" data-view="rows" onclick="switchView('rows')">Rows</button>
+        </div>
       </div>
       <div class="card-grid" id="card-grid"></div>
+      <div class="rows-grid" id="rows-grid" style="display:none;"></div>
     </div>
   </main>
 </div>
@@ -1147,6 +1494,7 @@ let currentConfig = null;
 let prevState = null;
 let prevCtrlState = {};
 let simulationRunning = false;
+let currentView = 'bento'; // 'bento' | 'rows'
 
 // -- State --
 // Each consumer entry: { id, expanded, overrides: { [key]: value } }
@@ -1675,6 +2023,8 @@ function setSimulationUI(running) {
     document.getElementById('empty-state').style.display = '';
     document.getElementById('view-wrapper').style.display = 'none';
     document.getElementById('card-grid').innerHTML = '';
+    var rg = document.getElementById('rows-grid');
+    if (rg) rg.innerHTML = '';
     updateStatus(null);
   }
 }
@@ -1849,9 +2199,32 @@ async function pollGroup() {
     var data = await resp.json();
     if (data.phase !== 'RUNNING') return;
     updateStatus(data);
-    renderGroup(data);
+    if (currentView === 'rows') renderRows(data);
+    else renderGroup(data);
     prevState = data;
   } catch (e) { /* ignore */ }
+}
+
+// -- View switching --
+function switchView(view) {
+  if (view === currentView) return;
+  currentView = view;
+  var bento = document.getElementById('card-grid');
+  var rows = document.getElementById('rows-grid');
+  if (bento) bento.style.display = view === 'bento' ? '' : 'none';
+  if (rows)  rows.style.display  = view === 'rows'  ? '' : 'none';
+  // Update switcher UI
+  var btns = document.querySelectorAll('.view-switch-btn');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.toggle('selected', btns[i].getAttribute('data-view') === view);
+  }
+  // Invalidate caches for the view we switched away from (so re-entering re-renders).
+  prevCtrlState = {};
+  // Re-render immediately with the last data we have.
+  if (prevState) {
+    if (view === 'rows') renderRows(prevState);
+    else renderGroup(prevState);
+  }
 }
 
 function splitPartitionKey(key) {
@@ -2132,6 +2505,294 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, function(c) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
+}
+
+// -- Rendering: rows view (incremental — preserves hover state + open dropdowns) --
+
+// Lag is normalized against a fixed scale: anything >= this saturates the gauge.
+// Nominal load → bars stay tiny; only backed-up consumers visibly rise.
+const LAG_MAX_SCALE = 200;
+
+// Minimum fill (in %) for any assigned/revoking cell so the gauge always shows
+// a small baseline, making it visually obvious the cell is live.
+const LAG_MIN_FILL_PCT = 8;
+
+function lagFillPct(lag) {
+  var pct = 0;
+  if (lag != null && lag > 0) pct = Math.round((lag / LAG_MAX_SCALE) * 100);
+  return Math.max(LAG_MIN_FILL_PCT, Math.min(100, pct));
+}
+
+function renderRows(data) {
+  if (!currentConfig) return;
+
+  var topics = [];
+  for (var i = 1; i <= currentConfig.numTopics; i++) {
+    topics.push(currentConfig.topicPrefix + '-' + i);
+  }
+  var numPartitions = currentConfig.numPartitions;
+  var partitionLag = data.partitionLag || {};
+
+  var grid = document.getElementById('rows-grid');
+  if (!grid) return;
+
+  var members = (data.members || []).slice().sort(function(a, b) { return a.slotIndex - b.slotIndex; });
+  var validIds = {};
+
+  for (var mi = 0; mi < members.length; mi++) {
+    var m = members[mi];
+    var panelId = 'row-panel-' + m.slotIndex;
+    validIds[panelId] = 1;
+    var panel = document.getElementById(panelId);
+    if (!panel) {
+      panel = buildPanelSkeleton(m, topics, numPartitions);
+      grid.appendChild(panel);
+    }
+    updatePanel(panel, m, topics, numPartitions, partitionLag);
+  }
+
+  // Remove stale panels (stopped members beyond numConsumers).
+  for (var ci = grid.children.length - 1; ci >= 0; ci--) {
+    var child = grid.children[ci];
+    if (!validIds[child.id]) grid.removeChild(child);
+  }
+}
+
+function buildPanelSkeleton(m, topics, numPartitions) {
+  var panel = document.createElement('div');
+  panel.id = 'row-panel-' + m.slotIndex;
+  panel.className = 'row-panel';
+
+  // One block per topic: head (name + N/M meta) + cell row below.
+  var stripHtml = '';
+  for (var ti = 0; ti < topics.length; ti++) {
+    var topicName = topics[ti];
+    stripHtml += '<div class="row-strip-topic">';
+    stripHtml += '<div class="row-strip-head">';
+    stripHtml += '<span class="strip-topic-name">' + escapeHtml(topicName) + '</span>';
+    stripHtml += '<span class="strip-topic-meta">per-partition lag · 0/' + numPartitions + ' parts</span>';
+    stripHtml += '</div>';
+    stripHtml += '<div class="row-strip-cells">';
+    for (var p = 0; p < numPartitions; p++) {
+      stripHtml += '<div class="pcell"></div>';
+    }
+    stripHtml += '</div>';
+    stripHtml += '</div>';
+  }
+
+  var actionsId = 'actions-' + m.slotIndex;
+  panel.innerHTML =
+    '<div class="row-header">' +
+      '<span class="member-name"></span>' +
+      '<span class="row-header-meta-sep">&middot;</span>' +
+      '<div class="row-header-meta">' +
+        '<span class="row-header-meta-item meta-protocol"><span class="row-header-meta-label">protocol</span><span class="row-header-meta-value"></span></span>' +
+        '<span class="row-header-meta-sep">&middot;</span>' +
+        '<span class="row-header-meta-item meta-id"><span class="row-header-meta-label">id</span><span class="row-header-meta-value"></span></span>' +
+        '<span class="row-header-meta-sep">&middot;</span>' +
+        '<span class="row-header-meta-item meta-instance"><span class="row-header-meta-label">instance</span><span class="row-header-meta-value"></span></span>' +
+        '<span class="row-header-meta-sep">&middot;</span>' +
+        '<span class="row-header-meta-item meta-epoch"><span class="row-header-meta-label">epoch</span><span class="row-header-meta-value"></span></span>' +
+      '</div>' +
+      '<span class="badge row-state"></span>' +
+      '<div class="dd row-actions-dd" id="' + actionsId + '">' +
+        '<button type="button" class="dd-btn chaos-btn row-actions-btn" onclick="toggleDd(\'' + actionsId + '\')">' +
+          '<span class="dd-value">Actions</span>' +
+          '<span class="dd-chevron">&#9662;</span>' +
+        '</button>' +
+        '<div class="dd-menu chaos-menu"></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="row-strip">' + stripHtml + '</div>';
+
+  return panel;
+}
+
+// Combine group state + chaos actions into a single effective badge.
+// Priority: Stopped > Frozen > Partitioned > group state.
+function computeStateBadge(m) {
+  if (!m.subscribed || m.state === 'Stopped') return { show: true, text: 'STOPPED',     cls: 'stopped' };
+  if (m.blocked)                              return { show: true, text: 'FROZEN',      cls: 'frozen' };
+  if (m.partitioned)                          return { show: true, text: 'PARTITIONED', cls: 'partitioned' };
+  var cls = badgeClassFor(m.state);
+  if (m.protocol === 'classic')               return { show: false, text: '', cls: cls };
+  return { show: true, text: m.state || '—', cls: cls };
+}
+
+function updatePanel(panel, m, topics, numPartitions, partitionLag) {
+  var isClassic = m.protocol === 'classic';
+  var effState = computeStateBadge(m);
+  var isStopped = effState.cls === 'stopped';
+
+  var panelCls = 'row-panel ' + effState.cls + (isStopped ? ' stopped' : '');
+  if (panel.className !== panelCls) panel.className = panelCls;
+
+  // Name.
+  var nameEl = panel.querySelector('.member-name');
+  var nameTxt = m.clientId || '';
+  if (nameEl.textContent !== nameTxt) {
+    nameEl.textContent = nameTxt;
+    nameEl.title = nameTxt;
+  }
+
+  // State badge: reflects chaos-driven states (FROZEN / PARTITIONED / STOPPED) or group state.
+  // Hidden only for classic members with no chaos applied.
+  var stateEl = panel.querySelector('.row-state');
+  if (!effState.show) {
+    if (stateEl.style.display !== 'none') stateEl.style.display = 'none';
+  } else {
+    if (stateEl.style.display === 'none') stateEl.style.display = '';
+    var stateCls = 'badge row-state ' + effState.cls;
+    if (stateEl.className !== stateCls) stateEl.className = stateCls;
+    if (stateEl.textContent !== effState.text) stateEl.textContent = effState.text;
+  }
+
+  // Line-2 meta items.
+  setHeaderMeta(panel, '.meta-protocol', m.protocol || '—', !!m.protocol);
+  setHeaderMeta(panel, '.meta-id',       m.memberId   || '—', !!m.memberId, m.memberId);
+  setHeaderMeta(panel, '.meta-instance', m.instanceId || '—', !!m.instanceId, m.instanceId);
+
+  // Epoch (consumer) vs generation (classic).
+  var epochItem = panel.querySelector('.meta-epoch');
+  var epochLbl  = epochItem.querySelector('.row-header-meta-label');
+  if (isClassic) {
+    if (epochLbl.textContent !== 'generation') epochLbl.textContent = 'generation';
+    var hasGen = m.groupGeneration != null && m.groupGeneration >= 0;
+    setHeaderMetaValue(epochItem, hasGen ? String(m.groupGeneration) : '—', hasGen);
+  } else {
+    if (epochLbl.textContent !== 'epoch') epochLbl.textContent = 'epoch';
+    var hasEp = m.memberEpoch != null && m.memberEpoch >= 0;
+    setHeaderMetaValue(epochItem, hasEp ? String(m.memberEpoch) : '—', hasEp);
+  }
+
+  // Partition strip cells.
+  updateStripCells(panel, m, topics, numPartitions, partitionLag);
+
+  // Actions dropdown menu — regenerate only when action state changes.
+  var actionsMenu = panel.querySelector('.row-actions-dd .chaos-menu');
+  var actionsKey = [m.subscribed ? '1' : '0', m.protocol || '-',
+                    m.partitioned ? '1' : '0', m.blocked ? '1' : '0'].join('|');
+  if (actionsMenu.dataset.key !== actionsKey) {
+    actionsMenu.dataset.key = actionsKey;
+    actionsMenu.innerHTML = buildActionMenuItems(m);
+  }
+}
+
+function setHeaderMeta(panel, selector, text, strong, fullTitle) {
+  var item = panel.querySelector(selector);
+  if (!item) return;
+  setHeaderMetaValue(item, text, strong, fullTitle);
+}
+
+function setHeaderMetaValue(itemEl, text, strong, fullTitle) {
+  var el = itemEl.querySelector('.row-header-meta-value');
+  if (!el) return;
+  if (el.textContent !== text) el.textContent = text;
+  var cls = 'row-header-meta-value' + (strong ? '' : ' dim');
+  if (el.className !== cls) el.className = cls;
+  // Show full value on hover when truncated.
+  if (fullTitle && el.title !== fullTitle) el.title = fullTitle;
+  else if (!fullTitle && el.title) el.removeAttribute('title');
+}
+
+function updateStripCells(panel, m, topics, numPartitions, partitionLag) {
+  var coordCurrent = new Set(m.assignment || []);
+  var coordTarget  = new Set(m.targetAssignment || []);
+  var consumerLocal = new Set(m.localAssignment || []);
+  // If the coordinator has NO partitions for this member (neither current nor target),
+  // the member is effectively out of the group (fenced / stopped / unsubscribed).
+  // In that case, ignore the consumer-local set too — otherwise we'd paint ghost
+  // "revoking" cells for partitions the group no longer associates with this member.
+  var isOutOfGroup = coordCurrent.size === 0 && coordTarget.size === 0;
+
+  var topicBlocks = panel.querySelectorAll('.row-strip-topic');
+  for (var ti = 0; ti < topics.length; ti++) {
+    var topicBlock = topicBlocks[ti];
+    if (!topicBlock) continue;
+    var t = topics[ti];
+    var cells = topicBlock.querySelectorAll('.pcell');
+    var ownedCount = 0;
+
+    for (var p = 0; p < numPartitions; p++) {
+      var cell = cells[p];
+      if (!cell) continue;
+      var key = t + '-' + p;
+      var inCurrent = !isOutOfGroup && coordCurrent.has(key);
+      var inTarget  = !isOutOfGroup && coordTarget.has(key);
+      var inLocal   = !isOutOfGroup && consumerLocal.has(key);
+      var lag = partitionLag[key];
+
+      var state = 'empty';
+      var fillPct = 0;
+      var tip = '';
+
+      if (inTarget && inLocal) {
+        state = 'assigned';
+        ownedCount++;
+        fillPct = lagFillPct(lag);
+        tip = t + ' / p' + p + ' · assigned' + (lag != null ? ' · lag ' + lag : '');
+      } else if (inTarget && !inLocal) {
+        state = 'pending';
+        tip = t + ' / p' + p + ' · pending — waiting on previous owner to release';
+      } else if (!inTarget && (inCurrent || inLocal)) {
+        state = 'revoking';
+        fillPct = lagFillPct(lag);
+        tip = t + ' / p' + p + ' · revoking — must be released' + (lag != null ? ' · lag ' + lag : '');
+      }
+
+      var newCls = 'pcell ' + state;
+      if (cell.className !== newCls) cell.className = newCls;
+
+      var curFill = cell.style.getPropertyValue('--fill');
+      var newFill = fillPct > 0 ? fillPct + '%' : '';
+      if (curFill !== newFill) {
+        if (newFill) cell.style.setProperty('--fill', newFill);
+        else cell.style.removeProperty('--fill');
+      }
+
+      var curTip = cell.getAttribute('data-tip') || '';
+      if (curTip !== tip) {
+        if (tip) cell.setAttribute('data-tip', tip);
+        else cell.removeAttribute('data-tip');
+      }
+    }
+
+    // Update topic head meta: "per-partition lag · N/M parts"
+    var metaEl = topicBlock.querySelector('.strip-topic-meta');
+    var metaTxt = 'per-partition lag · ' + ownedCount + '/' + numPartitions + ' parts';
+    if (metaEl.textContent !== metaTxt) metaEl.textContent = metaTxt;
+  }
+}
+
+function buildActionMenuItems(m) {
+  var dis = m.subscribed ? '' : ' disabled';
+  var items = '';
+
+  items += '<div class="chaos-group-label">Membership</div>';
+  if (m.subscribed) {
+    items += '<button class="chaos-item destructive" onclick="closeAllDd(); stopConsumer(' + m.slotIndex + ')">Stop consumer</button>';
+  } else {
+    items += '<button class="chaos-item" onclick="closeAllDd(); startConsumer(' + m.slotIndex + ')">Start consumer</button>';
+  }
+  if (m.protocol === 'classic') {
+    items += '<button class="chaos-item"' + dis + ' onclick="closeAllDd(); upgradeConsumer(' + m.slotIndex + ')">Upgrade to consumer</button>';
+  } else {
+    items += '<button class="chaos-item"' + dis + ' onclick="closeAllDd(); downgradeConsumer(' + m.slotIndex + ')">Downgrade to classic</button>';
+  }
+
+  items += '<div class="chaos-group-label">Fault Injection</div>';
+  if (m.partitioned) {
+    items += '<button class="chaos-item" onclick="closeAllDd(); healMember(' + m.slotIndex + ')">Heal network</button>';
+  } else {
+    items += '<button class="chaos-item destructive"' + dis + ' onclick="closeAllDd(); partitionMember(' + m.slotIndex + ')">Partition network</button>';
+  }
+  if (m.blocked) {
+    items += '<button class="chaos-item" onclick="closeAllDd(); unblockMember(' + m.slotIndex + ')">Unfreeze consumer</button>';
+  } else {
+    items += '<button class="chaos-item destructive"' + dis + ' onclick="closeAllDd(); blockMember(' + m.slotIndex + ')">Freeze consumer</button>';
+  }
+
+  return items;
 }
 
 // -- Member control handlers --
