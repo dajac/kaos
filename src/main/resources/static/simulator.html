@@ -781,6 +781,11 @@ body {
   border-radius: 2px;
 }
 
+/* The "LAG low..high" gradient legend only applies to the Bento view (lag
+   encoded as saturation). The New Rows view encodes lag as gauge fill, so
+   the gradient is misleading — hide it while the New UI is active. */
+body.ui-mode-new .legend-lag-gradient { display: none; }
+
 /* -- Empty state -- */
 .empty-state {
   display: flex;
@@ -1014,38 +1019,6 @@ body {
 #config-mode.locked .field-remove,
 #config-mode.locked .section-remove { pointer-events: none; }
 
-/* -- View switcher (main header) -- */
-.view-switch {
-  display: flex;
-  margin-left: 10px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.view-switch-btn {
-  padding: 4px 12px;
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  text-transform: lowercase;
-  letter-spacing: 0.3px;
-}
-.view-switch-btn + .view-switch-btn { border-left: 1px solid var(--border); }
-.view-switch-btn:hover:not(.selected) {
-  background: var(--surface2);
-  color: var(--text-muted);
-}
-.view-switch-btn.selected {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-
 /* -- UI settings gear in the main header (strip-height S/M/L, UI mode, etc.) -- */
 .ui-settings-dd {
   margin-left: 8px;
@@ -1145,9 +1118,8 @@ body {
   color: var(--accent);
 }
 
-/* -- Rows view container (base — shared across modes) --
-   --strip-height is live-tunable via the UI settings gear (S/M/L) — used by
-   the "new" mode only. "old" mode keeps a fixed 36px cell row. */
+/* -- Rows view container --
+   --strip-height is live-tunable via the UI settings gear (S/M/L). */
 .rows-grid {
   display: flex;
   flex-direction: column;
@@ -1157,266 +1129,11 @@ body {
   --strip-axis-height: 16px;
 }
 
-/* ========================================================================
-   OLD ROWS UI — scoped by #rows-grid[data-mode="old"]
-   ======================================================================== */
-
-/* -- Row panel (per-consumer) -- */
-#rows-grid[data-mode="old"] .row-panel {
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  transition: border-color 0.25s, opacity 0.25s, box-shadow 0.3s;
-  position: relative;
-  z-index: 1;
-}
-/* Lift the panel that has an open Chaos dropdown so the menu renders above
-   subsequent panels. */
-#rows-grid[data-mode="old"] .row-panel:has(.dd.open) { z-index: 20; }
-#rows-grid[data-mode="old"] .row-panel.stable      { border-color: rgba(52,211,153,0.35); }
-#rows-grid[data-mode="old"] .row-panel.reconciling {
-  border-color: rgba(251,191,36,0.45);
-  box-shadow: 0 0 0 1px rgba(251,191,36,0.12), 0 0 22px -8px rgba(251,191,36,0.4);
-}
-#rows-grid[data-mode="old"] .row-panel.stopping { border-color: rgba(248,113,113,0.4); }
-#rows-grid[data-mode="old"] .row-panel.joining  { border-color: rgba(76,154,255,0.45); }
-#rows-grid[data-mode="old"] .row-panel.stopped  { opacity: 0.45; }
-
-/* Left accent bar — a thicker colored border respects border-radius. */
-#rows-grid[data-mode="old"] .row-panel {
-  border-left-width: 4px;
-  border-left-color: var(--text-dim);
-  transition: border-color 0.25s, border-left-color 0.25s, opacity 0.25s, box-shadow 0.3s;
-}
-#rows-grid[data-mode="old"] .row-panel.stable      { border-left-color: var(--green); }
-#rows-grid[data-mode="old"] .row-panel.reconciling { border-left-color: var(--yellow); }
-#rows-grid[data-mode="old"] .row-panel.stopping    { border-left-color: var(--red); }
-#rows-grid[data-mode="old"] .row-panel.joining     { border-left-color: var(--accent); }
-#rows-grid[data-mode="old"] .row-panel.stopped     { border-left-color: var(--text-dim); }
-
-/* -- Row header (single line: name + meta + icons + state) -- */
-#rows-grid[data-mode="old"] .row-header {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  padding: 6px 14px 6px 18px;
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border-subtle);
-  border-radius: 7px 7px 0 0;
-  min-width: 0;
-}
-#rows-grid[data-mode="old"] .row-header .member-name {
-  font-size: 14px;
-  flex: 0 0 auto;
-}
-#rows-grid[data-mode="old"] .row-header .row-state {
-  flex: 0 0 auto;
-  margin-left: auto;     /* always right-align state even when meta is short */
-}
-#rows-grid[data-mode="old"] .row-header-meta {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  flex: 1 1 auto;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-dim);
-  letter-spacing: 0.2px;
-}
-#rows-grid[data-mode="old"] .row-header-meta-item {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 0;
-}
-#rows-grid[data-mode="old"] .row-header-meta-label {
-  text-transform: uppercase;
-  font-size: 9px;
-  letter-spacing: 0.9px;
-  color: var(--text-dim);
-  opacity: 0.75;
-}
-#rows-grid[data-mode="old"] .row-header-meta-value {
-  color: var(--text-muted);
-  font-weight: 600;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-#rows-grid[data-mode="old"] .row-header-meta-value.dim {
-  color: var(--text-dim);
-  opacity: 0.55;
-  font-weight: 400;
-}
-#rows-grid[data-mode="old"] .row-header-meta-sep {
-  color: var(--text-dim);
-  opacity: 0.4;
-}
-#rows-grid[data-mode="old"] .row-header-icons {
-  display: inline-flex;
-  gap: 6px;
-  flex: 0 0 auto;
-}
-#rows-grid[data-mode="old"] .row-icon {
-  font-size: 13px;
-  line-height: 1;
-}
-#rows-grid[data-mode="old"] .row-icon.frozen      { color: var(--fault); }
-#rows-grid[data-mode="old"] .row-icon.partitioned { color: var(--yellow); }
-
-/* -- Partition strip (body: between header and footer, full width) -- */
-#rows-grid[data-mode="old"] .row-strip {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px 20px 16px;
-  background: var(--bg);
-  min-width: 0;
-  box-sizing: border-box;
-}
-#rows-grid[data-mode="old"] .row-strip-topic {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-#rows-grid[data-mode="old"] .row-strip-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  min-width: 0;
-}
-#rows-grid[data-mode="old"] .strip-topic-name {
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  letter-spacing: 0.9px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-#rows-grid[data-mode="old"] .strip-topic-meta {
-  color: var(--text-dim);
-  opacity: 0.85;
-  flex-shrink: 0;
-  letter-spacing: 0.2px;
-}
-#rows-grid[data-mode="old"] .row-strip-cells {
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  height: 36px;                /* fixed cell height */
-  flex-shrink: 0;
-}
-#rows-grid[data-mode="old"] .pcell {
-  flex: 1 1 0;
-  min-width: 4px;
-  position: relative;
-  border-radius: 3px 3px 2px 2px;
-  background: rgba(255,255,255,0.03);
-  transition: background 0.2s, filter 0.15s;
-}
-
-/* Empty — barely-there track */
-#rows-grid[data-mode="old"] .pcell.empty { background: rgba(255,255,255,0.03); }
-
-/* Assigned — calm green track + gradient fill rising from bottom */
-#rows-grid[data-mode="old"] .pcell.assigned { background: rgba(52,211,153,0.09); }
-#rows-grid[data-mode="old"] .pcell.assigned::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--fill, 0%);
-  background: linear-gradient(to top, var(--green), rgba(52,211,153,0.72));
-  border-radius: 0 0 2px 2px;
-  transition: height 0.3s ease-out;
-  box-shadow: 0 -1px 4px rgba(52,211,153,0.3);
-}
-
-/* Pending — solid soft blue, no hatching */
-#rows-grid[data-mode="old"] .pcell.pending { background: rgba(76,154,255,0.30); }
-
-/* Revoking — solid amber track + amber gradient fill for the lag that's still accruing */
-#rows-grid[data-mode="old"] .pcell.revoking { background: rgba(251,191,36,0.22); }
-#rows-grid[data-mode="old"] .pcell.revoking::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--fill, 0%);
-  background: linear-gradient(to top, var(--yellow), rgba(251,191,36,0.72));
-  border-radius: 0 0 2px 2px;
-  transition: height 0.3s ease-out;
-}
-
-#rows-grid[data-mode="old"] .pcell:hover { filter: brightness(1.3); z-index: 3; }
-
-/* Instant CSS tooltip on cells with data-tip */
-#rows-grid[data-mode="old"] .pcell[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--surface3);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 40;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-}
-#rows-grid[data-mode="old"] .pcell[data-tip]:hover::after { opacity: 1; }
-
 /* -- Extra badge tints for chaos-driven states (merged with group state) -- */
 .badge.frozen      { background: var(--fault-dim);  color: var(--fault); }
 .badge.partitioned { background: var(--orange-dim); color: var(--orange); }
-#rows-grid[data-mode="old"] .row-panel.frozen      { border-left-color: var(--fault); }
-#rows-grid[data-mode="old"] .row-panel.partitioned { border-left-color: var(--orange); }
 
-/* -- Compact "Actions" dropdown trigger in the old row header -- */
-#rows-grid[data-mode="old"] .row-actions-btn {
-  padding: 2px 8px !important;
-  font-size: 11px !important;
-  min-height: auto !important;
-}
-#rows-grid[data-mode="old"] .chaos-btn {
-  background: var(--surface3);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-weight: 600;
-  font-size: 11px;
-  padding: 6px 10px;
-}
-#rows-grid[data-mode="old"] .chaos-btn:hover,
-#rows-grid[data-mode="old"] .dd.open .chaos-btn {
-  background: var(--accent-dim);
-  color: var(--accent);
-  border-color: rgba(76,154,255,0.4);
-}
-
-/* -- Chaos dropdown menu content (shared across modes) -- */
+/* -- Chaos dropdown menu content -- */
 .chaos-menu {
   min-width: 200px;
   right: 0;
@@ -1464,7 +1181,7 @@ body {
 }
 
 /* ========================================================================
-   NEW ROWS UI — scoped by #rows-grid[data-mode="new"]
+   ROWS UI — scoped by #rows-grid
    ======================================================================== */
 
 /* -- Row panel (per-consumer) — STRIP IS the row -------------------------
@@ -1472,7 +1189,7 @@ body {
    badge, and "Actions ▾" FLOAT over the strip. Backdrops are transparent
    at rest and fade in on hover. overflow: visible so the gauge-with-
    container shows cleanly without clipping the state badge. */
-#rows-grid[data-mode="new"] .row-panel {
+#rows-grid .row-panel {
   position: relative;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -1483,10 +1200,10 @@ body {
 }
 /* Lift the panel that has an open Actions dropdown so the menu renders
    above subsequent panels. */
-#rows-grid[data-mode="new"] .row-panel:has(.dd.open) { z-index: 20; }
+#rows-grid .row-panel:has(.dd.open) { z-index: 20; }
 
 /* Thin colored rail on the left edge. */
-#rows-grid[data-mode="new"] .row-panel::before {
+#rows-grid .row-panel::before {
   content: '';
   position: absolute;
   left: 0; top: 0; bottom: 0;
@@ -1498,32 +1215,32 @@ body {
   z-index: 4;
   pointer-events: none;
 }
-#rows-grid[data-mode="new"] .row-panel.stable::before       { background: var(--green); }
-#rows-grid[data-mode="new"] .row-panel.reconciling::before  { background: var(--yellow); }
-#rows-grid[data-mode="new"] .row-panel.stopping::before     { background: var(--red); }
-#rows-grid[data-mode="new"] .row-panel.joining::before      { background: var(--accent); }
-#rows-grid[data-mode="new"] .row-panel.stopped::before      { background: var(--text-dim); }
-#rows-grid[data-mode="new"] .row-panel.frozen::before       { background: var(--fault); }
-#rows-grid[data-mode="new"] .row-panel.partitioned::before  { background: var(--orange); }
+#rows-grid .row-panel.stable::before       { background: var(--green); }
+#rows-grid .row-panel.reconciling::before  { background: var(--yellow); }
+#rows-grid .row-panel.stopping::before     { background: var(--red); }
+#rows-grid .row-panel.joining::before      { background: var(--accent); }
+#rows-grid .row-panel.stopped::before      { background: var(--text-dim); }
+#rows-grid .row-panel.frozen::before       { background: var(--fault); }
+#rows-grid .row-panel.partitioned::before  { background: var(--orange); }
 
-#rows-grid[data-mode="new"] .row-panel.stable       { border-color: rgba(52,211,153,0.30); }
-#rows-grid[data-mode="new"] .row-panel.reconciling  {
+#rows-grid .row-panel.stable       { border-color: rgba(52,211,153,0.30); }
+#rows-grid .row-panel.reconciling  {
   border-color: rgba(251,191,36,0.38);
   box-shadow: 0 0 0 1px rgba(251,191,36,0.08), 0 0 22px -8px rgba(251,191,36,0.35);
 }
-#rows-grid[data-mode="new"] .row-panel.stopping     { border-color: rgba(248,113,113,0.35); }
-#rows-grid[data-mode="new"] .row-panel.joining      { border-color: rgba(76,154,255,0.38); }
+#rows-grid .row-panel.stopping     { border-color: rgba(248,113,113,0.35); }
+#rows-grid .row-panel.joining      { border-color: rgba(76,154,255,0.38); }
 /* For stopped panels, dim only the strip + axis + left overlay. The right
    overlay (Actions) stays interactive so users can still click Start. */
-#rows-grid[data-mode="new"] .row-panel.stopped .row-strip,
-#rows-grid[data-mode="new"] .row-panel.stopped .row-axis,
-#rows-grid[data-mode="new"] .row-panel.stopped .row-overlay-left { opacity: 0.45; }
-#rows-grid[data-mode="new"] .row-panel.stopped { border-color: rgba(107,122,141,0.35); }
-#rows-grid[data-mode="new"] .row-panel.frozen       { border-color: rgba(92,213,255,0.35); }
-#rows-grid[data-mode="new"] .row-panel.partitioned  { border-color: rgba(249,115,22,0.38); }
+#rows-grid .row-panel.stopped .row-strip,
+#rows-grid .row-panel.stopped .row-axis,
+#rows-grid .row-panel.stopped .row-overlay-left { opacity: 0.45; }
+#rows-grid .row-panel.stopped { border-color: rgba(107,122,141,0.35); }
+#rows-grid .row-panel.frozen       { border-color: rgba(92,213,255,0.35); }
+#rows-grid .row-panel.partitioned  { border-color: rgba(249,115,22,0.38); }
 
 /* -- Full-bleed strip: fills the upper portion of the row ---------------- */
-#rows-grid[data-mode="new"] .row-strip {
+#rows-grid .row-strip {
   position: relative;
   height: var(--strip-height);
   display: flex;
@@ -1535,13 +1252,13 @@ body {
   box-sizing: border-box;
   /* No overflow: hidden — floating tooltip escapes via fixed. */
 }
-#rows-grid[data-mode="new"] .row-strip-topic {
+#rows-grid .row-strip-topic {
   flex: 1 1 0;
   min-width: 0;
   position: relative;
   display: block;
 }
-#rows-grid[data-mode="new"] .row-strip-cells {
+#rows-grid .row-strip-cells {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1551,7 +1268,7 @@ body {
 
 /* -- Partition-id axis rail under the strip — topic label inline with
       partition ticks. Backdrop gradient fades out. ------------------------ */
-#rows-grid[data-mode="new"] .row-axis {
+#rows-grid .row-axis {
   position: relative;
   height: var(--strip-axis-height);
   padding-left: 3px;
@@ -1564,7 +1281,7 @@ body {
   border-bottom-left-radius: 8px;
   border-bottom-right-radius: 8px;
 }
-#rows-grid[data-mode="new"] .row-axis-topic {
+#rows-grid .row-axis-topic {
   flex: 1 1 0;
   min-width: 0;
   position: relative;
@@ -1575,7 +1292,7 @@ body {
   pointer-events: none;
   overflow: hidden;
 }
-#rows-grid[data-mode="new"] .row-axis-topic-label {
+#rows-grid .row-axis-topic-label {
   position: absolute;
   left: 4px;
   top: 2px;
@@ -1594,7 +1311,7 @@ body {
   z-index: 2;
   pointer-events: auto;
 }
-#rows-grid[data-mode="new"] .row-axis-tick {
+#rows-grid .row-axis-tick {
   position: absolute;
   top: 2px;
   transform: translateX(-50%);
@@ -1604,7 +1321,7 @@ body {
 }
 
 /* -- Heatmap cells: gauge-with-container ------------------------------- */
-#rows-grid[data-mode="new"] .pcell {
+#rows-grid .pcell {
   flex: 1 1 0;
   min-width: 2px;
   position: relative;
@@ -1612,17 +1329,17 @@ body {
   transition: background-color 0.25s, filter 0.15s;
 }
 /* Tighter corner radius only on the outermost cells. */
-#rows-grid[data-mode="new"] .row-strip-topic:first-child .pcell:first-child { border-top-left-radius: 6px; }
-#rows-grid[data-mode="new"] .row-strip-topic:last-child  .pcell:last-child  { border-top-right-radius: 6px; }
+#rows-grid .row-strip-topic:first-child .pcell:first-child { border-top-left-radius: 6px; }
+#rows-grid .row-strip-topic:last-child  .pcell:last-child  { border-top-right-radius: 6px; }
 
 /* Empty — faint track only (no fill) */
-#rows-grid[data-mode="new"] .pcell.empty { background: rgba(255,255,255,0.025); }
+#rows-grid .pcell.empty { background: rgba(255,255,255,0.025); }
 
 /* Assigned — green translucent track + solid fill rising */
-#rows-grid[data-mode="new"] .pcell.assigned {
+#rows-grid .pcell.assigned {
   background: rgba(52,211,153,0.09);
 }
-#rows-grid[data-mode="new"] .pcell.assigned::before {
+#rows-grid .pcell.assigned::before {
   content: '';
   position: absolute;
   left: 0; right: 0; bottom: 0;
@@ -1635,10 +1352,10 @@ body {
 
 /* Pending — blue translucent track + blue fill rising (lag visible while
    waiting for the previous owner to release). */
-#rows-grid[data-mode="new"] .pcell.pending {
+#rows-grid .pcell.pending {
   background: rgba(76,154,255,0.18);
 }
-#rows-grid[data-mode="new"] .pcell.pending::before {
+#rows-grid .pcell.pending::before {
   content: '';
   position: absolute;
   left: 0; right: 0; bottom: 0;
@@ -1650,10 +1367,10 @@ body {
 }
 
 /* Revoking — amber translucent track + amber fill rising */
-#rows-grid[data-mode="new"] .pcell.revoking {
+#rows-grid .pcell.revoking {
   background: rgba(251,191,36,0.14);
 }
-#rows-grid[data-mode="new"] .pcell.revoking::before {
+#rows-grid .pcell.revoking::before {
   content: '';
   position: absolute;
   left: 0; right: 0; bottom: 0;
@@ -1663,7 +1380,7 @@ body {
   pointer-events: none;
 }
 
-#rows-grid[data-mode="new"] .pcell:hover { filter: brightness(1.35); z-index: 3; }
+#rows-grid .pcell:hover { filter: brightness(1.35); z-index: 3; }
 
 /* -- Floating tooltip: ONE shared `#pcell-tip` element appended to <body>,
    positioned via JS using position: fixed — escapes every stacking
@@ -1695,7 +1412,7 @@ body {
    Left overlay = name + state BADGE (full text). Right overlay = "Actions ▾"
    text button. At rest the backdrop is invisible; labels stay readable via
    text-shadow. On :hover the backdrop + blur fade in. */
-#rows-grid[data-mode="new"] .row-overlay-left {
+#rows-grid .row-overlay-left {
   position: absolute;
   top: 0;
   left: 3px;
@@ -1713,13 +1430,13 @@ body {
   pointer-events: none;
   transition: background 0.2s, backdrop-filter 0.2s, max-width 0.25s;
 }
-#rows-grid[data-mode="new"] .row-panel:hover .row-overlay-left {
+#rows-grid .row-panel:hover .row-overlay-left {
   background: linear-gradient(to right, rgba(10,14,20,0.80) 55%, rgba(10,14,20,0));
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   max-width: 85%;
 }
-#rows-grid[data-mode="new"] .row-overlay-left .member-name {
+#rows-grid .row-overlay-left .member-name {
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 13px;
@@ -1736,7 +1453,7 @@ body {
 
 /* State as a full-text BADGE (not a dot). Always visible in the top-left
    overlay. Reuses .badge color classes. */
-#rows-grid[data-mode="new"] .row-state-badge {
+#rows-grid .row-state-badge {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -1754,16 +1471,16 @@ body {
   box-shadow: 0 1px 2px rgba(0,0,0,0.35);
   transition: background 0.25s, color 0.25s;
 }
-#rows-grid[data-mode="new"] .row-state-badge.stable       { background: var(--green-dim);  color: var(--green); }
-#rows-grid[data-mode="new"] .row-state-badge.reconciling  { background: var(--yellow-dim); color: var(--yellow); }
-#rows-grid[data-mode="new"] .row-state-badge.stopping     { background: var(--red-dim);    color: var(--red); }
-#rows-grid[data-mode="new"] .row-state-badge.joining      { background: var(--accent-dim); color: var(--accent); }
-#rows-grid[data-mode="new"] .row-state-badge.stopped      { background: rgba(107,122,141,0.18); color: var(--text-dim); }
-#rows-grid[data-mode="new"] .row-state-badge.frozen       { background: var(--fault-dim);  color: var(--fault); }
-#rows-grid[data-mode="new"] .row-state-badge.partitioned  { background: var(--orange-dim); color: var(--orange); }
+#rows-grid .row-state-badge.stable       { background: var(--green-dim);  color: var(--green); }
+#rows-grid .row-state-badge.reconciling  { background: var(--yellow-dim); color: var(--yellow); }
+#rows-grid .row-state-badge.stopping     { background: var(--red-dim);    color: var(--red); }
+#rows-grid .row-state-badge.joining      { background: var(--accent-dim); color: var(--accent); }
+#rows-grid .row-state-badge.stopped      { background: rgba(107,122,141,0.18); color: var(--text-dim); }
+#rows-grid .row-state-badge.frozen       { background: var(--fault-dim);  color: var(--fault); }
+#rows-grid .row-state-badge.partitioned  { background: var(--orange-dim); color: var(--orange); }
 
 /* Meta chips — hidden at rest, revealed alongside the left backdrop on hover. */
-#rows-grid[data-mode="new"] .row-header-meta {
+#rows-grid .row-header-meta {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1779,25 +1496,25 @@ body {
   transition: opacity 0.2s, max-width 0.25s;
   pointer-events: auto;
 }
-#rows-grid[data-mode="new"] .row-panel:hover .row-header-meta {
+#rows-grid .row-panel:hover .row-header-meta {
   opacity: 1;
   max-width: 600px;
 }
-#rows-grid[data-mode="new"] .row-header-meta-item {
+#rows-grid .row-header-meta-item {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
   min-width: 0;
   white-space: nowrap;
 }
-#rows-grid[data-mode="new"] .row-header-meta-label {
+#rows-grid .row-header-meta-label {
   text-transform: uppercase;
   font-size: 9px;
   letter-spacing: 0.9px;
   color: var(--text-dim);
   opacity: 0.75;
 }
-#rows-grid[data-mode="new"] .row-header-meta-value {
+#rows-grid .row-header-meta-value {
   color: var(--text-muted);
   font-weight: 600;
   max-width: 140px;
@@ -1805,18 +1522,18 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-#rows-grid[data-mode="new"] .row-header-meta-value.dim {
+#rows-grid .row-header-meta-value.dim {
   color: var(--text-dim);
   opacity: 0.6;
   font-weight: 400;
 }
-#rows-grid[data-mode="new"] .row-header-meta-sep {
+#rows-grid .row-header-meta-sep {
   color: var(--text-dim);
   opacity: 0.35;
 }
 
 /* -- Overlay: Actions (top-right) --------------------------------------- */
-#rows-grid[data-mode="new"] .row-overlay-right {
+#rows-grid .row-overlay-right {
   position: absolute;
   top: 0;
   right: 0;
@@ -1832,15 +1549,15 @@ body {
   pointer-events: none;
   transition: background 0.2s, backdrop-filter 0.2s;
 }
-#rows-grid[data-mode="new"] .row-overlay-right > * { pointer-events: auto; }
-#rows-grid[data-mode="new"] .row-panel:hover .row-overlay-right {
+#rows-grid .row-overlay-right > * { pointer-events: auto; }
+#rows-grid .row-panel:hover .row-overlay-right {
   background: linear-gradient(to left, rgba(10,14,20,0.78) 55%, rgba(10,14,20,0));
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
 /* Stopped panels: slightly stronger backdrop so the button reads against
    the dim strip, and keep Actions clickable. */
-#rows-grid[data-mode="new"] .row-panel.stopped .row-overlay-right {
+#rows-grid .row-panel.stopped .row-overlay-right {
   background: linear-gradient(to left, rgba(10,14,20,0.88) 55%, rgba(10,14,20,0));
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
@@ -1853,7 +1570,7 @@ body {
    Hover surface is the same GRAY as a dropdown-menu item
    (var(--surface3) / var(--text)), NOT blue accent. Keeps it subtle and
    consistent with the menu that opens underneath. */
-#rows-grid[data-mode="new"] .dd-btn.row-actions-btn {
+#rows-grid .dd-btn.row-actions-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1875,34 +1592,34 @@ body {
   transition: opacity 0.2s, background 0.12s, color 0.12s, border-color 0.12s;
   text-shadow: 0 1px 2px rgba(0,0,0,0.75);
 }
-#rows-grid[data-mode="new"] .dd-btn.row-actions-btn .dd-value {
+#rows-grid .dd-btn.row-actions-btn .dd-value {
   flex: none;
   width: auto;
   line-height: 1.4;
 }
-#rows-grid[data-mode="new"] .dd-btn.row-actions-btn .dd-chevron {
+#rows-grid .dd-btn.row-actions-btn .dd-chevron {
   font-size: 8px;
   color: inherit;
   margin-left: 2px;
   flex: 0 0 auto;
   transition: transform 0.2s, color 0.12s;
 }
-#rows-grid[data-mode="new"] .dd.open .dd-btn.row-actions-btn .dd-chevron { transform: rotate(180deg); }
+#rows-grid .dd.open .dd-btn.row-actions-btn .dd-chevron { transform: rotate(180deg); }
 /* Reveal fully on panel-hover OR when dropdown is open. */
-#rows-grid[data-mode="new"] .row-panel:hover .dd-btn.row-actions-btn,
-#rows-grid[data-mode="new"] .dd.open .dd-btn.row-actions-btn {
+#rows-grid .row-panel:hover .dd-btn.row-actions-btn,
+#rows-grid .dd.open .dd-btn.row-actions-btn {
   opacity: 1;
 }
 /* Gray (not blue) hover — matches the dropdown-menu item hover. */
-#rows-grid[data-mode="new"] .dd-btn.row-actions-btn:hover,
-#rows-grid[data-mode="new"] .dd.open .dd-btn.row-actions-btn {
+#rows-grid .dd-btn.row-actions-btn:hover,
+#rows-grid .dd.open .dd-btn.row-actions-btn {
   background: var(--surface3);
   color: var(--text);
   border-color: var(--border);
 }
 /* Stopped panels — always show Actions fully so Start is one click away. */
-#rows-grid[data-mode="new"] .row-panel.stopped .dd-btn.row-actions-btn { opacity: 0.9; }
-#rows-grid[data-mode="new"] .row-panel.stopped .dd-btn.row-actions-btn:hover { opacity: 1; }
+#rows-grid .row-panel.stopped .dd-btn.row-actions-btn { opacity: 0.9; }
+#rows-grid .row-panel.stopped .dd-btn.row-actions-btn:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -2015,7 +1732,7 @@ body {
           <div class="legend-item">
             <div class="legend-swatch" style="background:var(--yellow-dim); border:1px solid rgba(251,191,36,0.35);"></div> Revoking
           </div>
-          <div class="legend-item" style="margin-left:8px; gap:3px;">
+          <div class="legend-item legend-lag-gradient" style="margin-left:8px; gap:3px;">
             <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:0.3px;">LAG</span>
             <div style="display:flex;align-items:center;gap:1px;">
               <div class="legend-swatch" style="width:8px;background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.20);"></div>
@@ -2026,12 +1743,8 @@ body {
             <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);">low..high</span>
           </div>
         </div>
-        <div class="view-switch" id="view-switch">
-          <button type="button" class="view-switch-btn selected" data-view="bento" onclick="switchView('bento')">Bento</button>
-          <button type="button" class="view-switch-btn" data-view="rows" onclick="switchView('rows')">Rows</button>
-        </div>
-        <!-- UI settings menu (gear icon). Includes UI mode (New/Old) and
-             S/M/L preset for the NEW Rows view strip height. -->
+        <!-- UI settings menu (gear icon). Includes UI mode (New Rows / Old
+             Bento) and S/M/L preset for the New Rows view strip height. -->
         <div class="dd ui-settings-dd" id="ui-settings-dd">
           <button type="button" class="dd-btn ui-settings-btn" onclick="toggleDd('ui-settings-dd')" title="UI settings" aria-label="UI settings">
             <span class="dd-value" aria-hidden="true">&#9881;</span>
@@ -2041,8 +1754,8 @@ body {
             <div class="ui-settings-row" id="ui-mode-row">
               <label class="ui-settings-label">UI</label>
               <div class="ui-seg" id="ui-mode-seg" role="radiogroup" aria-label="UI">
-                <button type="button" class="ui-seg-btn selected" data-mode="new" onclick="setUiSetting('mode', 'new')">New</button>
-                <button type="button" class="ui-seg-btn" data-mode="old" onclick="setUiSetting('mode', 'old')">Old</button>
+                <button type="button" class="ui-seg-btn selected" data-ui-mode="new" onclick="setUiSetting('mode', 'new')">New</button>
+                <button type="button" class="ui-seg-btn" data-ui-mode="old" onclick="setUiSetting('mode', 'old')">Old</button>
               </div>
             </div>
             <div class="ui-settings-row" id="ui-strip-height-row">
@@ -2056,8 +1769,8 @@ body {
           </div>
         </div>
       </div>
-      <div class="card-grid" id="card-grid"></div>
-      <div class="rows-grid" id="rows-grid" data-mode="new" style="display:none;"></div>
+      <div class="card-grid" id="card-grid" style="display:none;"></div>
+      <div class="rows-grid" id="rows-grid"></div>
     </div>
   </main>
 </div>
@@ -2069,13 +1782,15 @@ let currentConfig = null;
 let prevState = null;
 let prevCtrlState = {};
 let simulationRunning = false;
-let currentView = 'bento'; // 'bento' | 'rows'
 
 // -- UI-only settings (presentation knobs, never part of the simulation
 // config). Persisted to localStorage so values survive reloads.
 //
-//   mode:              'new' (default) | 'old'  — selects the Rows view variant
-//   stripHeightPreset: 'S' | 'M' (default) | 'L' — 48/72/120 px tall NEW-mode strip
+//   mode: 'new' (default) → New Rows view (full-bleed heatmap, floating
+//                           tooltip, gauge-with-container cells)
+//         'old'           → Bento card grid (legacy per-consumer cards)
+//   stripHeightPreset: 'S' | 'M' (default) | 'L' — 48/72/120 px strip
+//                      height for the New Rows view (ignored in Bento).
 const STRIP_HEIGHT_PRESETS = { S: 48, M: 72, L: 120 };
 const UI_SETTING_DEFAULTS = { mode: 'new', stripHeightPreset: 'M' };
 let uiSettings = Object.assign({}, UI_SETTING_DEFAULTS);
@@ -2125,39 +1840,68 @@ function applyUiSetting(key) {
   }
 }
 
-// Apply the UI mode ("new" or "old"):
-//  - update the #rows-grid data-mode attribute (CSS is scoped by it),
-//  - clear any rendered panels so the next render uses the correct skeleton,
-//  - hide the floating #pcell-tip (it's tied to new-UI cells only),
-//  - toggle the Strip-Height row enabled/disabled (only meaningful in NEW),
-//  - refresh the UI / Size segmented buttons' selected state,
-//  - trigger an immediate re-render from the last cached prevState so the
-//    user sees the switch instantly without waiting for the next poll.
+// Apply the UI mode:
+//   'new' → show the New Rows view (#rows-grid), hide Bento (#card-grid)
+//   'old' → show the Bento view (#card-grid), hide the Rows grid
+//
+// Sets a body class (ui-mode-new / ui-mode-old) so CSS can scope mode-
+// conditional chrome (e.g. hiding the "LAG low..high" gradient legend in
+// the new UI). Clears both grids so the next render/poll uses fresh
+// skeletons, hides the floating #pcell-tip (tied to New-mode cells),
+// toggles the Strip-Height row enabled/disabled (meaningful only in the
+// New Rows view), and refreshes the UI segmented buttons' selected
+// state. Triggers an immediate re-render from the last cached prevState
+// so the user sees the switch instantly without waiting for the next
+// poll.
 function applyUiMode() {
-  var grid = document.getElementById('rows-grid');
-  if (grid) {
-    grid.setAttribute('data-mode', uiSettings.mode);
-    grid.innerHTML = '';
+  var mode = uiSettings.mode;
+  var cardGrid = document.getElementById('card-grid');
+  var rowsGrid = document.getElementById('rows-grid');
+  // Grid visibility: only the simulation-running wrapper controls whether
+  // either grid is visible at all (via #view-wrapper). Within that, we
+  // show exactly one grid per mode.
+  if (cardGrid) {
+    cardGrid.style.display = mode === 'old' ? '' : 'none';
+    cardGrid.innerHTML = '';
+  }
+  if (rowsGrid) {
+    rowsGrid.style.display = mode === 'new' ? '' : 'none';
+    rowsGrid.innerHTML = '';
   }
   // Mode cache invalidated — force a full re-render next tick.
   prevCtrlState = {};
   hidePcellTip();
 
+  // Body class for mode-conditional CSS (legend, etc.).
+  if (document.body) {
+    document.body.classList.toggle('ui-mode-new', mode === 'new');
+    document.body.classList.toggle('ui-mode-old', mode === 'old');
+  }
+
   // UI-mode segmented buttons.
   var modeBtns = document.querySelectorAll('#ui-mode-seg .ui-seg-btn');
   for (var i = 0; i < modeBtns.length; i++) {
     modeBtns[i].classList.toggle('selected',
-      modeBtns[i].getAttribute('data-mode') === uiSettings.mode);
+      modeBtns[i].getAttribute('data-ui-mode') === mode);
   }
-  // Strip-Height row is meaningful only in the NEW mode.
+  // Strip-Height row is meaningful only in the New Rows view.
   var shRow = document.getElementById('ui-strip-height-row');
-  if (shRow) shRow.classList.toggle('disabled', uiSettings.mode === 'old');
+  if (shRow) shRow.classList.toggle('disabled', mode === 'old');
 
-  if (currentView === 'rows' && prevState) renderRows(prevState);
+  // Re-render immediately with the last data we have, so the user sees the
+  // switch without waiting for the next poll tick.
+  if (prevState) renderCurrentView(prevState);
+}
+
+// Dispatch to the renderer for the currently-active UI mode.
+function renderCurrentView(data) {
+  if (uiSettings.mode === 'old') renderGroup(data);
+  else renderRowsNew(data);
 }
 
 function applyAllUiSettings() {
-  // Order matters: set data-mode first, then push the strip-height custom prop.
+  // Order matters: set the mode (which also applies body class + shows the
+  // correct grid) first, then push the strip-height custom prop.
   applyUiMode();
   applyUiSetting('stripHeightPreset');
 }
@@ -2670,6 +2414,8 @@ function setSimulationUI(running) {
   var configMode = document.getElementById('config-mode');
   var btn = document.getElementById('btn-start-sim');
   var autopilotBtn = document.getElementById('btn-autopilot-config');
+  var cardGrid = document.getElementById('card-grid');
+  var rowsGrid = document.getElementById('rows-grid');
 
   if (running) {
     configMode.classList.add('locked');
@@ -2679,6 +2425,9 @@ function setSimulationUI(running) {
     autopilotBtn.disabled = false;
     document.getElementById('empty-state').style.display = 'none';
     document.getElementById('view-wrapper').style.display = '';
+    // Show whichever grid matches the current UI mode; keep the other hidden.
+    if (cardGrid) cardGrid.style.display = uiSettings.mode === 'old' ? '' : 'none';
+    if (rowsGrid) rowsGrid.style.display = uiSettings.mode === 'new' ? '' : 'none';
   } else {
     configMode.classList.remove('locked');
     btn.textContent = 'Start';
@@ -2688,9 +2437,16 @@ function setSimulationUI(running) {
     autopilotBtn.className = 'btn btn-autopilot';
     document.getElementById('empty-state').style.display = '';
     document.getElementById('view-wrapper').style.display = 'none';
-    document.getElementById('card-grid').innerHTML = '';
-    var rg = document.getElementById('rows-grid');
-    if (rg) rg.innerHTML = '';
+    if (cardGrid) {
+      cardGrid.innerHTML = '';
+      // Keep the mode-aware visibility so the wrapper swap is consistent the
+      // next time the simulation starts.
+      cardGrid.style.display = uiSettings.mode === 'old' ? '' : 'none';
+    }
+    if (rowsGrid) {
+      rowsGrid.innerHTML = '';
+      rowsGrid.style.display = uiSettings.mode === 'new' ? '' : 'none';
+    }
     updateStatus(null);
   }
 }
@@ -2865,32 +2621,9 @@ async function pollGroup() {
     var data = await resp.json();
     if (data.phase !== 'RUNNING') return;
     updateStatus(data);
-    if (currentView === 'rows') renderRows(data);
-    else renderGroup(data);
+    renderCurrentView(data);
     prevState = data;
   } catch (e) { /* ignore */ }
-}
-
-// -- View switching --
-function switchView(view) {
-  if (view === currentView) return;
-  currentView = view;
-  var bento = document.getElementById('card-grid');
-  var rows = document.getElementById('rows-grid');
-  if (bento) bento.style.display = view === 'bento' ? '' : 'none';
-  if (rows)  rows.style.display  = view === 'rows'  ? '' : 'none';
-  // Update switcher UI
-  var btns = document.querySelectorAll('.view-switch-btn');
-  for (var i = 0; i < btns.length; i++) {
-    btns[i].classList.toggle('selected', btns[i].getAttribute('data-view') === view);
-  }
-  // Invalidate caches for the view we switched away from (so re-entering re-renders).
-  prevCtrlState = {};
-  // Re-render immediately with the last data we have.
-  if (prevState) {
-    if (view === 'rows') renderRows(prevState);
-    else renderGroup(prevState);
-  }
 }
 
 function splitPartitionKey(key) {
@@ -3175,119 +2908,9 @@ function escapeHtml(s) {
 
 // -- Rendering: rows view (incremental — preserves hover state + open dropdowns) --
 
-// ------------------------------------------------------------------------
-// Dispatcher — routes to the OLD or NEW Rows UI based on uiSettings.mode.
-// Shared helpers (escapeHtml, badgeClassFor, action handlers, polling,
-// currentConfig) are used by both sides. Only the panel renderers are split.
-// ------------------------------------------------------------------------
-function renderRows(data) {
-  if (uiSettings.mode === 'old') renderRowsOld(data);
-  else renderRowsNew(data);
-}
-
-// ------------------------------------------------------------------------
-// OLD UI — pre-R8-01 Rows view. Uses fixed 36px cell strip, per-cell
-// CSS ::after tooltip, sidebar-style card with header band. Scale = 200
-// for lag fill. No tooltip delegation, no axis rail.
-// ------------------------------------------------------------------------
-
-const LAG_MAX_SCALE_OLD = 200;
-const LAG_MIN_FILL_PCT_OLD = 8;
-
-function lagFillPctOld(lag) {
-  var pct = 0;
-  if (lag != null && lag > 0) pct = Math.round((lag / LAG_MAX_SCALE_OLD) * 100);
-  return Math.max(LAG_MIN_FILL_PCT_OLD, Math.min(100, pct));
-}
-
-function renderRowsOld(data) {
-  if (!currentConfig) return;
-
-  var topics = [];
-  for (var i = 1; i <= currentConfig.numTopics; i++) {
-    topics.push(currentConfig.topicPrefix + '-' + i);
-  }
-  var numPartitions = currentConfig.numPartitions;
-  var partitionLag = data.partitionLag || {};
-
-  var grid = document.getElementById('rows-grid');
-  if (!grid) return;
-
-  var members = (data.members || []).slice().sort(function(a, b) { return a.slotIndex - b.slotIndex; });
-  var validIds = {};
-
-  for (var mi = 0; mi < members.length; mi++) {
-    var m = members[mi];
-    var panelId = 'row-panel-' + m.slotIndex;
-    validIds[panelId] = 1;
-    var panel = document.getElementById(panelId);
-    if (!panel) {
-      panel = buildPanelSkeletonOld(m, topics, numPartitions);
-      grid.appendChild(panel);
-    }
-    updatePanelOld(panel, m, topics, numPartitions, partitionLag);
-  }
-
-  // Remove stale panels (stopped members beyond numConsumers).
-  for (var ci = grid.children.length - 1; ci >= 0; ci--) {
-    var child = grid.children[ci];
-    if (!validIds[child.id]) grid.removeChild(child);
-  }
-}
-
-function buildPanelSkeletonOld(m, topics, numPartitions) {
-  var panel = document.createElement('div');
-  panel.id = 'row-panel-' + m.slotIndex;
-  panel.className = 'row-panel';
-
-  // One block per topic: head (name + N/M meta) + cell row below.
-  var stripHtml = '';
-  for (var ti = 0; ti < topics.length; ti++) {
-    var topicName = topics[ti];
-    stripHtml += '<div class="row-strip-topic">';
-    stripHtml += '<div class="row-strip-head">';
-    stripHtml += '<span class="strip-topic-name">' + escapeHtml(topicName) + '</span>';
-    stripHtml += '<span class="strip-topic-meta">per-partition lag · 0/' + numPartitions + ' parts</span>';
-    stripHtml += '</div>';
-    stripHtml += '<div class="row-strip-cells">';
-    for (var p = 0; p < numPartitions; p++) {
-      stripHtml += '<div class="pcell"></div>';
-    }
-    stripHtml += '</div>';
-    stripHtml += '</div>';
-  }
-
-  var actionsId = 'actions-' + m.slotIndex;
-  panel.innerHTML =
-    '<div class="row-header">' +
-      '<span class="member-name"></span>' +
-      '<span class="row-header-meta-sep">&middot;</span>' +
-      '<div class="row-header-meta">' +
-        '<span class="row-header-meta-item meta-protocol"><span class="row-header-meta-label">protocol</span><span class="row-header-meta-value"></span></span>' +
-        '<span class="row-header-meta-sep">&middot;</span>' +
-        '<span class="row-header-meta-item meta-id"><span class="row-header-meta-label">id</span><span class="row-header-meta-value"></span></span>' +
-        '<span class="row-header-meta-sep">&middot;</span>' +
-        '<span class="row-header-meta-item meta-instance"><span class="row-header-meta-label">instance</span><span class="row-header-meta-value"></span></span>' +
-        '<span class="row-header-meta-sep">&middot;</span>' +
-        '<span class="row-header-meta-item meta-epoch"><span class="row-header-meta-label">epoch</span><span class="row-header-meta-value"></span></span>' +
-      '</div>' +
-      '<span class="badge row-state"></span>' +
-      '<div class="dd row-actions-dd" id="' + actionsId + '">' +
-        '<button type="button" class="dd-btn chaos-btn row-actions-btn" onclick="toggleDd(\'' + actionsId + '\')">' +
-          '<span class="dd-value">Actions</span>' +
-          '<span class="dd-chevron">&#9662;</span>' +
-        '</button>' +
-        '<div class="dd-menu chaos-menu"></div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="row-strip">' + stripHtml + '</div>';
-
-  return panel;
-}
-
 // Combine group state + chaos actions into a single effective badge.
 // Priority: Stopped > Frozen > Partitioned > group state. Shared between
-// the old + new UI.
+// the Bento view and the Rows view.
 function computeStateBadge(m) {
   if (!m.subscribed || m.state === 'Stopped') return { show: true, text: 'STOPPED',     cls: 'stopped' };
   if (m.blocked)                              return { show: true, text: 'FROZEN',      cls: 'frozen' };
@@ -3297,152 +2920,7 @@ function computeStateBadge(m) {
   return { show: true, text: m.state || '—', cls: cls };
 }
 
-function updatePanelOld(panel, m, topics, numPartitions, partitionLag) {
-  var isClassic = m.protocol === 'classic';
-  var effState = computeStateBadge(m);
-  var isStopped = effState.cls === 'stopped';
-
-  var panelCls = 'row-panel ' + effState.cls + (isStopped ? ' stopped' : '');
-  if (panel.className !== panelCls) panel.className = panelCls;
-
-  // Name.
-  var nameEl = panel.querySelector('.member-name');
-  var nameTxt = m.clientId || '';
-  if (nameEl.textContent !== nameTxt) {
-    nameEl.textContent = nameTxt;
-    nameEl.title = nameTxt;
-  }
-
-  // State badge: reflects chaos-driven states (FROZEN / PARTITIONED / STOPPED) or group state.
-  // Hidden only for classic members with no chaos applied.
-  var stateEl = panel.querySelector('.row-state');
-  if (!effState.show) {
-    if (stateEl.style.display !== 'none') stateEl.style.display = 'none';
-  } else {
-    if (stateEl.style.display === 'none') stateEl.style.display = '';
-    var stateCls = 'badge row-state ' + effState.cls;
-    if (stateEl.className !== stateCls) stateEl.className = stateCls;
-    if (stateEl.textContent !== effState.text) stateEl.textContent = effState.text;
-  }
-
-  // Line-2 meta items.
-  setHeaderMetaOld(panel, '.meta-protocol', m.protocol || '—', !!m.protocol);
-  setHeaderMetaOld(panel, '.meta-id',       m.memberId   || '—', !!m.memberId, m.memberId);
-  setHeaderMetaOld(panel, '.meta-instance', m.instanceId || '—', !!m.instanceId, m.instanceId);
-
-  // Epoch (consumer) vs generation (classic).
-  var epochItem = panel.querySelector('.meta-epoch');
-  var epochLbl  = epochItem.querySelector('.row-header-meta-label');
-  if (isClassic) {
-    if (epochLbl.textContent !== 'generation') epochLbl.textContent = 'generation';
-    var hasGen = m.groupGeneration != null && m.groupGeneration >= 0;
-    setHeaderMetaValueOld(epochItem, hasGen ? String(m.groupGeneration) : '—', hasGen);
-  } else {
-    if (epochLbl.textContent !== 'epoch') epochLbl.textContent = 'epoch';
-    var hasEp = m.memberEpoch != null && m.memberEpoch >= 0;
-    setHeaderMetaValueOld(epochItem, hasEp ? String(m.memberEpoch) : '—', hasEp);
-  }
-
-  // Partition strip cells.
-  updateStripCellsOld(panel, m, topics, numPartitions, partitionLag);
-
-  // Actions dropdown menu — regenerate only when action state changes.
-  var actionsMenu = panel.querySelector('.row-actions-dd .chaos-menu');
-  var actionsKey = [m.subscribed ? '1' : '0', m.protocol || '-',
-                    m.partitioned ? '1' : '0', m.blocked ? '1' : '0'].join('|');
-  if (actionsMenu.dataset.key !== actionsKey) {
-    actionsMenu.dataset.key = actionsKey;
-    actionsMenu.innerHTML = buildActionMenuItems(m);
-  }
-}
-
-function setHeaderMetaOld(panel, selector, text, strong, fullTitle) {
-  var item = panel.querySelector(selector);
-  if (!item) return;
-  setHeaderMetaValueOld(item, text, strong, fullTitle);
-}
-
-function setHeaderMetaValueOld(itemEl, text, strong, fullTitle) {
-  var el = itemEl.querySelector('.row-header-meta-value');
-  if (!el) return;
-  if (el.textContent !== text) el.textContent = text;
-  var cls = 'row-header-meta-value' + (strong ? '' : ' dim');
-  if (el.className !== cls) el.className = cls;
-  // Show full value on hover when truncated.
-  if (fullTitle && el.title !== fullTitle) el.title = fullTitle;
-  else if (!fullTitle && el.title) el.removeAttribute('title');
-}
-
-function updateStripCellsOld(panel, m, topics, numPartitions, partitionLag) {
-  var coordCurrent = new Set(m.assignment || []);
-  var coordTarget  = new Set(m.targetAssignment || []);
-  var consumerLocal = new Set(m.localAssignment || []);
-  // If the coordinator has NO partitions for this member (neither current nor target),
-  // the member is effectively out of the group (fenced / stopped / unsubscribed).
-  // In that case, ignore the consumer-local set too — otherwise we'd paint ghost
-  // "revoking" cells for partitions the group no longer associates with this member.
-  var isOutOfGroup = coordCurrent.size === 0 && coordTarget.size === 0;
-
-  var topicBlocks = panel.querySelectorAll('.row-strip-topic');
-  for (var ti = 0; ti < topics.length; ti++) {
-    var topicBlock = topicBlocks[ti];
-    if (!topicBlock) continue;
-    var t = topics[ti];
-    var cells = topicBlock.querySelectorAll('.pcell');
-    var ownedCount = 0;
-
-    for (var p = 0; p < numPartitions; p++) {
-      var cell = cells[p];
-      if (!cell) continue;
-      var key = t + '-' + p;
-      var inCurrent = !isOutOfGroup && coordCurrent.has(key);
-      var inTarget  = !isOutOfGroup && coordTarget.has(key);
-      var inLocal   = !isOutOfGroup && consumerLocal.has(key);
-      var lag = partitionLag[key];
-
-      var state = 'empty';
-      var fillPct = 0;
-      var tip = '';
-
-      if (inTarget && inLocal) {
-        state = 'assigned';
-        ownedCount++;
-        fillPct = lagFillPctOld(lag);
-        tip = t + ' / p' + p + ' · assigned' + (lag != null ? ' · lag ' + lag : '');
-      } else if (inTarget && !inLocal) {
-        state = 'pending';
-        tip = t + ' / p' + p + ' · pending — waiting on previous owner to release';
-      } else if (!inTarget && (inCurrent || inLocal)) {
-        state = 'revoking';
-        fillPct = lagFillPctOld(lag);
-        tip = t + ' / p' + p + ' · revoking — must be released' + (lag != null ? ' · lag ' + lag : '');
-      }
-
-      var newCls = 'pcell ' + state;
-      if (cell.className !== newCls) cell.className = newCls;
-
-      var curFill = cell.style.getPropertyValue('--fill');
-      var newFill = fillPct > 0 ? fillPct + '%' : '';
-      if (curFill !== newFill) {
-        if (newFill) cell.style.setProperty('--fill', newFill);
-        else cell.style.removeProperty('--fill');
-      }
-
-      var curTip = cell.getAttribute('data-tip') || '';
-      if (curTip !== tip) {
-        if (tip) cell.setAttribute('data-tip', tip);
-        else cell.removeAttribute('data-tip');
-      }
-    }
-
-    // Update topic head meta: "per-partition lag · N/M parts"
-    var metaEl = topicBlock.querySelector('.strip-topic-meta');
-    var metaTxt = 'per-partition lag · ' + ownedCount + '/' + numPartitions + ' parts';
-    if (metaEl.textContent !== metaTxt) metaEl.textContent = metaTxt;
-  }
-}
-
-// Shared action-menu builder — same markup in both UI modes.
+// Shared action-menu builder — same markup for Bento and Rows views.
 function buildActionMenuItems(m) {
   var dis = m.subscribed ? '' : ' disabled';
   var items = '';
@@ -3475,7 +2953,7 @@ function buildActionMenuItems(m) {
 }
 
 // ------------------------------------------------------------------------
-// NEW UI — R8-01 Rows view. Full-bleed heatmap strip with floating overlays
+// Rows view (R8-01). Full-bleed heatmap strip with floating overlays
 // (name + state badge on the left, Actions on the right), partition-id axis
 // rail underneath, single fixed-positioned tooltip delegated on the grid,
 // gauge-with-container cells, tunable strip height (S/M/L), LAG_MAX_SCALE
@@ -3565,8 +3043,7 @@ function refreshHoveredPcellTip() {
 }
 
 // Event delegation on #rows-grid. mouseover/mouseout bubble, so moving
-// across cells updates the tooltip cleanly. Only active for cells inside
-// the NEW-mode strip — OLD-mode cells rely on CSS ::after.
+// across cells updates the tooltip cleanly.
 function setupPcellTipDelegation() {
   var grid = document.getElementById('rows-grid');
   if (!grid || grid.dataset.tipBound === '1') return;
