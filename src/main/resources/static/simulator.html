@@ -1046,16 +1046,123 @@ body {
   color: var(--accent);
 }
 
-/* -- Rows view container -- */
+/* -- UI settings gear in the main header (strip-height S/M/L, UI mode, etc.) -- */
+.ui-settings-dd {
+  margin-left: 8px;
+  flex: 0 0 auto;
+}
+.dd-btn.ui-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  min-height: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.dd-btn.ui-settings-btn:hover,
+.dd.open .dd-btn.ui-settings-btn {
+  background: var(--accent-dim);
+  border-color: rgba(76,154,255,0.4);
+  color: var(--accent);
+}
+.dd-btn.ui-settings-btn .dd-value {
+  flex: none;
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.ui-settings-menu {
+  min-width: 260px;
+  right: 0;
+  left: auto;
+  padding: 8px 0;
+  overflow: visible;
+  max-height: none;
+}
+.ui-settings-group {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  padding: 2px 12px 6px;
+}
+.ui-settings-row {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+}
+.ui-settings-row.disabled .ui-seg { opacity: 0.4; pointer-events: none; }
+.ui-settings-row.disabled .ui-settings-label { opacity: 0.4; }
+.ui-settings-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+/* Segmented control shared by the UI mode row and the strip-height row. */
+.ui-seg {
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  width: 100%;
+}
+.ui-seg-btn {
+  flex: 1 1 0;
+  padding: 4px 0;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.ui-seg-btn + .ui-seg-btn { border-left: 1px solid var(--border); }
+.ui-seg-btn:hover:not(.selected) {
+  background: var(--surface2);
+  color: var(--text-muted);
+}
+.ui-seg-btn.selected {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* -- Rows view container (base — shared across modes) --
+   --strip-height is live-tunable via the UI settings gear (S/M/L) — used by
+   the "new" mode only. "old" mode keeps a fixed 36px cell row. */
 .rows-grid {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 14px;
+  --strip-height: 72px;
+  --strip-axis-height: 16px;
 }
 
+/* ========================================================================
+   OLD ROWS UI — scoped by #rows-grid[data-mode="old"]
+   ======================================================================== */
+
 /* -- Row panel (per-consumer) -- */
-.row-panel {
+#rows-grid[data-mode="old"] .row-panel {
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -1067,30 +1174,30 @@ body {
 }
 /* Lift the panel that has an open Chaos dropdown so the menu renders above
    subsequent panels. */
-.row-panel:has(.dd.open) { z-index: 20; }
-.row-panel.stable      { border-color: rgba(52,211,153,0.35); }
-.row-panel.reconciling {
+#rows-grid[data-mode="old"] .row-panel:has(.dd.open) { z-index: 20; }
+#rows-grid[data-mode="old"] .row-panel.stable      { border-color: rgba(52,211,153,0.35); }
+#rows-grid[data-mode="old"] .row-panel.reconciling {
   border-color: rgba(251,191,36,0.45);
   box-shadow: 0 0 0 1px rgba(251,191,36,0.12), 0 0 22px -8px rgba(251,191,36,0.4);
 }
-.row-panel.stopping { border-color: rgba(248,113,113,0.4); }
-.row-panel.joining  { border-color: rgba(76,154,255,0.45); }
-.row-panel.stopped  { opacity: 0.45; }
+#rows-grid[data-mode="old"] .row-panel.stopping { border-color: rgba(248,113,113,0.4); }
+#rows-grid[data-mode="old"] .row-panel.joining  { border-color: rgba(76,154,255,0.45); }
+#rows-grid[data-mode="old"] .row-panel.stopped  { opacity: 0.45; }
 
 /* Left accent bar — a thicker colored border respects border-radius. */
-.row-panel {
+#rows-grid[data-mode="old"] .row-panel {
   border-left-width: 4px;
   border-left-color: var(--text-dim);
   transition: border-color 0.25s, border-left-color 0.25s, opacity 0.25s, box-shadow 0.3s;
 }
-.row-panel.stable      { border-left-color: var(--green); }
-.row-panel.reconciling { border-left-color: var(--yellow); }
-.row-panel.stopping    { border-left-color: var(--red); }
-.row-panel.joining     { border-left-color: var(--accent); }
-.row-panel.stopped     { border-left-color: var(--text-dim); }
+#rows-grid[data-mode="old"] .row-panel.stable      { border-left-color: var(--green); }
+#rows-grid[data-mode="old"] .row-panel.reconciling { border-left-color: var(--yellow); }
+#rows-grid[data-mode="old"] .row-panel.stopping    { border-left-color: var(--red); }
+#rows-grid[data-mode="old"] .row-panel.joining     { border-left-color: var(--accent); }
+#rows-grid[data-mode="old"] .row-panel.stopped     { border-left-color: var(--text-dim); }
 
 /* -- Row header (single line: name + meta + icons + state) -- */
-.row-header {
+#rows-grid[data-mode="old"] .row-header {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1101,15 +1208,15 @@ body {
   border-radius: 7px 7px 0 0;
   min-width: 0;
 }
-.row-header .member-name {
+#rows-grid[data-mode="old"] .row-header .member-name {
   font-size: 14px;
   flex: 0 0 auto;
 }
-.row-header .row-state {
+#rows-grid[data-mode="old"] .row-header .row-state {
   flex: 0 0 auto;
   margin-left: auto;     /* always right-align state even when meta is short */
 }
-.row-header-meta {
+#rows-grid[data-mode="old"] .row-header-meta {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -1121,20 +1228,20 @@ body {
   color: var(--text-dim);
   letter-spacing: 0.2px;
 }
-.row-header-meta-item {
+#rows-grid[data-mode="old"] .row-header-meta-item {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
   min-width: 0;
 }
-.row-header-meta-label {
+#rows-grid[data-mode="old"] .row-header-meta-label {
   text-transform: uppercase;
   font-size: 9px;
   letter-spacing: 0.9px;
   color: var(--text-dim);
   opacity: 0.75;
 }
-.row-header-meta-value {
+#rows-grid[data-mode="old"] .row-header-meta-value {
   color: var(--text-muted);
   font-weight: 600;
   max-width: 180px;
@@ -1142,29 +1249,29 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.row-header-meta-value.dim {
+#rows-grid[data-mode="old"] .row-header-meta-value.dim {
   color: var(--text-dim);
   opacity: 0.55;
   font-weight: 400;
 }
-.row-header-meta-sep {
+#rows-grid[data-mode="old"] .row-header-meta-sep {
   color: var(--text-dim);
   opacity: 0.4;
 }
-.row-header-icons {
+#rows-grid[data-mode="old"] .row-header-icons {
   display: inline-flex;
   gap: 6px;
   flex: 0 0 auto;
 }
-.row-icon {
+#rows-grid[data-mode="old"] .row-icon {
   font-size: 13px;
   line-height: 1;
 }
-.row-icon.frozen      { color: var(--fault); }
-.row-icon.partitioned { color: var(--yellow); }
+#rows-grid[data-mode="old"] .row-icon.frozen      { color: var(--fault); }
+#rows-grid[data-mode="old"] .row-icon.partitioned { color: var(--yellow); }
 
 /* -- Partition strip (body: between header and footer, full width) -- */
-.row-strip {
+#rows-grid[data-mode="old"] .row-strip {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -1174,14 +1281,14 @@ body {
   min-width: 0;
   box-sizing: border-box;
 }
-.row-strip-topic {
+#rows-grid[data-mode="old"] .row-strip-topic {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.row-strip-head {
+#rows-grid[data-mode="old"] .row-strip-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -1190,7 +1297,7 @@ body {
   font-size: 10px;
   min-width: 0;
 }
-.strip-topic-name {
+#rows-grid[data-mode="old"] .strip-topic-name {
   font-weight: 700;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -1199,20 +1306,20 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.strip-topic-meta {
+#rows-grid[data-mode="old"] .strip-topic-meta {
   color: var(--text-dim);
   opacity: 0.85;
   flex-shrink: 0;
   letter-spacing: 0.2px;
 }
-.row-strip-cells {
+#rows-grid[data-mode="old"] .row-strip-cells {
   display: flex;
   align-items: stretch;
   gap: 2px;
   height: 36px;                /* fixed cell height */
   flex-shrink: 0;
 }
-.pcell {
+#rows-grid[data-mode="old"] .pcell {
   flex: 1 1 0;
   min-width: 4px;
   position: relative;
@@ -1222,11 +1329,11 @@ body {
 }
 
 /* Empty — barely-there track */
-.pcell.empty { background: rgba(255,255,255,0.03); }
+#rows-grid[data-mode="old"] .pcell.empty { background: rgba(255,255,255,0.03); }
 
 /* Assigned — calm green track + gradient fill rising from bottom */
-.pcell.assigned { background: rgba(52,211,153,0.09); }
-.pcell.assigned::before {
+#rows-grid[data-mode="old"] .pcell.assigned { background: rgba(52,211,153,0.09); }
+#rows-grid[data-mode="old"] .pcell.assigned::before {
   content: '';
   position: absolute;
   left: 0;
@@ -1240,11 +1347,11 @@ body {
 }
 
 /* Pending — solid soft blue, no hatching */
-.pcell.pending { background: rgba(76,154,255,0.30); }
+#rows-grid[data-mode="old"] .pcell.pending { background: rgba(76,154,255,0.30); }
 
 /* Revoking — solid amber track + amber gradient fill for the lag that's still accruing */
-.pcell.revoking { background: rgba(251,191,36,0.22); }
-.pcell.revoking::before {
+#rows-grid[data-mode="old"] .pcell.revoking { background: rgba(251,191,36,0.22); }
+#rows-grid[data-mode="old"] .pcell.revoking::before {
   content: '';
   position: absolute;
   left: 0;
@@ -1256,10 +1363,10 @@ body {
   transition: height 0.3s ease-out;
 }
 
-.pcell:hover { filter: brightness(1.3); z-index: 3; }
+#rows-grid[data-mode="old"] .pcell:hover { filter: brightness(1.3); z-index: 3; }
 
 /* Instant CSS tooltip on cells with data-tip */
-.pcell[data-tip]::after {
+#rows-grid[data-mode="old"] .pcell[data-tip]::after {
   content: attr(data-tip);
   position: absolute;
   bottom: calc(100% + 6px);
@@ -1280,21 +1387,21 @@ body {
   z-index: 40;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
-.pcell[data-tip]:hover::after { opacity: 1; }
+#rows-grid[data-mode="old"] .pcell[data-tip]:hover::after { opacity: 1; }
 
 /* -- Extra badge tints for chaos-driven states (merged with group state) -- */
 .badge.frozen      { background: var(--fault-dim);  color: var(--fault); }
 .badge.partitioned { background: var(--orange-dim); color: var(--orange); }
-.row-panel.frozen      { border-left-color: var(--fault); }
-.row-panel.partitioned { border-left-color: var(--orange); }
+#rows-grid[data-mode="old"] .row-panel.frozen      { border-left-color: var(--fault); }
+#rows-grid[data-mode="old"] .row-panel.partitioned { border-left-color: var(--orange); }
 
-/* -- Compact "Actions" dropdown trigger in the header -- */
-.row-actions-btn {
+/* -- Compact "Actions" dropdown trigger in the old row header -- */
+#rows-grid[data-mode="old"] .row-actions-btn {
   padding: 2px 8px !important;
   font-size: 11px !important;
   min-height: auto !important;
 }
-.chaos-btn {
+#rows-grid[data-mode="old"] .chaos-btn {
   background: var(--surface3);
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -1302,12 +1409,14 @@ body {
   font-size: 11px;
   padding: 6px 10px;
 }
-.chaos-btn:hover,
-.dd.open .chaos-btn {
+#rows-grid[data-mode="old"] .chaos-btn:hover,
+#rows-grid[data-mode="old"] .dd.open .chaos-btn {
   background: var(--accent-dim);
   color: var(--accent);
   border-color: rgba(76,154,255,0.4);
 }
+
+/* -- Chaos dropdown menu content (shared across modes) -- */
 .chaos-menu {
   min-width: 200px;
   right: 0;
@@ -1353,6 +1462,447 @@ body {
   cursor: not-allowed;
   pointer-events: none;
 }
+
+/* ========================================================================
+   NEW ROWS UI — scoped by #rows-grid[data-mode="new"]
+   ======================================================================== */
+
+/* -- Row panel (per-consumer) — STRIP IS the row -------------------------
+   Full-bleed heatmap surface + thin partition-id rail below. Name, state
+   badge, and "Actions ▾" FLOAT over the strip. Backdrops are transparent
+   at rest and fade in on hover. overflow: visible so the gauge-with-
+   container shows cleanly without clipping the state badge. */
+#rows-grid[data-mode="new"] .row-panel {
+  position: relative;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.25s, opacity 0.25s, box-shadow 0.3s;
+  overflow: visible;
+  z-index: 1;
+}
+/* Lift the panel that has an open Actions dropdown so the menu renders
+   above subsequent panels. */
+#rows-grid[data-mode="new"] .row-panel:has(.dd.open) { z-index: 20; }
+
+/* Thin colored rail on the left edge. */
+#rows-grid[data-mode="new"] .row-panel::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--text-dim);
+  transition: background 0.25s;
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+  z-index: 4;
+  pointer-events: none;
+}
+#rows-grid[data-mode="new"] .row-panel.stable::before       { background: var(--green); }
+#rows-grid[data-mode="new"] .row-panel.reconciling::before  { background: var(--yellow); }
+#rows-grid[data-mode="new"] .row-panel.stopping::before     { background: var(--red); }
+#rows-grid[data-mode="new"] .row-panel.joining::before      { background: var(--accent); }
+#rows-grid[data-mode="new"] .row-panel.stopped::before      { background: var(--text-dim); }
+#rows-grid[data-mode="new"] .row-panel.frozen::before       { background: var(--fault); }
+#rows-grid[data-mode="new"] .row-panel.partitioned::before  { background: var(--orange); }
+
+#rows-grid[data-mode="new"] .row-panel.stable       { border-color: rgba(52,211,153,0.30); }
+#rows-grid[data-mode="new"] .row-panel.reconciling  {
+  border-color: rgba(251,191,36,0.38);
+  box-shadow: 0 0 0 1px rgba(251,191,36,0.08), 0 0 22px -8px rgba(251,191,36,0.35);
+}
+#rows-grid[data-mode="new"] .row-panel.stopping     { border-color: rgba(248,113,113,0.35); }
+#rows-grid[data-mode="new"] .row-panel.joining      { border-color: rgba(76,154,255,0.38); }
+/* For stopped panels, dim only the strip + axis + left overlay. The right
+   overlay (Actions) stays interactive so users can still click Start. */
+#rows-grid[data-mode="new"] .row-panel.stopped .row-strip,
+#rows-grid[data-mode="new"] .row-panel.stopped .row-axis,
+#rows-grid[data-mode="new"] .row-panel.stopped .row-overlay-left { opacity: 0.45; }
+#rows-grid[data-mode="new"] .row-panel.stopped { border-color: rgba(107,122,141,0.35); }
+#rows-grid[data-mode="new"] .row-panel.frozen       { border-color: rgba(92,213,255,0.35); }
+#rows-grid[data-mode="new"] .row-panel.partitioned  { border-color: rgba(249,115,22,0.38); }
+
+/* -- Full-bleed strip: fills the upper portion of the row ---------------- */
+#rows-grid[data-mode="new"] .row-strip {
+  position: relative;
+  height: var(--strip-height);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 2px;                 /* thin gutter between topic blocks */
+  padding-left: 3px;        /* leave space for the accent rail */
+  min-width: 0;
+  box-sizing: border-box;
+  /* No overflow: hidden — floating tooltip escapes via fixed. */
+}
+#rows-grid[data-mode="new"] .row-strip-topic {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  display: block;
+}
+#rows-grid[data-mode="new"] .row-strip-cells {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 1px;                 /* dense heatmap — thin gutter between cells */
+}
+
+/* -- Partition-id axis rail under the strip — topic label inline with
+      partition ticks. Backdrop gradient fades out. ------------------------ */
+#rows-grid[data-mode="new"] .row-axis {
+  position: relative;
+  height: var(--strip-axis-height);
+  padding-left: 3px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(255,255,255,0.015);
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+#rows-grid[data-mode="new"] .row-axis-topic {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  pointer-events: none;
+  overflow: hidden;
+}
+#rows-grid[data-mode="new"] .row-axis-topic-label {
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: var(--text-muted);
+  opacity: 0.85;
+  padding: 0 10px 0 2px;
+  background: linear-gradient(to right, rgba(10,14,20,0.95) 70%, rgba(10,14,20,0));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55%;
+  z-index: 2;
+  pointer-events: auto;
+}
+#rows-grid[data-mode="new"] .row-axis-tick {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  opacity: 0.65;
+  z-index: 1;
+}
+
+/* -- Heatmap cells: gauge-with-container ------------------------------- */
+#rows-grid[data-mode="new"] .pcell {
+  flex: 1 1 0;
+  min-width: 2px;
+  position: relative;
+  background: rgba(255,255,255,0.02);
+  transition: background-color 0.25s, filter 0.15s;
+}
+/* Tighter corner radius only on the outermost cells. */
+#rows-grid[data-mode="new"] .row-strip-topic:first-child .pcell:first-child { border-top-left-radius: 6px; }
+#rows-grid[data-mode="new"] .row-strip-topic:last-child  .pcell:last-child  { border-top-right-radius: 6px; }
+
+/* Empty — faint track only (no fill) */
+#rows-grid[data-mode="new"] .pcell.empty { background: rgba(255,255,255,0.025); }
+
+/* Assigned — green translucent track + solid fill rising */
+#rows-grid[data-mode="new"] .pcell.assigned {
+  background: rgba(52,211,153,0.09);
+}
+#rows-grid[data-mode="new"] .pcell.assigned::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: var(--fill, 0%);
+  background: linear-gradient(to top, var(--green), rgba(52,211,153,0.78));
+  transition: height 0.3s ease-out;
+  box-shadow: 0 -1px 4px rgba(52,211,153,0.28);
+  pointer-events: none;
+}
+
+/* Pending — blue translucent track + blue fill rising (lag visible while
+   waiting for the previous owner to release). */
+#rows-grid[data-mode="new"] .pcell.pending {
+  background: rgba(76,154,255,0.18);
+}
+#rows-grid[data-mode="new"] .pcell.pending::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: var(--fill, 0%);
+  background: linear-gradient(to top, var(--accent), rgba(76,154,255,0.78));
+  transition: height 0.3s ease-out;
+  box-shadow: 0 -1px 4px rgba(76,154,255,0.30);
+  pointer-events: none;
+}
+
+/* Revoking — amber translucent track + amber fill rising */
+#rows-grid[data-mode="new"] .pcell.revoking {
+  background: rgba(251,191,36,0.14);
+}
+#rows-grid[data-mode="new"] .pcell.revoking::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: var(--fill, 0%);
+  background: linear-gradient(to top, var(--yellow), rgba(251,191,36,0.78));
+  transition: height 0.3s ease-out;
+  pointer-events: none;
+}
+
+#rows-grid[data-mode="new"] .pcell:hover { filter: brightness(1.35); z-index: 3; }
+
+/* -- Floating tooltip: ONE shared `#pcell-tip` element appended to <body>,
+   positioned via JS using position: fixed — escapes every stacking
+   context (including the sticky .main-header). Shared across modes (but
+   only the new UI uses it — the old UI uses its CSS ::after tooltip). */
+#pcell-tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: var(--surface3);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 0);
+  transition: opacity 0.12s;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+#pcell-tip.show { opacity: 1; }
+
+/* -- Transparent overlays at rest, reveal on hover -----------------------
+   Left overlay = name + state BADGE (full text). Right overlay = "Actions ▾"
+   text button. At rest the backdrop is invisible; labels stay readable via
+   text-shadow. On :hover the backdrop + blur fade in. */
+#rows-grid[data-mode="new"] .row-overlay-left {
+  position: absolute;
+  top: 0;
+  left: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 10px;
+  background: linear-gradient(to right, rgba(10,14,20,0) 55%, rgba(10,14,20,0));
+  backdrop-filter: blur(0);
+  -webkit-backdrop-filter: blur(0);
+  border-bottom-right-radius: 8px;
+  z-index: 5;
+  max-width: 55%;
+  min-width: 0;
+  pointer-events: none;
+  transition: background 0.2s, backdrop-filter 0.2s, max-width 0.25s;
+}
+#rows-grid[data-mode="new"] .row-panel:hover .row-overlay-left {
+  background: linear-gradient(to right, rgba(10,14,20,0.80) 55%, rgba(10,14,20,0));
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  max-width: 85%;
+}
+#rows-grid[data-mode="new"] .row-overlay-left .member-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.55);
+}
+
+/* State as a full-text BADGE (not a dot). Always visible in the top-left
+   overlay. Reuses .badge color classes. */
+#rows-grid[data-mode="new"] .row-state-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  background: rgba(107,122,141,0.15);
+  color: var(--text-dim);
+  pointer-events: auto;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  transition: background 0.25s, color 0.25s;
+}
+#rows-grid[data-mode="new"] .row-state-badge.stable       { background: var(--green-dim);  color: var(--green); }
+#rows-grid[data-mode="new"] .row-state-badge.reconciling  { background: var(--yellow-dim); color: var(--yellow); }
+#rows-grid[data-mode="new"] .row-state-badge.stopping     { background: var(--red-dim);    color: var(--red); }
+#rows-grid[data-mode="new"] .row-state-badge.joining      { background: var(--accent-dim); color: var(--accent); }
+#rows-grid[data-mode="new"] .row-state-badge.stopped      { background: rgba(107,122,141,0.18); color: var(--text-dim); }
+#rows-grid[data-mode="new"] .row-state-badge.frozen       { background: var(--fault-dim);  color: var(--fault); }
+#rows-grid[data-mode="new"] .row-state-badge.partitioned  { background: var(--orange-dim); color: var(--orange); }
+
+/* Meta chips — hidden at rest, revealed alongside the left backdrop on hover. */
+#rows-grid[data-mode="new"] .row-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.2px;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  opacity: 0;
+  max-width: 0;
+  transition: opacity 0.2s, max-width 0.25s;
+  pointer-events: auto;
+}
+#rows-grid[data-mode="new"] .row-panel:hover .row-header-meta {
+  opacity: 1;
+  max-width: 600px;
+}
+#rows-grid[data-mode="new"] .row-header-meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+#rows-grid[data-mode="new"] .row-header-meta-label {
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.9px;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+#rows-grid[data-mode="new"] .row-header-meta-value {
+  color: var(--text-muted);
+  font-weight: 600;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#rows-grid[data-mode="new"] .row-header-meta-value.dim {
+  color: var(--text-dim);
+  opacity: 0.6;
+  font-weight: 400;
+}
+#rows-grid[data-mode="new"] .row-header-meta-sep {
+  color: var(--text-dim);
+  opacity: 0.35;
+}
+
+/* -- Overlay: Actions (top-right) --------------------------------------- */
+#rows-grid[data-mode="new"] .row-overlay-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 16px;
+  background: linear-gradient(to left, rgba(10,14,20,0) 55%, rgba(10,14,20,0));
+  backdrop-filter: blur(0);
+  -webkit-backdrop-filter: blur(0);
+  border-bottom-left-radius: 8px;
+  z-index: 5;
+  pointer-events: none;
+  transition: background 0.2s, backdrop-filter 0.2s;
+}
+#rows-grid[data-mode="new"] .row-overlay-right > * { pointer-events: auto; }
+#rows-grid[data-mode="new"] .row-panel:hover .row-overlay-right {
+  background: linear-gradient(to left, rgba(10,14,20,0.78) 55%, rgba(10,14,20,0));
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+/* Stopped panels: slightly stronger backdrop so the button reads against
+   the dim strip, and keep Actions clickable. */
+#rows-grid[data-mode="new"] .row-panel.stopped .row-overlay-right {
+  background: linear-gradient(to left, rgba(10,14,20,0.88) 55%, rgba(10,14,20,0));
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Compact Actions text button. Visible at rest (text IS the icon), lights
+   up on panel-hover / button-hover / dd-open. Uses .dd-btn +
+   .row-actions-btn compound selectors to override base .dd-btn defaults.
+
+   Hover surface is the same GRAY as a dropdown-menu item
+   (var(--surface3) / var(--text)), NOT blue accent. Keeps it subtle and
+   consistent with the menu that opens underneath. */
+#rows-grid[data-mode="new"] .dd-btn.row-actions-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  height: auto;
+  padding: 2px 8px;
+  min-height: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.2s, background 0.12s, color 0.12s, border-color 0.12s;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.75);
+}
+#rows-grid[data-mode="new"] .dd-btn.row-actions-btn .dd-value {
+  flex: none;
+  width: auto;
+  line-height: 1.4;
+}
+#rows-grid[data-mode="new"] .dd-btn.row-actions-btn .dd-chevron {
+  font-size: 8px;
+  color: inherit;
+  margin-left: 2px;
+  flex: 0 0 auto;
+  transition: transform 0.2s, color 0.12s;
+}
+#rows-grid[data-mode="new"] .dd.open .dd-btn.row-actions-btn .dd-chevron { transform: rotate(180deg); }
+/* Reveal fully on panel-hover OR when dropdown is open. */
+#rows-grid[data-mode="new"] .row-panel:hover .dd-btn.row-actions-btn,
+#rows-grid[data-mode="new"] .dd.open .dd-btn.row-actions-btn {
+  opacity: 1;
+}
+/* Gray (not blue) hover — matches the dropdown-menu item hover. */
+#rows-grid[data-mode="new"] .dd-btn.row-actions-btn:hover,
+#rows-grid[data-mode="new"] .dd.open .dd-btn.row-actions-btn {
+  background: var(--surface3);
+  color: var(--text);
+  border-color: var(--border);
+}
+/* Stopped panels — always show Actions fully so Start is one click away. */
+#rows-grid[data-mode="new"] .row-panel.stopped .dd-btn.row-actions-btn { opacity: 0.9; }
+#rows-grid[data-mode="new"] .row-panel.stopped .dd-btn.row-actions-btn:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -1480,9 +2030,34 @@ body {
           <button type="button" class="view-switch-btn selected" data-view="bento" onclick="switchView('bento')">Bento</button>
           <button type="button" class="view-switch-btn" data-view="rows" onclick="switchView('rows')">Rows</button>
         </div>
+        <!-- UI settings menu (gear icon). Includes UI mode (New/Old) and
+             S/M/L preset for the NEW Rows view strip height. -->
+        <div class="dd ui-settings-dd" id="ui-settings-dd">
+          <button type="button" class="dd-btn ui-settings-btn" onclick="toggleDd('ui-settings-dd')" title="UI settings" aria-label="UI settings">
+            <span class="dd-value" aria-hidden="true">&#9881;</span>
+          </button>
+          <div class="dd-menu ui-settings-menu">
+            <div class="ui-settings-group">UI Settings</div>
+            <div class="ui-settings-row" id="ui-mode-row">
+              <label class="ui-settings-label">UI</label>
+              <div class="ui-seg" id="ui-mode-seg" role="radiogroup" aria-label="UI">
+                <button type="button" class="ui-seg-btn selected" data-mode="new" onclick="setUiSetting('mode', 'new')">New</button>
+                <button type="button" class="ui-seg-btn" data-mode="old" onclick="setUiSetting('mode', 'old')">Old</button>
+              </div>
+            </div>
+            <div class="ui-settings-row" id="ui-strip-height-row">
+              <label class="ui-settings-label">Strip Height</label>
+              <div class="ui-seg" id="ui-strip-height-seg" role="radiogroup" aria-label="Strip Height">
+                <button type="button" class="ui-seg-btn" data-height-preset="S" onclick="setUiSetting('stripHeightPreset', 'S')">S</button>
+                <button type="button" class="ui-seg-btn selected" data-height-preset="M" onclick="setUiSetting('stripHeightPreset', 'M')">M</button>
+                <button type="button" class="ui-seg-btn" data-height-preset="L" onclick="setUiSetting('stripHeightPreset', 'L')">L</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="card-grid" id="card-grid"></div>
-      <div class="rows-grid" id="rows-grid" style="display:none;"></div>
+      <div class="rows-grid" id="rows-grid" data-mode="new" style="display:none;"></div>
     </div>
   </main>
 </div>
@@ -1495,6 +2070,97 @@ let prevState = null;
 let prevCtrlState = {};
 let simulationRunning = false;
 let currentView = 'bento'; // 'bento' | 'rows'
+
+// -- UI-only settings (presentation knobs, never part of the simulation
+// config). Persisted to localStorage so values survive reloads.
+//
+//   mode:              'new' (default) | 'old'  — selects the Rows view variant
+//   stripHeightPreset: 'S' | 'M' (default) | 'L' — 48/72/120 px tall NEW-mode strip
+const STRIP_HEIGHT_PRESETS = { S: 48, M: 72, L: 120 };
+const UI_SETTING_DEFAULTS = { mode: 'new', stripHeightPreset: 'M' };
+let uiSettings = Object.assign({}, UI_SETTING_DEFAULTS);
+try {
+  var _stored = window.localStorage && localStorage.getItem('kaos.uiSettings');
+  if (_stored) {
+    var _parsed = JSON.parse(_stored);
+    if (_parsed && typeof _parsed === 'object') {
+      if (_parsed.mode === 'new' || _parsed.mode === 'old') {
+        uiSettings.mode = _parsed.mode;
+      }
+      if (_parsed.stripHeightPreset && STRIP_HEIGHT_PRESETS[_parsed.stripHeightPreset]) {
+        uiSettings.stripHeightPreset = _parsed.stripHeightPreset;
+      }
+    }
+  }
+} catch (e) { /* localStorage unavailable or corrupt — use defaults */ }
+
+function setUiSetting(key, value) {
+  if (key === 'mode') {
+    if (value !== 'new' && value !== 'old') value = UI_SETTING_DEFAULTS.mode;
+    if (uiSettings.mode !== value) {
+      uiSettings.mode = value;
+      applyUiMode();
+    }
+  } else if (key === 'stripHeightPreset') {
+    if (!STRIP_HEIGHT_PRESETS[value]) value = UI_SETTING_DEFAULTS.stripHeightPreset;
+    uiSettings.stripHeightPreset = value;
+    applyUiSetting(key);
+  }
+  try { localStorage.setItem('kaos.uiSettings', JSON.stringify(uiSettings)); }
+  catch (e) { /* best-effort */ }
+}
+
+function applyUiSetting(key) {
+  if (key === 'stripHeightPreset') {
+    var px = STRIP_HEIGHT_PRESETS[uiSettings.stripHeightPreset] || STRIP_HEIGHT_PRESETS.M;
+    var grid = document.getElementById('rows-grid');
+    if (grid) grid.style.setProperty('--strip-height', px + 'px');
+    var btns = document.querySelectorAll('#ui-strip-height-seg .ui-seg-btn');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('selected',
+        btns[i].getAttribute('data-height-preset') === uiSettings.stripHeightPreset);
+    }
+  } else if (key === 'mode') {
+    applyUiMode();
+  }
+}
+
+// Apply the UI mode ("new" or "old"):
+//  - update the #rows-grid data-mode attribute (CSS is scoped by it),
+//  - clear any rendered panels so the next render uses the correct skeleton,
+//  - hide the floating #pcell-tip (it's tied to new-UI cells only),
+//  - toggle the Strip-Height row enabled/disabled (only meaningful in NEW),
+//  - refresh the UI / Size segmented buttons' selected state,
+//  - trigger an immediate re-render from the last cached prevState so the
+//    user sees the switch instantly without waiting for the next poll.
+function applyUiMode() {
+  var grid = document.getElementById('rows-grid');
+  if (grid) {
+    grid.setAttribute('data-mode', uiSettings.mode);
+    grid.innerHTML = '';
+  }
+  // Mode cache invalidated — force a full re-render next tick.
+  prevCtrlState = {};
+  hidePcellTip();
+
+  // UI-mode segmented buttons.
+  var modeBtns = document.querySelectorAll('#ui-mode-seg .ui-seg-btn');
+  for (var i = 0; i < modeBtns.length; i++) {
+    modeBtns[i].classList.toggle('selected',
+      modeBtns[i].getAttribute('data-mode') === uiSettings.mode);
+  }
+  // Strip-Height row is meaningful only in the NEW mode.
+  var shRow = document.getElementById('ui-strip-height-row');
+  if (shRow) shRow.classList.toggle('disabled', uiSettings.mode === 'old');
+
+  if (currentView === 'rows' && prevState) renderRows(prevState);
+}
+
+function applyAllUiSettings() {
+  // Order matters: set data-mode first, then push the strip-height custom prop.
+  applyUiMode();
+  applyUiSetting('stripHeightPreset');
+}
 
 // -- State --
 // Each consumer entry: { id, expanded, overrides: { [key]: value } }
@@ -2509,21 +3175,32 @@ function escapeHtml(s) {
 
 // -- Rendering: rows view (incremental — preserves hover state + open dropdowns) --
 
-// Lag is normalized against a fixed scale: anything >= this saturates the gauge.
-// Nominal load → bars stay tiny; only backed-up consumers visibly rise.
-const LAG_MAX_SCALE = 200;
-
-// Minimum fill (in %) for any assigned/revoking cell so the gauge always shows
-// a small baseline, making it visually obvious the cell is live.
-const LAG_MIN_FILL_PCT = 8;
-
-function lagFillPct(lag) {
-  var pct = 0;
-  if (lag != null && lag > 0) pct = Math.round((lag / LAG_MAX_SCALE) * 100);
-  return Math.max(LAG_MIN_FILL_PCT, Math.min(100, pct));
+// ------------------------------------------------------------------------
+// Dispatcher — routes to the OLD or NEW Rows UI based on uiSettings.mode.
+// Shared helpers (escapeHtml, badgeClassFor, action handlers, polling,
+// currentConfig) are used by both sides. Only the panel renderers are split.
+// ------------------------------------------------------------------------
+function renderRows(data) {
+  if (uiSettings.mode === 'old') renderRowsOld(data);
+  else renderRowsNew(data);
 }
 
-function renderRows(data) {
+// ------------------------------------------------------------------------
+// OLD UI — pre-R8-01 Rows view. Uses fixed 36px cell strip, per-cell
+// CSS ::after tooltip, sidebar-style card with header band. Scale = 200
+// for lag fill. No tooltip delegation, no axis rail.
+// ------------------------------------------------------------------------
+
+const LAG_MAX_SCALE_OLD = 200;
+const LAG_MIN_FILL_PCT_OLD = 8;
+
+function lagFillPctOld(lag) {
+  var pct = 0;
+  if (lag != null && lag > 0) pct = Math.round((lag / LAG_MAX_SCALE_OLD) * 100);
+  return Math.max(LAG_MIN_FILL_PCT_OLD, Math.min(100, pct));
+}
+
+function renderRowsOld(data) {
   if (!currentConfig) return;
 
   var topics = [];
@@ -2545,10 +3222,10 @@ function renderRows(data) {
     validIds[panelId] = 1;
     var panel = document.getElementById(panelId);
     if (!panel) {
-      panel = buildPanelSkeleton(m, topics, numPartitions);
+      panel = buildPanelSkeletonOld(m, topics, numPartitions);
       grid.appendChild(panel);
     }
-    updatePanel(panel, m, topics, numPartitions, partitionLag);
+    updatePanelOld(panel, m, topics, numPartitions, partitionLag);
   }
 
   // Remove stale panels (stopped members beyond numConsumers).
@@ -2558,7 +3235,7 @@ function renderRows(data) {
   }
 }
 
-function buildPanelSkeleton(m, topics, numPartitions) {
+function buildPanelSkeletonOld(m, topics, numPartitions) {
   var panel = document.createElement('div');
   panel.id = 'row-panel-' + m.slotIndex;
   panel.className = 'row-panel';
@@ -2609,7 +3286,8 @@ function buildPanelSkeleton(m, topics, numPartitions) {
 }
 
 // Combine group state + chaos actions into a single effective badge.
-// Priority: Stopped > Frozen > Partitioned > group state.
+// Priority: Stopped > Frozen > Partitioned > group state. Shared between
+// the old + new UI.
 function computeStateBadge(m) {
   if (!m.subscribed || m.state === 'Stopped') return { show: true, text: 'STOPPED',     cls: 'stopped' };
   if (m.blocked)                              return { show: true, text: 'FROZEN',      cls: 'frozen' };
@@ -2619,7 +3297,7 @@ function computeStateBadge(m) {
   return { show: true, text: m.state || '—', cls: cls };
 }
 
-function updatePanel(panel, m, topics, numPartitions, partitionLag) {
+function updatePanelOld(panel, m, topics, numPartitions, partitionLag) {
   var isClassic = m.protocol === 'classic';
   var effState = computeStateBadge(m);
   var isStopped = effState.cls === 'stopped';
@@ -2648,9 +3326,9 @@ function updatePanel(panel, m, topics, numPartitions, partitionLag) {
   }
 
   // Line-2 meta items.
-  setHeaderMeta(panel, '.meta-protocol', m.protocol || '—', !!m.protocol);
-  setHeaderMeta(panel, '.meta-id',       m.memberId   || '—', !!m.memberId, m.memberId);
-  setHeaderMeta(panel, '.meta-instance', m.instanceId || '—', !!m.instanceId, m.instanceId);
+  setHeaderMetaOld(panel, '.meta-protocol', m.protocol || '—', !!m.protocol);
+  setHeaderMetaOld(panel, '.meta-id',       m.memberId   || '—', !!m.memberId, m.memberId);
+  setHeaderMetaOld(panel, '.meta-instance', m.instanceId || '—', !!m.instanceId, m.instanceId);
 
   // Epoch (consumer) vs generation (classic).
   var epochItem = panel.querySelector('.meta-epoch');
@@ -2658,15 +3336,15 @@ function updatePanel(panel, m, topics, numPartitions, partitionLag) {
   if (isClassic) {
     if (epochLbl.textContent !== 'generation') epochLbl.textContent = 'generation';
     var hasGen = m.groupGeneration != null && m.groupGeneration >= 0;
-    setHeaderMetaValue(epochItem, hasGen ? String(m.groupGeneration) : '—', hasGen);
+    setHeaderMetaValueOld(epochItem, hasGen ? String(m.groupGeneration) : '—', hasGen);
   } else {
     if (epochLbl.textContent !== 'epoch') epochLbl.textContent = 'epoch';
     var hasEp = m.memberEpoch != null && m.memberEpoch >= 0;
-    setHeaderMetaValue(epochItem, hasEp ? String(m.memberEpoch) : '—', hasEp);
+    setHeaderMetaValueOld(epochItem, hasEp ? String(m.memberEpoch) : '—', hasEp);
   }
 
   // Partition strip cells.
-  updateStripCells(panel, m, topics, numPartitions, partitionLag);
+  updateStripCellsOld(panel, m, topics, numPartitions, partitionLag);
 
   // Actions dropdown menu — regenerate only when action state changes.
   var actionsMenu = panel.querySelector('.row-actions-dd .chaos-menu');
@@ -2678,13 +3356,13 @@ function updatePanel(panel, m, topics, numPartitions, partitionLag) {
   }
 }
 
-function setHeaderMeta(panel, selector, text, strong, fullTitle) {
+function setHeaderMetaOld(panel, selector, text, strong, fullTitle) {
   var item = panel.querySelector(selector);
   if (!item) return;
-  setHeaderMetaValue(item, text, strong, fullTitle);
+  setHeaderMetaValueOld(item, text, strong, fullTitle);
 }
 
-function setHeaderMetaValue(itemEl, text, strong, fullTitle) {
+function setHeaderMetaValueOld(itemEl, text, strong, fullTitle) {
   var el = itemEl.querySelector('.row-header-meta-value');
   if (!el) return;
   if (el.textContent !== text) el.textContent = text;
@@ -2695,7 +3373,7 @@ function setHeaderMetaValue(itemEl, text, strong, fullTitle) {
   else if (!fullTitle && el.title) el.removeAttribute('title');
 }
 
-function updateStripCells(panel, m, topics, numPartitions, partitionLag) {
+function updateStripCellsOld(panel, m, topics, numPartitions, partitionLag) {
   var coordCurrent = new Set(m.assignment || []);
   var coordTarget  = new Set(m.targetAssignment || []);
   var consumerLocal = new Set(m.localAssignment || []);
@@ -2729,14 +3407,14 @@ function updateStripCells(panel, m, topics, numPartitions, partitionLag) {
       if (inTarget && inLocal) {
         state = 'assigned';
         ownedCount++;
-        fillPct = lagFillPct(lag);
+        fillPct = lagFillPctOld(lag);
         tip = t + ' / p' + p + ' · assigned' + (lag != null ? ' · lag ' + lag : '');
       } else if (inTarget && !inLocal) {
         state = 'pending';
         tip = t + ' / p' + p + ' · pending — waiting on previous owner to release';
       } else if (!inTarget && (inCurrent || inLocal)) {
         state = 'revoking';
-        fillPct = lagFillPct(lag);
+        fillPct = lagFillPctOld(lag);
         tip = t + ' / p' + p + ' · revoking — must be released' + (lag != null ? ' · lag ' + lag : '');
       }
 
@@ -2764,6 +3442,7 @@ function updateStripCells(panel, m, topics, numPartitions, partitionLag) {
   }
 }
 
+// Shared action-menu builder — same markup in both UI modes.
 function buildActionMenuItems(m) {
   var dis = m.subscribed ? '' : ' disabled';
   var items = '';
@@ -2793,6 +3472,426 @@ function buildActionMenuItems(m) {
   }
 
   return items;
+}
+
+// ------------------------------------------------------------------------
+// NEW UI — R8-01 Rows view. Full-bleed heatmap strip with floating overlays
+// (name + state badge on the left, Actions on the right), partition-id axis
+// rail underneath, single fixed-positioned tooltip delegated on the grid,
+// gauge-with-container cells, tunable strip height (S/M/L), LAG_MAX_SCALE
+// = 100, pending cells show lag.
+// ------------------------------------------------------------------------
+
+// One shared <div> appended to <body>, positioned with position: fixed —
+// escapes every stacking context (including the sticky .main-header).
+var pcellTipEl = null;
+var pcellTipCurrent = null;   // the .pcell currently hovered, or null
+
+function ensurePcellTip() {
+  if (pcellTipEl) return pcellTipEl;
+  pcellTipEl = document.createElement('div');
+  pcellTipEl.id = 'pcell-tip';
+  pcellTipEl.setAttribute('role', 'tooltip');
+  document.body.appendChild(pcellTipEl);
+  return pcellTipEl;
+}
+
+function hidePcellTip() {
+  if (!pcellTipEl) return;
+  pcellTipEl.classList.remove('show');
+  pcellTipCurrent = null;
+}
+
+function positionPcellTip(cell) {
+  var tip = ensurePcellTip();
+  var text = cell.getAttribute('data-tip');
+  if (!text) { hidePcellTip(); return; }
+  if (cell.classList && cell.classList.contains('empty')) { hidePcellTip(); return; }
+
+  // Set text before measuring so the tooltip has its final size.
+  if (tip.textContent !== text) tip.textContent = text;
+
+  // Make it measurable without flicker: show off-screen, measure, then reposition.
+  tip.classList.add('show');
+  tip.style.left = '-9999px';
+  tip.style.top  = '-9999px';
+
+  var cellRect = cell.getBoundingClientRect();
+  var tipRect  = tip.getBoundingClientRect();
+  var tipW = tipRect.width  || 160;
+  var tipH = tipRect.height || 24;
+
+  var header = document.getElementById('main-header');
+  var headerBottom = 0;
+  if (header && header.offsetParent !== null) {
+    headerBottom = header.getBoundingClientRect().bottom;
+  }
+
+  // Default: above the cell (8px gap). Flip to below if the tooltip would
+  // collide with the sticky main header or go off the top of the viewport.
+  var placeBelow = false;
+  var aboveTop = cellRect.top - tipH - 8;
+  if (aboveTop < headerBottom + 4 || aboveTop < 4) placeBelow = true;
+
+  var top = placeBelow ? cellRect.bottom + 8 : cellRect.top - tipH - 8;
+
+  // Horizontally center on the cell; clamp to viewport so the tooltip
+  // doesn't spill off the left/right edges.
+  var centerX = cellRect.left + cellRect.width / 2;
+  var minLeft = 4 + tipW / 2;
+  var maxLeft = (window.innerWidth || document.documentElement.clientWidth) - 4 - tipW / 2;
+  if (centerX < minLeft) centerX = minLeft;
+  if (centerX > maxLeft) centerX = maxLeft;
+
+  tip.style.left = centerX + 'px';
+  tip.style.top  = top + 'px';
+}
+
+// Refresh the tooltip TEXT without repositioning, after a poll has
+// potentially updated the cell's data-tip. Called at the end of
+// updateStripCellsNew(). Guards:
+//  - the hovered cell must still be in the DOM (not pruned) and still
+//    carry a data-tip (i.e. state is still non-empty). Otherwise we hide.
+//  - we only touch textContent; left/top stay put so the tooltip does not
+//    jitter under the cursor.
+function refreshHoveredPcellTip() {
+  if (!pcellTipCurrent || !pcellTipEl) return;
+  var cell = pcellTipCurrent;
+  if (!document.body.contains(cell)) { hidePcellTip(); return; }
+  if (!cell.hasAttribute('data-tip')) { hidePcellTip(); return; }
+  if (cell.classList.contains('empty')) { hidePcellTip(); return; }
+  var text = cell.getAttribute('data-tip');
+  if (pcellTipEl.textContent !== text) pcellTipEl.textContent = text;
+}
+
+// Event delegation on #rows-grid. mouseover/mouseout bubble, so moving
+// across cells updates the tooltip cleanly. Only active for cells inside
+// the NEW-mode strip — OLD-mode cells rely on CSS ::after.
+function setupPcellTipDelegation() {
+  var grid = document.getElementById('rows-grid');
+  if (!grid || grid.dataset.tipBound === '1') return;
+  grid.dataset.tipBound = '1';
+
+  grid.addEventListener('mouseover', function(e) {
+    if (uiSettings.mode !== 'new') return;
+    var cell = e.target.closest ? e.target.closest('.pcell') : null;
+    if (!cell || !grid.contains(cell)) return;
+    if (!cell.hasAttribute('data-tip')) return;
+    if (cell.classList.contains('empty')) return;
+    pcellTipCurrent = cell;
+    positionPcellTip(cell);
+  });
+
+  grid.addEventListener('mouseout', function(e) {
+    var cell = e.target.closest ? e.target.closest('.pcell') : null;
+    if (!cell) return;
+    var to = e.relatedTarget;
+    if (to && cell.contains(to)) return;
+    if (pcellTipCurrent === cell) hidePcellTip();
+  });
+
+  // Hide on scroll / resize / click so the tooltip doesn't dangle in the
+  // wrong place while content moves under it.
+  window.addEventListener('scroll', hidePcellTip, true);
+  window.addEventListener('resize', hidePcellTip);
+  window.addEventListener('click', hidePcellTip, true);
+}
+
+// Lag is normalized against a fixed scale of 100 (R8-01 tuning). Partition
+// lag >= 100 saturates the gauge; anything below 100 scales linearly.
+const LAG_MAX_SCALE = 100;
+const LAG_MIN_FILL_PCT = 8;
+
+function lagFillPct(lag) {
+  var pct = 0;
+  if (lag != null && lag > 0) pct = Math.round((lag / LAG_MAX_SCALE) * 100);
+  return Math.max(LAG_MIN_FILL_PCT, Math.min(100, pct));
+}
+
+function renderRowsNew(data) {
+  if (!currentConfig) return;
+
+  var topics = [];
+  for (var i = 1; i <= currentConfig.numTopics; i++) {
+    topics.push(currentConfig.topicPrefix + '-' + i);
+  }
+  var numPartitions = currentConfig.numPartitions;
+  var partitionLag = data.partitionLag || {};
+
+  var grid = document.getElementById('rows-grid');
+  if (!grid) return;
+
+  // Ensure the floating-tooltip delegation is wired (idempotent).
+  setupPcellTipDelegation();
+
+  var members = (data.members || []).slice().sort(function(a, b) { return a.slotIndex - b.slotIndex; });
+  var validIds = {};
+
+  for (var mi = 0; mi < members.length; mi++) {
+    var m = members[mi];
+    var panelId = 'row-panel-' + m.slotIndex;
+    validIds[panelId] = 1;
+    var panel = document.getElementById(panelId);
+    if (!panel) {
+      panel = buildPanelSkeletonNew(m, topics, numPartitions);
+      grid.appendChild(panel);
+    }
+    updatePanelNew(panel, m, topics, numPartitions, partitionLag);
+  }
+
+  // Remove stale panels (stopped members beyond numConsumers).
+  for (var ci = grid.children.length - 1; ci >= 0; ci--) {
+    var child = grid.children[ci];
+    if (!validIds[child.id]) grid.removeChild(child);
+  }
+}
+
+function buildPanelSkeletonNew(m, topics, numPartitions) {
+  var panel = document.createElement('div');
+  panel.id = 'row-panel-' + m.slotIndex;
+  panel.className = 'row-panel';
+
+  // Full-bleed strip: one topic-slice per topic, each with N cells
+  // horizontally. Topic label does NOT live in the strip — it sits in
+  // the axis rail below, inline with the partition-id ticks.
+  var stripHtml = '';
+  for (var ti = 0; ti < topics.length; ti++) {
+    stripHtml += '<div class="row-strip-topic">';
+    stripHtml += '<div class="row-strip-cells">';
+    for (var p = 0; p < numPartitions; p++) {
+      stripHtml += '<div class="pcell"></div>';
+    }
+    stripHtml += '</div>';
+    stripHtml += '</div>';
+  }
+
+  // Axis rail: one band per topic. Each band holds a dim mono topic label
+  // pinned to the left, followed by periodic partition-id ticks. Ticks
+  // are computed in layoutAxisNew() once per skeleton build.
+  var axisHtml = '';
+  for (var ai = 0; ai < topics.length; ai++) {
+    axisHtml += '<div class="row-axis-topic">' +
+      '<span class="row-axis-topic-label" title="' + escapeHtml(topics[ai]) + '">' +
+        escapeHtml(topics[ai]) +
+      '</span>' +
+    '</div>';
+  }
+
+  // The top-left overlay shows the state as a full-text BADGE plus the
+  // member name and (on hover) meta chips. The top-right overlay shows
+  // a visible "Actions ▾" text button.
+  var actionsId = 'actions-' + m.slotIndex;
+  panel.innerHTML =
+    '<div class="row-strip">' + stripHtml + '</div>' +
+    '<div class="row-axis">' + axisHtml + '</div>' +
+    '<div class="row-overlay-left">' +
+      '<span class="row-state-badge"></span>' +
+      '<span class="member-name"></span>' +
+      '<div class="row-header-meta">' +
+        '<span class="row-header-meta-item meta-protocol"><span class="row-header-meta-label">protocol</span><span class="row-header-meta-value"></span></span>' +
+        '<span class="row-header-meta-sep">&middot;</span>' +
+        '<span class="row-header-meta-item meta-id"><span class="row-header-meta-label">id</span><span class="row-header-meta-value"></span></span>' +
+        '<span class="row-header-meta-sep">&middot;</span>' +
+        '<span class="row-header-meta-item meta-instance"><span class="row-header-meta-label">instance</span><span class="row-header-meta-value"></span></span>' +
+        '<span class="row-header-meta-sep">&middot;</span>' +
+        '<span class="row-header-meta-item meta-epoch"><span class="row-header-meta-label">epoch</span><span class="row-header-meta-value"></span></span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="row-overlay-right">' +
+      '<div class="dd row-actions-dd" id="' + actionsId + '">' +
+        '<button type="button" class="dd-btn row-actions-btn" onclick="toggleDd(\'' + actionsId + '\')" title="Actions" aria-label="Actions">' +
+          '<span class="dd-value">Actions</span>' +
+          '<span class="dd-chevron">&#9662;</span>' +
+        '</button>' +
+        '<div class="dd-menu chaos-menu"></div>' +
+      '</div>' +
+    '</div>';
+
+  // Layout the axis tick labels once per skeleton build (stable for a
+  // given topic count / partition count — rebuilds on config change).
+  layoutAxisNew(panel, topics.length, numPartitions);
+
+  return panel;
+}
+
+// Axis stride: every Nth partition gets a tick label.
+function pickAxisStrideNew(numPartitions) {
+  if (numPartitions >= 100) return 20;
+  if (numPartitions >= 40)  return 10;
+  if (numPartitions >= 15)  return 5;
+  return Math.max(1, Math.ceil(numPartitions / 4));
+}
+
+// Position the periodic partition-id tick labels inside each axis band.
+function layoutAxisNew(panel, numTopics, numPartitions) {
+  var axisBands = panel.querySelectorAll('.row-axis-topic');
+  if (!axisBands.length) return;
+  var stride = pickAxisStrideNew(numPartitions);
+  for (var ti = 0; ti < numTopics; ti++) {
+    var band = axisBands[ti];
+    var oldTicks = band.querySelectorAll('.row-axis-tick');
+    for (var ot = 0; ot < oldTicks.length; ot++) oldTicks[ot].remove();
+    var ticksHtml = '';
+    for (var p = 0; p < numPartitions; p += stride) {
+      var centerPct = ((p + 0.5) / numPartitions) * 100;
+      ticksHtml += '<span class="row-axis-tick" style="left:' + centerPct.toFixed(2) + '%">' + p + '</span>';
+    }
+    band.insertAdjacentHTML('beforeend', ticksHtml);
+  }
+}
+
+function updatePanelNew(panel, m, topics, numPartitions, partitionLag) {
+  var isClassic = m.protocol === 'classic';
+  var effState = computeStateBadge(m);
+  var isStopped = effState.cls === 'stopped';
+
+  var panelCls = 'row-panel ' + effState.cls + (isStopped ? ' stopped' : '');
+  if (panel.className !== panelCls) panel.className = panelCls;
+
+  // Name.
+  var nameEl = panel.querySelector('.member-name');
+  var nameTxt = m.clientId || '';
+  if (nameEl.textContent !== nameTxt) {
+    nameEl.textContent = nameTxt;
+    nameEl.title = nameTxt;
+  }
+
+  // State as a full-text BADGE (STABLE / RECONCILING / STOPPED / FROZEN /
+  // PARTITIONED). Always visible in the top-left overlay. Hidden only for
+  // classic members with no chaos applied.
+  var stateEl = panel.querySelector('.row-state-badge');
+  if (stateEl) {
+    if (!effState.show) {
+      if (stateEl.style.display !== 'none') stateEl.style.display = 'none';
+    } else {
+      if (stateEl.style.display === 'none') stateEl.style.display = '';
+      var stateCls = 'row-state-badge ' + effState.cls;
+      if (stateEl.className !== stateCls) stateEl.className = stateCls;
+      var stateTxt = (effState.text || '').toUpperCase();
+      if (stateEl.textContent !== stateTxt) stateEl.textContent = stateTxt;
+    }
+  }
+
+  // Line-2 meta items.
+  setHeaderMetaNew(panel, '.meta-protocol', m.protocol || '—', !!m.protocol);
+  setHeaderMetaNew(panel, '.meta-id',       m.memberId   || '—', !!m.memberId, m.memberId);
+  setHeaderMetaNew(panel, '.meta-instance', m.instanceId || '—', !!m.instanceId, m.instanceId);
+
+  // Epoch (consumer) vs generation (classic).
+  var epochItem = panel.querySelector('.meta-epoch');
+  var epochLbl  = epochItem.querySelector('.row-header-meta-label');
+  if (isClassic) {
+    if (epochLbl.textContent !== 'generation') epochLbl.textContent = 'generation';
+    var hasGen = m.groupGeneration != null && m.groupGeneration >= 0;
+    setHeaderMetaValueNew(epochItem, hasGen ? String(m.groupGeneration) : '—', hasGen);
+  } else {
+    if (epochLbl.textContent !== 'epoch') epochLbl.textContent = 'epoch';
+    var hasEp = m.memberEpoch != null && m.memberEpoch >= 0;
+    setHeaderMetaValueNew(epochItem, hasEp ? String(m.memberEpoch) : '—', hasEp);
+  }
+
+  // Partition strip cells.
+  updateStripCellsNew(panel, m, topics, numPartitions, partitionLag);
+
+  // Actions dropdown menu — regenerate only when action state changes.
+  var actionsMenu = panel.querySelector('.row-actions-dd .chaos-menu');
+  var actionsKey = [m.subscribed ? '1' : '0', m.protocol || '-',
+                    m.partitioned ? '1' : '0', m.blocked ? '1' : '0'].join('|');
+  if (actionsMenu.dataset.key !== actionsKey) {
+    actionsMenu.dataset.key = actionsKey;
+    actionsMenu.innerHTML = buildActionMenuItems(m);
+  }
+}
+
+function setHeaderMetaNew(panel, selector, text, strong, fullTitle) {
+  var item = panel.querySelector(selector);
+  if (!item) return;
+  setHeaderMetaValueNew(item, text, strong, fullTitle);
+}
+
+function setHeaderMetaValueNew(itemEl, text, strong, fullTitle) {
+  var el = itemEl.querySelector('.row-header-meta-value');
+  if (!el) return;
+  if (el.textContent !== text) el.textContent = text;
+  var cls = 'row-header-meta-value' + (strong ? '' : ' dim');
+  if (el.className !== cls) el.className = cls;
+  // Show full value on hover when truncated.
+  if (fullTitle && el.title !== fullTitle) el.title = fullTitle;
+  else if (!fullTitle && el.title) el.removeAttribute('title');
+}
+
+function updateStripCellsNew(panel, m, topics, numPartitions, partitionLag) {
+  var coordCurrent = new Set(m.assignment || []);
+  var coordTarget  = new Set(m.targetAssignment || []);
+  var consumerLocal = new Set(m.localAssignment || []);
+  // If the coordinator has NO partitions for this member (neither current nor target),
+  // the member is effectively out of the group (fenced / stopped / unsubscribed).
+  // In that case, ignore the consumer-local set too — otherwise we'd paint ghost
+  // "revoking" cells for partitions the group no longer associates with this member.
+  var isOutOfGroup = coordCurrent.size === 0 && coordTarget.size === 0;
+
+  var topicBlocks = panel.querySelectorAll('.row-strip-topic');
+  for (var ti = 0; ti < topics.length; ti++) {
+    var topicBlock = topicBlocks[ti];
+    if (!topicBlock) continue;
+    var t = topics[ti];
+    var cells = topicBlock.querySelectorAll('.pcell');
+
+    for (var p = 0; p < numPartitions; p++) {
+      var cell = cells[p];
+      if (!cell) continue;
+      var key = t + '-' + p;
+      var inCurrent = !isOutOfGroup && coordCurrent.has(key);
+      var inTarget  = !isOutOfGroup && coordTarget.has(key);
+      var inLocal   = !isOutOfGroup && consumerLocal.has(key);
+      var lag = partitionLag[key];
+
+      var state = 'empty';
+      var fillPct = 0;
+
+      if (inTarget && inLocal) {
+        state = 'assigned';
+        fillPct = lagFillPct(lag);
+      } else if (inTarget && !inLocal) {
+        // Pending cells also show a lag gauge — the partition is queued
+        // for this consumer, and any lag tracked is worth seeing.
+        state = 'pending';
+        fillPct = lagFillPct(lag);
+      } else if (!inTarget && (inCurrent || inLocal)) {
+        state = 'revoking';
+        fillPct = lagFillPct(lag);
+      }
+
+      // Tooltips ONLY on non-empty cells (don't pollute unowned slots).
+      var tip = '';
+      if (state !== 'empty') {
+        tip = t + ' / p' + p + ' · ' + state;
+        if (lag != null && lag > 0) tip += ' · lag ' + lag;
+      }
+
+      var newCls = 'pcell ' + state;
+      if (cell.className !== newCls) cell.className = newCls;
+
+      var curFill = cell.style.getPropertyValue('--fill');
+      var newFill = fillPct > 0 ? fillPct + '%' : '';
+      if (curFill !== newFill) {
+        if (newFill) cell.style.setProperty('--fill', newFill);
+        else cell.style.removeProperty('--fill');
+      }
+
+      var curTip = cell.getAttribute('data-tip') || '';
+      if (curTip !== tip) {
+        if (tip) cell.setAttribute('data-tip', tip);
+        else cell.removeAttribute('data-tip');
+      }
+    }
+  }
+
+  // After ALL cells have been refreshed, if the user is still hovering one
+  // of our cells, swap the tooltip text to match the latest data-tip value
+  // (e.g. updated lag). Position is left untouched so the tooltip stays
+  // anchored under the cursor without jitter.
+  refreshHoveredPcellTip();
 }
 
 // -- Member control handlers --
@@ -2836,6 +3935,10 @@ async function unblockMember(index) {
     consumerEntries.push({ id: nextConsumerId++, expanded: false, overrides: {} });
   }
   renderAll();
+  // Apply persisted UI settings (mode + strip-height preset) on boot.
+  applyAllUiSettings();
+  // Prepare the shared floating tooltip element.
+  ensurePcellTip();
 
   try {
     var resp = await fetch('/api/simulator/status');
