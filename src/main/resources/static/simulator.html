@@ -3030,21 +3030,10 @@ function positionPcellTip(cell) {
   var cellRect = cell.getBoundingClientRect();
   var tipRect  = tip.getBoundingClientRect();
   var tipW = tipRect.width  || 160;
-  var tipH = tipRect.height || 24;
 
-  var header = document.getElementById('main-header');
-  var headerBottom = 0;
-  if (header && header.offsetParent !== null) {
-    headerBottom = header.getBoundingClientRect().bottom;
-  }
-
-  // Default: above the cell (8px gap). Flip to below if the tooltip would
-  // collide with the sticky main header or go off the top of the viewport.
-  var placeBelow = false;
-  var aboveTop = cellRect.top - tipH - 8;
-  if (aboveTop < headerBottom + 4 || aboveTop < 4) placeBelow = true;
-
-  var top = placeBelow ? cellRect.bottom + 8 : cellRect.top - tipH - 8;
+  // Always below the cell (8px gap). Consistent placement — the user never has
+  // to hunt for where the tooltip will show up.
+  var top = cellRect.bottom + 8;
 
   // Horizontally center on the cell; clamp to viewport so the tooltip
   // doesn't spill off the left/right edges.
