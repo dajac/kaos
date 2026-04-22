@@ -2911,13 +2911,46 @@ function escapeHtml(s) {
 // Combine group state + chaos actions into a single effective badge.
 // Priority: Stopped > Frozen > Partitioned > group state. Shared between
 // the Bento view and the Rows view.
+// Returns true if a consumer-protocol member has any partition that's still
+// in flight — i.e. the coordinator's target doesn't match the consumer's local
+// assignment. Used to override a reported `Stable` back to `Reconciling` while
+// pending/revoking partitions exist.
+function hasConsumerMismatch(m) {
+  var target = m.targetAssignment || [];
+  var current = m.assignment || [];
+  var local = m.localAssignment || [];
+  var targetSet = new Set(target);
+  var localSet = new Set(local);
+  // Pending: target has it, local doesn't.
+  for (var i = 0; i < target.length; i++) {
+    if (!localSet.has(target[i])) return true;
+  }
+  // Revoking: local (or coord's current) has something target doesn't.
+  for (var j = 0; j < local.length; j++) {
+    if (!targetSet.has(local[j])) return true;
+  }
+  for (var k = 0; k < current.length; k++) {
+    if (!targetSet.has(current[k])) return true;
+  }
+  return false;
+}
+
 function computeStateBadge(m) {
   if (!m.subscribed || m.state === 'Stopped') return { show: true, text: 'STOPPED',     cls: 'stopped' };
   if (m.blocked)                              return { show: true, text: 'FROZEN',      cls: 'frozen' };
   if (m.partitioned)                          return { show: true, text: 'PARTITIONED', cls: 'partitioned' };
-  var cls = badgeClassFor(m.state);
+
+  var effectiveState = m.state;
+  // For consumer protocol, a member with pending/revoking partitions is not
+  // actually stable — the coord's memberEpoch may have caught up, but local
+  // reconciliation hasn't settled. Surface this as Reconciling in the UI.
+  if (m.protocol === 'consumer' && m.state === 'Stable' && hasConsumerMismatch(m)) {
+    effectiveState = 'Reconciling';
+  }
+
+  var cls = badgeClassFor(effectiveState);
   if (m.protocol === 'classic')               return { show: false, text: '', cls: cls };
-  return { show: true, text: m.state || '—', cls: cls };
+  return { show: true, text: effectiveState || '—', cls: cls };
 }
 
 // Shared action-menu builder — same markup for Bento and Rows views.
