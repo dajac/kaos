@@ -3088,6 +3088,10 @@ function lagFillPct(lag) {
 function renderRowsNew(data) {
   if (!currentConfig) return;
 
+  // Stash the current admin-reported group state so updateStripCellsNew can
+  // factor it into classic / eager-assignor rebalance handling.
+  currentGroupAdminState = data.groupState || null;
+
   var topics = [];
   for (var i = 1; i <= currentConfig.numTopics; i++) {
     topics.push(currentConfig.topicPrefix + '-' + i);
@@ -3297,15 +3301,48 @@ function setHeaderMetaValueNew(itemEl, text, strong, fullTitle) {
   else if (!fullTitle && el.title) el.removeAttribute('title');
 }
 
+// Eager classic assignors revoke everything on a rebalance, then re-assign.
+// cooperative-sticky is the one cooperative variant.
+var COOPERATIVE_CLASSIC_ASSIGNORS = new Set(['cooperative-sticky']);
+function isEagerClassicAssignor(assignor) {
+  return !COOPERATIVE_CLASSIC_ASSIGNORS.has(assignor);
+}
+
+// Set once per poll by renderRowsNew; consulted by updateStripCellsNew.
+var currentGroupAdminState = null;
+
 function updateStripCellsNew(panel, m, topics, numPartitions, partitionLag) {
   var coordCurrent = new Set(m.assignment || []);
   var coordTarget  = new Set(m.targetAssignment || []);
   var consumerLocal = new Set(m.localAssignment || []);
-  // If the coordinator has NO partitions for this member (neither current nor target),
-  // the member is effectively out of the group (fenced / stopped / unsubscribed).
-  // In that case, ignore the consumer-local set too — otherwise we'd paint ghost
-  // "revoking" cells for partitions the group no longer associates with this member.
-  var isOutOfGroup = coordCurrent.size === 0 && coordTarget.size === 0;
+  // A member is "out of group" when:
+  //   (a) the user has stopped it locally (`!subscribed` / state `Stopped`) — we
+  //       flip this immediately, without waiting for admin to catch up, or
+  //   (b) the coordinator has no partitions for it (fenced or already removed).
+  // In either case, drop every cell to empty so we don't paint stale assignments
+  // while the admin API is lagging behind a PreparingRebalance.
+  var isStoppedLocally = !m.subscribed || m.state === 'Stopped';
+  var isOutOfGroup = isStoppedLocally
+    || (coordCurrent.size === 0 && coordTarget.size === 0);
+
+  // Classic protocol has no real target-vs-current distinction (the admin API
+  // doesn't expose a separate target; the backend mirrors current into target).
+  // Pending/revoking are consumer-protocol concepts and trying to synthesize them
+  // for classic produces misleading colour flickers. For classic, we just trust the
+  // admin's current assignment: owned → assigned, otherwise empty. The member-state
+  // badge (RECONCILING / …) already conveys "a rebalance is in progress".
+  //
+  // One subtlety: while the group is in PreparingRebalance/CompletingRebalance with
+  // an eager assignor (range / roundrobin / sticky), every member has already run
+  // onPartitionsRevoked(full) locally — nobody is consuming. The admin API still
+  // returns the last stable assignment, so trusting it blindly would show green
+  // cells that don't reflect reality. Detect that case and force everything empty.
+  var isClassic = m.protocol === 'classic';
+  var classicEagerMidRebalance = isClassic
+    && currentConfig
+    && isEagerClassicAssignor(currentConfig.assignor)
+    && (currentGroupAdminState === 'PreparingRebalance'
+        || currentGroupAdminState === 'CompletingRebalance');
 
   var topicBlocks = panel.querySelectorAll('.row-strip-topic');
   for (var ti = 0; ti < topics.length; ti++) {
@@ -3326,7 +3363,12 @@ function updateStripCellsNew(panel, m, topics, numPartitions, partitionLag) {
       var state = 'empty';
       var fillPct = 0;
 
-      if (inTarget && inLocal) {
+      if (isClassic) {
+        if (inCurrent && !classicEagerMidRebalance) {
+          state = 'assigned';
+          fillPct = lagFillPct(lag);
+        }
+      } else if (inTarget && inLocal) {
         state = 'assigned';
         fillPct = lagFillPct(lag);
       } else if (inTarget && !inLocal) {
