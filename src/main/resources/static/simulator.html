@@ -3099,12 +3099,15 @@ function setupPcellTipDelegation() {
 // Lag is normalized against a fixed scale of 100 (R8-01 tuning). Partition
 // lag >= 100 saturates the gauge; anything below 100 scales linearly.
 const LAG_MAX_SCALE = 100;
-const LAG_MIN_FILL_PCT = 8;
+// Round small lag values up to the nearest 5 so even tiny backlogs show up
+// with a visible baseline fill (lag 1 → 5%, lag 6 → 10%, etc.) — no artificial
+// floor above 0 though: a lag of exactly 0 still renders as no fill.
+const LAG_ROUND_STEP = 5;
 
 function lagFillPct(lag) {
-  var pct = 0;
-  if (lag != null && lag > 0) pct = Math.round((lag / LAG_MAX_SCALE) * 100);
-  return Math.max(LAG_MIN_FILL_PCT, Math.min(100, pct));
+  if (lag == null || lag <= 0) return 0;
+  var rounded = Math.ceil(lag / LAG_ROUND_STEP) * LAG_ROUND_STEP;
+  return Math.min(100, Math.round((rounded / LAG_MAX_SCALE) * 100));
 }
 
 function renderRowsNew(data) {
