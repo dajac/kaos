@@ -312,6 +312,7 @@ public class SimulatorEngine {
             cc = config.consumers.get(slot.index());
         }
         String assignor = cc != null ? cc.assignor : config.assignor;
+        String rackId = cc != null ? cc.rackId : null;
         int maxPollIntervalMs = cc != null ? cc.maxPollIntervalMs : config.maxPollIntervalMs;
         boolean staticMember = cc != null ? cc.staticMember : config.staticMembers;
 
@@ -340,6 +341,10 @@ public class SimulatorEngine {
 
         if (staticMember) {
             props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, config.groupId + "-" + slot.clientId());
+        }
+
+        if (rackId != null && !rackId.isEmpty()) {
+            props.put(ConsumerConfig.CLIENT_RACK_CONFIG, rackId);
         }
 
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);

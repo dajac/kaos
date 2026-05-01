@@ -820,6 +820,14 @@ body.ui-mode-new .legend-lag-gradient { display: none; }
   margin-bottom: 0;
   line-height: 1.25;
 }
+/* When the control area stacks onto multiple rows, anchor the label to the
+   top row instead of centering it against the full control height. */
+.field.field-inline.field-stacked {
+  align-items: start;
+}
+.field.field-inline.field-stacked .field-label {
+  padding-top: 6px;
+}
 .field-control {
   display: flex;
   align-items: center;
@@ -1653,9 +1661,9 @@ body.ui-mode-new .legend-lag-gradient { display: none; }
               <div id="cfg-protocol-dd"></div>
             </div>
 
-            <div class="field field-inline">
+            <div class="field field-inline" id="cfg-assignor-field">
               <label class="field-label">Assignor</label>
-              <div id="cfg-assignor-dd"></div>
+              <div id="cfg-assignor-control"></div>
             </div>
 
             <div class="field field-inline">
@@ -1920,11 +1928,30 @@ let groupState = {
 };
 let groupOptionalSettings = {};  // e.g. { sessionTimeoutMs: 45000 }
 
-// Assignor options per protocol.
+// Assignor options per protocol. For consumer protocol, 'custom' is a sentinel
+// that reveals a free-form text input for any other assignor name.
 const ASSIGNOR_OPTIONS = {
-  consumer: ['uniform', 'range'],
+  consumer: ['uniform', 'range', 'custom'],
   classic: ['range', 'roundrobin', 'sticky', 'cooperative-sticky']
 };
+const CONSUMER_PRESET_ASSIGNORS = ['uniform', 'range'];
+
+// Maps the stored assignor string to the dropdown's selected value.
+function assignorDropdownValue(protocol, value) {
+  if (protocol !== 'consumer') return value;
+  return CONSUMER_PRESET_ASSIGNORS.indexOf(value) !== -1 ? value : 'custom';
+}
+
+function isCustomAssignor(protocol, value) {
+  return protocol === 'consumer' && CONSUMER_PRESET_ASSIGNORS.indexOf(value) === -1;
+}
+
+// True if `value` can be used as an assignor for `protocol`. Classic requires a
+// known strategy; consumer accepts any string (custom assignor names allowed).
+function isValidAssignor(protocol, value) {
+  if (protocol === 'classic') return ASSIGNOR_OPTIONS.classic.indexOf(value) !== -1;
+  return true;
+}
 
 // Group-level optional settings (rendered inline when added).
 const GROUP_OPTIONAL_FIELDS = [
@@ -1943,6 +1970,7 @@ const OVERRIDE_FIELDS = [
   { key: 'protocol',           label: 'Protocol',               type: 'enum',   options: ['consumer', 'classic'] },
   { key: 'assignor',           label: 'Assignor',               type: 'enum-dynamic' },
   { key: 'staticMember',       label: 'Static Membership',      type: 'enum',   options: ['false', 'true'], optionLabels: ['off', 'on'] },
+  { key: 'rackId',             label: 'Rack ID',                type: 'text' },
   { key: 'pollTimeoutMs',      label: 'Poll Timeout (ms)',      type: 'number', min: 0,    max: 60000  },
   { key: 'pollDelayMs',        label: 'Poll Delay (ms)',        type: 'number', min: 0,    max: 120000 },
   { key: 'maxPollIntervalMs',  label: 'Max Poll Interval (ms)', type: 'number', min: 1000, max: 600000 },
@@ -1953,6 +1981,7 @@ const CHIP_KEY_LABELS = {
   protocol: 'protocol',
   assignor: 'assignor',
   staticMember: 'static',
+  rackId: 'rack',
   pollTimeoutMs: 'pollTimeout',
   pollDelayMs: 'pollDelay',
   maxPollIntervalMs: 'maxPoll',
@@ -2018,17 +2047,31 @@ document.addEventListener('click', function(e) {
 // -- Group-level handlers --
 function setGroupProtocol(value) {
   groupState.protocol = value;
-  // Ensure assignor remains valid for new protocol; else reset to first option.
-  var validAssignors = ASSIGNOR_OPTIONS[value] || ASSIGNOR_OPTIONS.consumer;
-  if (validAssignors.indexOf(groupState.assignor) === -1) {
+  if (!isValidAssignor(value, groupState.assignor)) {
+    var validAssignors = ASSIGNOR_OPTIONS[value] || ASSIGNOR_OPTIONS.consumer;
     groupState.assignor = validAssignors[0];
   }
   renderAll();
 }
 
 function setGroupAssignor(value) {
-  groupState.assignor = value;
+  // 'custom' is a sentinel from the dropdown — reveal the text input by
+  // clearing the stored value (only when leaving a preset, so an existing
+  // typed value is preserved if the user re-clicks 'custom').
+  if (value === 'custom') {
+    if (CONSUMER_PRESET_ASSIGNORS.indexOf(groupState.assignor) !== -1) {
+      groupState.assignor = '';
+    }
+  } else {
+    groupState.assignor = value;
+  }
   renderAll();
+}
+
+function setGroupCustomAssignor(value) {
+  groupState.assignor = value;
+  // Chips on consumer sections inherit the group default — refresh them.
+  renderConsumerSections();
 }
 
 function setGroupStatic(value) {
@@ -2049,12 +2092,23 @@ function renderGroupDropdowns() {
   var assignorOpts = (ASSIGNOR_OPTIONS[groupState.protocol] || ASSIGNOR_OPTIONS.consumer).map(function(v) {
     return { value: v, label: v };
   });
-  document.getElementById('cfg-assignor-dd').outerHTML = renderDropdown({
+  var ddHtml = renderDropdown({
     id: 'cfg-assignor-dd',
-    value: groupState.assignor,
+    value: assignorDropdownValue(groupState.protocol, groupState.assignor),
     options: assignorOpts,
     onChangeExpr: 'setGroupAssignor($value)'
   });
+  var custom = isCustomAssignor(groupState.protocol, groupState.assignor);
+  var customHtml = '';
+  if (custom) {
+    customHtml = '<input type="text" class="field-input" id="cfg-custom-assignor"' +
+      ' style="margin-top: 6px;"' +
+      ' value="' + escapeHtml(groupState.assignor) + '"' +
+      ' placeholder="custom assignor name"' +
+      ' onchange="setGroupCustomAssignor(this.value)">';
+  }
+  document.getElementById('cfg-assignor-control').innerHTML = ddHtml + customHtml;
+  document.getElementById('cfg-assignor-field').classList.toggle('field-stacked', custom);
   document.getElementById('cfg-static-dd').outerHTML = renderDropdown({
     id: 'cfg-static-dd',
     value: groupState.staticMember,
@@ -2138,6 +2192,7 @@ function getDefaults() {
     protocol:          groupState.protocol,
     assignor:          groupState.assignor,
     staticMember:      groupState.staticMember,
+    rackId:            '',
     pollTimeoutMs:     groupOptionalSettings.pollTimeoutMs     != null ? groupOptionalSettings.pollTimeoutMs     : 0,
     pollDelayMs:       groupOptionalSettings.pollDelayMs       != null ? groupOptionalSettings.pollDelayMs       : 1000,
     maxPollIntervalMs: groupOptionalSettings.maxPollIntervalMs != null ? groupOptionalSettings.maxPollIntervalMs : 300000,
@@ -2211,9 +2266,11 @@ function addOverride(consumerId, key) {
   var eff = effectiveFor(entry);
   entry.overrides[key] = eff[key];
   if (key === 'protocol') {
-    var valid = ASSIGNOR_OPTIONS[entry.overrides.protocol] || ASSIGNOR_OPTIONS.consumer;
     var cur = entry.overrides.assignor != null ? entry.overrides.assignor : eff.assignor;
-    if (valid.indexOf(cur) === -1) entry.overrides.assignor = valid[0];
+    if (!isValidAssignor(entry.overrides.protocol, cur)) {
+      var valid = ASSIGNOR_OPTIONS[entry.overrides.protocol] || ASSIGNOR_OPTIONS.consumer;
+      entry.overrides.assignor = valid[0];
+    }
   }
   renderConsumerSections();
 }
@@ -2228,12 +2285,23 @@ function removeOverride(consumerId, key) {
 function setOverride(consumerId, key, value) {
   var entry = consumerEntries.find(function(e) { return e.id === consumerId; });
   if (!entry) return;
-  entry.overrides[key] = value;
+  if (key === 'assignor' && value === 'custom') {
+    // Sentinel from dropdown — clear when leaving a preset to reveal an empty
+    // input; preserve if the override is already a non-preset (custom) value.
+    var prev = entry.overrides.assignor;
+    if (prev === undefined || CONSUMER_PRESET_ASSIGNORS.indexOf(prev) !== -1) {
+      entry.overrides.assignor = '';
+    }
+  } else {
+    entry.overrides[key] = value;
+  }
   if (key === 'protocol') {
-    var valid = ASSIGNOR_OPTIONS[value] || ASSIGNOR_OPTIONS.consumer;
     var eff = effectiveFor(entry);
     var cur = entry.overrides.assignor != null ? entry.overrides.assignor : eff.assignor;
-    if (valid.indexOf(cur) === -1) entry.overrides.assignor = valid[0];
+    if (!isValidAssignor(value, cur)) {
+      var valid = ASSIGNOR_OPTIONS[value] || ASSIGNOR_OPTIONS.consumer;
+      entry.overrides.assignor = valid[0];
+    }
   }
   renderConsumerSections();
 }
@@ -2263,9 +2331,13 @@ function renderConsumerChips(entry) {
 function renderOverrideField(entry, f) {
   var consumerId = entry.id;
   var val = entry.overrides[f.key];
-  var html = '<div class="field field-inline">';
+  var eff = effectiveFor(entry);
+  var stacked = (f.key === 'assignor') && isCustomAssignor(eff.protocol, val);
+  var html = '<div class="field field-inline' + (stacked ? ' field-stacked' : '') + '">';
   html += '<label class="field-label">' + escapeHtml(f.label) + '</label>';
   html += '<div class="field-control">';
+
+  var extraHtml = '';
 
   if (f.type === 'enum') {
     var options = f.options.map(function(opt, i) {
@@ -2278,16 +2350,25 @@ function renderOverrideField(entry, f) {
       onChangeExpr: 'setOverride(' + consumerId + ', \'' + f.key + '\', $value)'
     });
   } else if (f.type === 'enum-dynamic' && f.key === 'assignor') {
-    var eff = effectiveFor(entry);
     var opts = (ASSIGNOR_OPTIONS[eff.protocol] || ASSIGNOR_OPTIONS.consumer).map(function(v) {
       return { value: v, label: v };
     });
     html += renderDropdown({
       id: 'c-' + consumerId + '-assignor-dd',
-      value: String(val),
+      value: assignorDropdownValue(eff.protocol, val),
       options: opts,
       onChangeExpr: 'setOverride(' + consumerId + ', \'assignor\', $value)'
     });
+    if (isCustomAssignor(eff.protocol, val)) {
+      extraHtml = '<input type="text" class="field-input"' +
+        ' style="margin-top: 6px;"' +
+        ' value="' + escapeHtml(String(val || '')) + '"' +
+        ' placeholder="custom assignor name"' +
+        ' onchange="setOverride(' + consumerId + ', \'assignor\', this.value)">';
+    }
+  } else if (f.type === 'text') {
+    html += '<input type="text" class="field-input" value="' + escapeHtml(String(val || '')) + '"' +
+      ' onchange="setOverride(' + consumerId + ', \'' + f.key + '\', this.value)">';
   } else if (f.type === 'number') {
     html += '<input type="number" class="field-input" value="' + escapeHtml(String(val)) + '"' +
       ' min="' + f.min + '" max="' + f.max + '"' +
@@ -2296,7 +2377,9 @@ function renderOverrideField(entry, f) {
 
   html += '<button type="button" class="field-remove" title="Remove override — inherit from group"' +
     ' onclick="removeOverride(' + consumerId + ', \'' + f.key + '\')">&times;</button>';
-  html += '</div></div>';
+  html += '</div>';
+  html += extraHtml;
+  html += '</div>';
   return html;
 }
 
@@ -2391,6 +2474,7 @@ function collectConsumerConfigs() {
       name: consumerName(entry),
       protocol: eff.protocol,
       assignor: eff.assignor,
+      rackId: eff.rackId || '',
       pollTimeoutMs: parseInt(eff.pollTimeoutMs),
       pollDelayMs: parseInt(eff.pollDelayMs),
       maxPollIntervalMs: parseInt(eff.maxPollIntervalMs),
@@ -2540,6 +2624,7 @@ async function startSimulation() {
       return {
         protocol: c.protocol,
         assignor: c.assignor,
+        rackId: c.rackId,
         pollTimeoutMs: c.pollTimeoutMs,
         pollDelayMs: c.pollDelayMs,
         maxPollIntervalMs: c.maxPollIntervalMs,
@@ -3497,8 +3582,12 @@ async function unblockMember(index) {
         // Restore group protocol, assignor, static.
         if (currentConfig.protocol) groupState.protocol = currentConfig.protocol;
         if (currentConfig.assignor) {
-          var valid = ASSIGNOR_OPTIONS[groupState.protocol] || ASSIGNOR_OPTIONS.consumer;
-          groupState.assignor = valid.indexOf(currentConfig.assignor) !== -1 ? currentConfig.assignor : valid[0];
+          if (isValidAssignor(groupState.protocol, currentConfig.assignor)) {
+            groupState.assignor = currentConfig.assignor;
+          } else {
+            var valid = ASSIGNOR_OPTIONS[groupState.protocol] || ASSIGNOR_OPTIONS.consumer;
+            groupState.assignor = valid[0];
+          }
         }
         groupState.staticMember = currentConfig.staticMembers ? 'true' : 'false';
 

@@ -30,6 +30,7 @@ public class SimulatorConfig {
     public static class ConsumerConfig {
         public String protocol;
         public String assignor;
+        public String rackId;
         public int pollTimeoutMs;
         public int pollDelayMs;
         public int maxPollIntervalMs;
