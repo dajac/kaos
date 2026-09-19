@@ -1,0 +1,25 @@
+# Build output
+target/
+dependency-reduced-pom.xml
+
+# Frontend
+node_modules/
+node/
+
+# Local tooling
+.claude/
+.review/
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+.factorypath
+
+# OS files
+.DS_Store
