@@ -37,8 +37,8 @@ planned; see `docs/ARCHITECTURE.md` for their status.
 ## Build and run
 
 ```sh
-./mvnw verify                 # unit tests; later also Testcontainers ITs (needs Docker) and UI build + Vitest
-./mvnw verify -DskipITs       # skip the integration tests (planned, no effect yet)
+./mvnw verify                 # unit tests and Testcontainers ITs (needs Docker); later also UI build + Vitest
+./mvnw verify -DskipITs       # skip the integration tests (*IT), keep the unit tests
 ./mvnw verify -DskipUi        # skip the frontend build (planned, no effect yet)
 ./run.sh [options]            # build and run; all options go to the app, see ./run.sh --help
 java -jar kaos-server/target/kaos-*.jar [--bootstrap-server localhost:9092] [--port 8081]

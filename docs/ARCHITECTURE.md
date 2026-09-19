@@ -12,6 +12,7 @@ section that describes it.
 | Part | Status |
 |---|---|
 | Maven multi-module build, `run.sh`, shaded jar | built |
+| Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | `kaos-core` | skeleton (the two packages, no types); the rest is planned |
 | `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
 | `kaos-ui` | planned |
@@ -73,9 +74,8 @@ view is not carried over.
 
 Status: the Java build rows are in place (Java 21, Kafka, Kroxylicious,
 Javalin, Jackson, the command line, logging, packaging, and JUnit 6 with
-AssertJ). The
-remaining test libraries, failsafe, the frontend and the API contract
-are planned.
+AssertJ, Testcontainers and failsafe). Mockito, Awaitility, the frontend
+and the API contract are planned.
 
 The versions below were checked on 2026-09-19. When a tool rejects a
 brand-new major (JUnit 6, TypeScript 7, frontend-maven-plugin 2.x), the
@@ -125,7 +125,8 @@ Status: the parent POM, the Maven wrapper, `run.sh`, the two
 `Version` and `dto/MetaResponse` of `kaos-server` exist, next to
 `LICENSE`, `.gitignore`, `CLAUDE.md` and this document. Everything else
 in the tree below is planned, including the `kaos-ui` module and the
-`-DskipUi` and `-DskipITs` switches.
+`-DskipUi` switch. The test harness of `kaos-core` also exists; see
+[Verification](#verification).
 
 ```
 kaos/
@@ -147,6 +148,7 @@ kaos/
       kafka/    TopicManager, GroupConfigManager, GroupPoller (-> AdminView), ClientFactory
       proxy/    NetworkProxy, ProxyLauncher, NetworkFaults, NetworkFaultFilterFactory,
                 BoundPluginRegistry (+ META-INF/services FilterFactory entry)
+    src/test/java/io/github/dajac/kaos/test/       IT harness: KafkaClusterExtension, KafkaCluster
       state/    SnapshotAssembler, PartitionClassifier, StatusDeriver, SnapshotPublisher
   kaos-server/                 Javalin adapter + shaded runnable jar
     src/main/java/io/github/dajac/kaos/server/
@@ -692,13 +694,37 @@ Mixed-protocol groups are supported.
 ## Verification
 
 Status: planned, except that `./mvnw verify` already builds the modules,
-runs the unit tests and produces the shaded jar, and that `./run.sh`
-builds and starts the server.
+runs the unit tests and the integration-test harness below, and produces
+the shaded jar, that `-DskipITs` works, and that `./run.sh` builds and
+starts the server.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
   required) and the UI build with Vitest.
 - `-DskipUi` and `-DskipITs` give fast local loops.
+
+**Integration-test harness**
+- The parent POM binds failsafe to every module. Classes named `*IT` run
+  in the `integration-test` phase, and surefire keeps running the other
+  tests. `-DskipITs` skips the ITs only.
+- ITs get a broker from the JUnit extension `KafkaClusterExtension`, in
+  the `kaos-core` test sources (`io.github.dajac.kaos.test`). A test
+  class registers it with `@ExtendWith` and declares a `KafkaCluster`
+  parameter, which gives `bootstrapServers()`, `createAdmin()` and
+  `uniqueName(prefix)`.
+- The broker is a Testcontainers `apache/kafka` container whose tag is
+  the version of the kafka-clients on the classpath, so the broker and
+  the clients always match.
+- The broker starts on first use and is kept in the root store of the
+  JUnit engine. All the IT classes of a JVM share it, JUnit stops it
+  when the engine finishes, and no static state is involved. Because the
+  cluster is shared, tests use unique topic and group names and never
+  assume an empty cluster.
+- `KafkaClusterIT` is the smoke test: it creates a topic with an
+  `Admin` and describes it.
+- When `kaos-server` needs the harness, `kaos-core` will publish its
+  test sources as a `test-jar` that the server consumes in test scope.
+  This is planned.
 
 **Backend end-to-end**
 1. Start a local broker:
