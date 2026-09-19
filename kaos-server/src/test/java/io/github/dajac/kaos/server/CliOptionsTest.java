@@ -4,65 +4,72 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
+import picocli.CommandLine;
+import picocli.CommandLine.ParameterException;
 
 class CliOptionsTest {
 
     @Test
     void defaultsToALocalBrokerAndPort8081() {
-        CliOptions options = CliOptions.parse(new String[] {});
+        CliOptions options = parse();
 
-        assertThat(options).isEqualTo(new CliOptions("localhost:9092", 8081));
-    }
-
-    @Test
-    void portDefaultsTo8081() {
-        CliOptions options = CliOptions.parse(new String[] {"--bootstrap-server", "broker:9092"});
-
-        assertThat(options).isEqualTo(new CliOptions("broker:9092", 8081));
+        assertThat(options.bootstrapServer()).isEqualTo("localhost:9092");
+        assertThat(options.port()).isEqualTo(8081);
     }
 
     @Test
     void parsesAllOptionsInAnyOrder() {
-        CliOptions options = CliOptions.parse(new String[] {"--port", "0", "--bootstrap-server", "broker:9092"});
+        CliOptions options = parse("--port", "0", "--bootstrap-server", "broker:9092");
 
-        assertThat(options).isEqualTo(new CliOptions("broker:9092", 0));
+        assertThat(options.bootstrapServer()).isEqualTo("broker:9092");
+        assertThat(options.port()).isZero();
     }
 
     @Test
-    void rejectsAnEmptyBootstrapServer() {
-        assertThatThrownBy(() -> CliOptions.parse(new String[] {"--bootstrap-server", " "}))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("--bootstrap-server");
+    void acceptsTheEqualsForm() {
+        CliOptions options = parse("--port=9000", "--bootstrap-server=a:9092,b:9092");
+
+        assertThat(options.bootstrapServer()).isEqualTo("a:9092,b:9092");
+        assertThat(options.port()).isEqualTo(9000);
     }
 
     @Test
-    void detectsHelpAnywhereOnTheCommandLine() {
-        assertThat(CliOptions.isHelp(new String[] {"--port", "1", "--help"})).isTrue();
-        assertThat(CliOptions.isHelp(new String[] {"--port", "1"})).isFalse();
-        assertThat(CliOptions.USAGE).contains("--bootstrap-server", "--port", "--help");
+    void rejectsABlankBootstrapServer() {
+        assertThatThrownBy(() -> parse("--bootstrap-server", " "))
+            .isInstanceOf(ParameterException.class)
+            .hasMessageContaining("--bootstrap-server")
+            .hasMessageContaining("must not be blank");
     }
 
     @Test
     void rejectsAnOptionWithoutValue() {
-        assertThatThrownBy(() -> CliOptions.parse(new String[] {"--bootstrap-server"}))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Missing value");
+        assertThatThrownBy(() -> parse("--bootstrap-server"))
+            .isInstanceOf(ParameterException.class)
+            .hasMessageContaining("--bootstrap-server");
     }
 
     @Test
     void rejectsAnUnknownOption() {
-        assertThatThrownBy(() -> CliOptions.parse(new String[] {"--bootstrap-server", "x", "--nope"}))
-            .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> parse("--nope"))
+            .isInstanceOf(ParameterException.class)
             .hasMessageContaining("--nope");
     }
 
     @Test
     void rejectsAnInvalidPort() {
-        assertThatThrownBy(() -> CliOptions.parse(new String[] {"--bootstrap-server", "x", "--port", "abc"}))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Invalid port");
-        assertThatThrownBy(() -> CliOptions.parse(new String[] {"--bootstrap-server", "x", "--port", "70000"}))
-            .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> parse("--port", "abc"))
+            .isInstanceOf(ParameterException.class)
+            .hasMessageContaining("--port")
+            .hasMessageContaining("not a number");
+        assertThatThrownBy(() -> parse("--port", "70000"))
+            .isInstanceOf(ParameterException.class)
+            .hasMessageContaining("--port")
             .hasMessageContaining("out of range");
+    }
+
+    private static CliOptions parse(String... args) {
+        CliOptions options = new CliOptions();
+        new CommandLine(options).parseArgs(args);
+        return options;
     }
 }

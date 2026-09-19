@@ -1,74 +1,77 @@
 package io.github.dajac.kaos.server;
 
-import java.util.Arrays;
+import picocli.CommandLine.ITypeConverter;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.TypeConversionException;
 
 /**
- * The command line options of the server.
- *
- * @param bootstrapServer the Kafka bootstrap servers the simulator connects to
- * @param port the HTTP port; 0 picks a free port
+ * The command line options of the server. picocli fills the fields when it parses the command
+ * line; {@link Main} mixes them into its command.
  */
-record CliOptions(String bootstrapServer, int port) {
+final class CliOptions {
 
     static final String DEFAULT_BOOTSTRAP_SERVER = "localhost:9092";
     static final int DEFAULT_PORT = 8081;
 
-    static final String USAGE = """
-        Usage: ./run.sh [options]
-               java -jar kaos-server-<version>.jar [options]
+    @Option(
+        names = "--bootstrap-server",
+        paramLabel = "<host:port>",
+        defaultValue = DEFAULT_BOOTSTRAP_SERVER,
+        converter = BootstrapServerConverter.class,
+        description = "Kafka bootstrap servers (default: ${DEFAULT-VALUE})")
+    private String bootstrapServer = DEFAULT_BOOTSTRAP_SERVER;
 
-          --bootstrap-server <host:port>  Kafka bootstrap servers (default: %s)
-          --port <port>                   HTTP port (default: %d)
-          --help                          Print this help and exit
-        """.formatted(DEFAULT_BOOTSTRAP_SERVER, DEFAULT_PORT);
+    @Option(
+        names = "--port",
+        paramLabel = "<port>",
+        defaultValue = "" + DEFAULT_PORT,
+        converter = PortConverter.class,
+        description = "HTTP port; 0 picks a free port (default: ${DEFAULT-VALUE})")
+    private int port = DEFAULT_PORT;
 
     /**
-     * Returns whether the command line asks for the usage text.
+     * Returns the Kafka bootstrap servers the simulator connects to.
      */
-    static boolean isHelp(String[] args) {
-        return Arrays.asList(args).contains("--help");
+    String bootstrapServer() {
+        return bootstrapServer;
     }
 
     /**
-     * Parses the command line.
-     *
-     * @throws IllegalArgumentException with a user-facing message if the arguments are invalid
+     * Returns the HTTP port; 0 picks a free port.
      */
-    static CliOptions parse(String[] args) {
-        String bootstrapServer = DEFAULT_BOOTSTRAP_SERVER;
-        int port = DEFAULT_PORT;
+    int port() {
+        return port;
+    }
 
-        for (int i = 0; i < args.length; i++) {
-            String option = args[i];
-            switch (option) {
-                case "--bootstrap-server" -> bootstrapServer = value(args, ++i, option);
-                case "--port" -> port = parsePort(value(args, ++i, option));
-                default -> throw new IllegalArgumentException("Unknown option: " + option);
+    /**
+     * Rejects a blank bootstrap server list.
+     */
+    static final class BootstrapServerConverter implements ITypeConverter<String> {
+        @Override
+        public String convert(String value) {
+            if (value.isBlank()) {
+                throw new TypeConversionException("the value must not be blank");
             }
+            return value;
         }
-
-        if (bootstrapServer.isBlank()) {
-            throw new IllegalArgumentException("Empty value for option: --bootstrap-server");
-        }
-        return new CliOptions(bootstrapServer, port);
     }
 
-    private static String value(String[] args, int index, String option) {
-        if (index >= args.length) {
-            throw new IllegalArgumentException("Missing value for option: " + option);
-        }
-        return args[index];
-    }
-
-    private static int parsePort(String value) {
-        try {
-            int port = Integer.parseInt(value);
+    /**
+     * Accepts the ports 0 to 65535.
+     */
+    static final class PortConverter implements ITypeConverter<Integer> {
+        @Override
+        public Integer convert(String value) {
+            int port;
+            try {
+                port = Integer.parseInt(value);
+            } catch (NumberFormatException e) {
+                throw new TypeConversionException("'" + value + "' is not a number");
+            }
             if (port < 0 || port > 65535) {
-                throw new IllegalArgumentException("Port out of range: " + value);
+                throw new TypeConversionException("port " + value + " is out of range (0-65535)");
             }
             return port;
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid port: " + value);
         }
     }
 }

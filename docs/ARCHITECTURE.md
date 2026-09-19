@@ -72,7 +72,8 @@ view is not carried over.
 ## Tech stack
 
 Status: the Java build rows are in place (Java 21, Kafka, Kroxylicious,
-Javalin, Jackson, logging, packaging, and JUnit 6 with AssertJ). The
+Javalin, Jackson, the command line, logging, packaging, and JUnit 6 with
+AssertJ). The
 remaining test libraries, failsafe, the frontend and the API contract
 are planned.
 
@@ -87,6 +88,7 @@ build steps back one major.
 | Proxy | `kroxylicious-runtime` 0.24.0 (requires Java 21) |
 | HTTP | Javalin 7.2.x (Jetty 12), with REST, SSE and static files |
 | JSON | Jackson via `jackson-bom` 2.22.x |
+| Command line | picocli 4.7.x in server, through reflection (no annotation processor) |
 | Logging | `slf4j-api` only in core; logback-classic 1.5.x in server |
 | Packaging | `maven-shade-plugin` 3.6.x |
 | Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for `*IT` |
@@ -484,11 +486,16 @@ Status: planned.
 Status: planned, except a stub of `GET /api/v1/meta` that returns only
 `{"version": "<build version>"}`, and the command line:
 `--bootstrap-server <host:port>` (default `localhost:9092`),
-`--port <port>` (default 8081) and `--help`. The application owns every
-option: `run.sh` builds the jar and passes all its arguments through
-unchanged, so a new option needs no change in the script. Invalid options print the usage and exit with
-status 2. A failed startup, such as a port already in use, releases the
-server, prints the reason and exits with status 1.
+`--port <port>` (default 8081), `--help` and `--version`. picocli parses
+it: `CliOptions` holds the annotated options, `Main` is the command that
+mixes them in, and `Version` provides `--version`. The application owns
+every option: `run.sh` builds the jar and passes all its arguments
+through unchanged, so a new option needs no change in the script.
+
+Exit codes: `--help` and `--version` exit with status 0. Invalid options
+print the error and the usage, and exit with status 2. A failed startup,
+such as a port already in use, releases the server, prints the reason
+and exits with status 1.
 
 The HTTP API is resource-oriented and mirrors the Java model. The server
 holds one `Simulator`.

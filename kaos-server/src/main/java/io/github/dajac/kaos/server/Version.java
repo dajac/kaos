@@ -4,16 +4,22 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.Properties;
+import picocli.CommandLine.IVersionProvider;
 
 /**
  * The version of the running build. Maven writes it into {@code version.properties} when it filters
- * the resources.
+ * the resources. picocli instantiates this class to print {@code --version}.
  */
-final class Version {
+final class Version implements IVersionProvider {
 
     private static final String RESOURCE = "version.properties";
 
-    private Version() {
+    Version() {
+    }
+
+    @Override
+    public String[] getVersion() {
+        return new String[] {"Kaos " + read()};
     }
 
     /**
