@@ -40,8 +40,8 @@ planned; see `docs/ARCHITECTURE.md` for their status.
 ./mvnw verify                 # unit tests; later also Testcontainers ITs (needs Docker) and UI build + Vitest
 ./mvnw verify -DskipITs       # skip the integration tests (planned, no effect yet)
 ./mvnw verify -DskipUi        # skip the frontend build (planned, no effect yet)
-./run.sh [bootstrap] [port]   # build and run; defaults localhost:9092 and 8081
-java -jar kaos-server/target/kaos-*.jar --bootstrap-server localhost:9092 [--port 8081]
+./run.sh [options]            # build and run; all options go to the app, see ./run.sh --help
+java -jar kaos-server/target/kaos-*.jar [--bootstrap-server localhost:9092] [--port 8081]
 ```
 
 The runnable jar is the shaded `kaos-server/target/kaos-server-<version>.jar`.

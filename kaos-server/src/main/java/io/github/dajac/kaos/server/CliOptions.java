@@ -1,5 +1,7 @@
 package io.github.dajac.kaos.server;
 
+import java.util.Arrays;
+
 /**
  * The command line options of the server.
  *
@@ -8,14 +10,24 @@ package io.github.dajac.kaos.server;
  */
 record CliOptions(String bootstrapServer, int port) {
 
+    static final String DEFAULT_BOOTSTRAP_SERVER = "localhost:9092";
     static final int DEFAULT_PORT = 8081;
 
     static final String USAGE = """
-        Usage: java -jar kaos-server.jar --bootstrap-server <host:port> [--port <port>]
+        Usage: ./run.sh [options]
+               java -jar kaos-server-<version>.jar [options]
 
-          --bootstrap-server <host:port>  Kafka bootstrap servers (required)
+          --bootstrap-server <host:port>  Kafka bootstrap servers (default: %s)
           --port <port>                   HTTP port (default: %d)
-        """.formatted(DEFAULT_PORT);
+          --help                          Print this help and exit
+        """.formatted(DEFAULT_BOOTSTRAP_SERVER, DEFAULT_PORT);
+
+    /**
+     * Returns whether the command line asks for the usage text.
+     */
+    static boolean isHelp(String[] args) {
+        return Arrays.asList(args).contains("--help");
+    }
 
     /**
      * Parses the command line.
@@ -23,7 +35,7 @@ record CliOptions(String bootstrapServer, int port) {
      * @throws IllegalArgumentException with a user-facing message if the arguments are invalid
      */
     static CliOptions parse(String[] args) {
-        String bootstrapServer = null;
+        String bootstrapServer = DEFAULT_BOOTSTRAP_SERVER;
         int port = DEFAULT_PORT;
 
         for (int i = 0; i < args.length; i++) {
@@ -35,8 +47,8 @@ record CliOptions(String bootstrapServer, int port) {
             }
         }
 
-        if (bootstrapServer == null || bootstrapServer.isBlank()) {
-            throw new IllegalArgumentException("Missing required option: --bootstrap-server");
+        if (bootstrapServer.isBlank()) {
+            throw new IllegalArgumentException("Empty value for option: --bootstrap-server");
         }
         return new CliOptions(bootstrapServer, port);
     }

@@ -82,10 +82,6 @@
                 <configuration>
                     <skip>false</skip>
                     <mainClass>${main.class}</mainClass>
-                    <arguments>
-                        <argument>--bootstrap-server</argument>
-                        <argument>localhost:9092</argument>
-                    </arguments>
                 </configuration>
             </plugin>
 

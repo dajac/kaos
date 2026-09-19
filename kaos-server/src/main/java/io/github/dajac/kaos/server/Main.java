@@ -14,6 +14,11 @@ public final class Main {
     }
 
     public static void main(String[] args) {
+        if (CliOptions.isHelp(args)) {
+            System.out.print(CliOptions.USAGE);
+            return;
+        }
+
         CliOptions options;
         try {
             options = CliOptions.parse(args);

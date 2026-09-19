@@ -483,8 +483,10 @@ Status: planned.
 
 Status: planned, except a stub of `GET /api/v1/meta` that returns only
 `{"version": "<build version>"}`, and the command line:
-`--bootstrap-server <host:port>` (required) and `--port <port>`
-(default 8081). Invalid options print the usage and exit with
+`--bootstrap-server <host:port>` (default `localhost:9092`),
+`--port <port>` (default 8081) and `--help`. The application owns every
+option: `run.sh` builds the jar and passes all its arguments through
+unchanged, so a new option needs no change in the script. Invalid options print the usage and exit with
 status 2. A failed startup, such as a port already in use, releases the
 server, prints the reason and exits with status 1.
 
