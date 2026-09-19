@@ -1,0 +1,71 @@
+package io.github.dajac.kaos;
+
+import java.util.List;
+
+/**
+ * A disturbance that can be injected into a simulated consumer. Faults are values: two faults of
+ * the same kind are equal.
+ */
+public sealed interface Fault permits Fault.Freeze, Fault.NetworkIsolation, Fault.ConnectionReset {
+
+    /** The identifier used in the HTTP API and in {@link ConfigMetadata#faults()}. */
+    String id();
+
+    /** The consumer stops polling. The proxy is not involved. */
+    static Fault freeze() {
+        return new Freeze();
+    }
+
+    /** The proxy silently drops the requests of the consumer, like a network partition. */
+    static Fault networkIsolation() {
+        return new NetworkIsolation();
+    }
+
+    /** The proxy closes the connections of the consumer instead of forwarding its requests. */
+    static Fault connectionReset() {
+        return new ConnectionReset();
+    }
+
+    /** All the faults, in a stable order. */
+    static List<Fault> all() {
+        return List.of(freeze(), networkIsolation(), connectionReset());
+    }
+
+    /**
+     * Returns the fault with the given identifier.
+     *
+     * @throws IllegalArgumentException if no fault has this identifier
+     */
+    static Fault of(String id) {
+        for (Fault fault : all()) {
+            if (fault.id().equals(id)) {
+                return fault;
+            }
+        }
+        throw new IllegalArgumentException("Unknown fault: " + id);
+    }
+
+    /** See {@link Fault#freeze()}. */
+    record Freeze() implements Fault {
+        @Override
+        public String id() {
+            return "freeze";
+        }
+    }
+
+    /** See {@link Fault#networkIsolation()}. */
+    record NetworkIsolation() implements Fault {
+        @Override
+        public String id() {
+            return "network-isolation";
+        }
+    }
+
+    /** See {@link Fault#connectionReset()}. */
+    record ConnectionReset() implements Fault {
+        @Override
+        public String id() {
+            return "connection-reset";
+        }
+    }
+}

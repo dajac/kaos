@@ -14,7 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
-| `kaos-core` | skeleton (the two packages, no types); the rest is planned |
+| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`); the rest is planned |
 | `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
 | `kaos-ui` | planned |
 
@@ -122,13 +122,18 @@ Notes:
 
 ## Project structure
 
-Status: the parent POM, the Maven wrapper, `run.sh`, the two
-`package-info` files of `kaos-core`, and `Main`, `Server`, `CliOptions`,
-`Version` and `dto/MetaResponse` of `kaos-server` exist, next to
-`LICENSE`, `.gitignore`, `CLAUDE.md`, the CI workflow and this document.
-Everything else in the tree below is planned, including the `kaos-ui`
-module and the `-DskipUi` switch. The test harness of `kaos-core` also
-exists; see [Verification](#verification).
+Status: the parent POM, the Maven wrapper, `run.sh`, and `Main`,
+`Server`, `CliOptions`, `Version` and `dto/MetaResponse` of
+`kaos-server` exist, next to `LICENSE`, `.gitignore`, `CLAUDE.md`, the
+CI workflow and this document. In `kaos-core`, the spec, options and
+validation model exists: the five spec records with `ConsumerSettings`
+and `ConsumerOverrides`, the three options classes, `ConfigMetadata`,
+`Fault`, `Protocol`, `Violation`, `SimulationException`,
+`InvalidConfigException`, the whole `internal/config` package, and a
+`Simulator` that holds only the static `validate`. Everything else in
+the tree below is planned, including the `kaos-ui` module and the
+`-DskipUi` switch. The test harness of `kaos-core` also exists; see
+[Verification](#verification).
 
 ```
 kaos/
@@ -141,6 +146,7 @@ kaos/
       Simulator, Topic, ProducerHandle, ConsumerGroup, ConsumerHandle, Autopilot, Fault
       ProducerOptions, GroupOptions, ConsumerOptions, Registration, SnapshotListener
       SimulatorSpec, TopicSpec, ProducerSpec, GroupSpec, ConsumerSpec (records), ConfigMetadata
+      ConsumerSettings, ConsumerOverrides (records), Violation
       SimulatorSnapshot, ProducerSnapshot, GroupSnapshot, ConsumerSnapshot, PartitionView, PartitionRef
       enums: Protocol, Phase, GroupState, GroupType, PartitionState, ConsumerStatus, ProducerState
       SimulationException, InvalidConfigException (List<Violation>), SimulationStateException
@@ -177,7 +183,13 @@ never imports one.
 
 ### Java API (`kaos-core`)
 
-Status: planned.
+Status: the spec, options and validation model is built. This covers
+the paragraphs "Options lambdas", "Records as the data view" and
+"Validation" below, the `Fault` type and the `Protocol` enum. The
+harness is planned: `Simulator` has only the static `validate`, the
+components (`Topic`, `ProducerHandle`, `ConsumerGroup`,
+`ConsumerHandle`) do not exist, and neither do `describe()`, the `add…`
+overloads, the snapshot types and the other enums.
 
 The model is a harness, `Simulator`, with independent components under
 it. The style is Testcontainers-like: construct, configure, `start()`,
@@ -277,28 +289,119 @@ try (Simulator simulator = new Simulator("localhost:9092")
 
 **Options lambdas**
 - `ProducerOptions`, `GroupOptions` and `ConsumerOptions`.
+- A lambda builds a spec, and needs no simulator for it:
+  `ProducerSpec.of(p -> …)`, `GroupSpec.of(id, g -> …)` and
+  `ConsumerSpec.of(c -> …)`. The `add…(lambda)` methods of the harness
+  go through these factories, so the lambdas and the specs are two doors
+  into the same model.
+- The options take `Duration`s; the specs hold milliseconds
+  (`sessionTimeoutMs`), under the same names as `ConfigMetadata` and the
+  violations.
+- The options reference topics by name (`subscribe("orders")`,
+  `topics("orders")`). The overloads taking a `Topic`, used in the
+  example above, are planned with the harness.
 - Consumer values that are not set inherit from the group's
-  `consumerDefaults`. There are no nullable spec records.
+  `consumerDefaults`. Values that `consumerDefaults` does not set keep
+  the defaults of `ConfigMetadata`. The order of the calls in a group
+  lambda does not matter.
 
 **Records as the data view**
-- `simulator.describe()` returns an immutable `SimulatorSpec` with
-  `topics[]`, `producers[]` and `groups[]`. Each consumer lists its
-  `overrides` and its resolved `effective` values. Resolution happens in
-  one place, `EffectiveConfigResolver`.
+- `simulator.describe()` (planned) returns an immutable `SimulatorSpec`
+  with `topics[]`, `producers[]` and `groups[]`.
+- The records:
+  - `TopicSpec(name, partitions)`;
+  - `ProducerSpec(id, topics, ratePerPartition)`;
+  - `GroupSpec(id, subscribedTopics, sessionTimeoutMs,
+    heartbeatIntervalMs, assignmentIntervalMs, consumerDefaults,
+    consumers)`;
+  - `ConsumerSpec(id, overrides, effective)`.
+- There are no nullable values in the specs:
+  - `ConsumerSettings` is a complete set of consumer settings. It is the
+    type of `consumerDefaults` and of `effective`.
+  - `ConsumerOverrides` has the same components as `Optional`s. An empty
+    one inherits.
+  - The empty assignor name selects the default of the protocol (of the
+    broker for `CONSUMER`, of the client for `CLASSIC`). The empty rack
+    id means no rack.
+  - An empty producer or consumer id means "not assigned yet": the
+    simulator or the group assigns it when the component is added.
+- `effective` is derived, never trusted. Resolution happens in one
+  place, `EffectiveConfigResolver`: an override that is set wins, and
+  everything else is inherited. A `GroupSpec` recomputes `effective` for
+  its consumers when it is constructed. A `ConsumerSpec` outside of a
+  group accepts a `null` `effective`, which resolves against the
+  `ConfigMetadata` defaults; this is what a request body that carries
+  only `overrides` produces.
 - Matching `TopicSpec`, `ProducerSpec`, `GroupSpec` and `ConsumerSpec`
-  records are accepted by overloads: `addGroup(GroupSpec)` and so on. The
-  server uses these overloads for request bodies.
-- The lambdas and the specs are two doors into the same internal model.
+  records are accepted by overloads (planned): `addGroup(GroupSpec)` and
+  so on. The server uses these overloads for request bodies.
+
+**Configuration metadata**
+- `ConfigMetadata.get()` is the immutable table of everything
+  configurable:
+  - the fields, each with a key, a label, a scope (`SIMULATOR`, `TOPIC`,
+    `PRODUCER`, `GROUP` or `CONSUMER`), a type, a default and, for the
+    bounded integers, an inclusive range;
+  - the assignor names of each protocol, and whether the protocol
+    accepts a custom name;
+  - the fault ids.
+- The defaults of the specs and of the options, and every range check
+  of `ConfigValidator`, read this table.
+- The defaults and ranges are the prototype's:
+
+| Scope | Key | Default | Range |
+|---|---|---|---|
+| simulator | `numTopics` | 1 | 1–20 |
+| topic | `partitions` | 36 | 1–100 |
+| producer | `ratePerPartition` | 2.0 (1 record every 500 ms) | > 0 |
+| group | `id` | `kaos` | not blank |
+| group | `numConsumers` | 4 | |
+| group | `sessionTimeoutMs` | 45000 | 1000–300000 |
+| group | `heartbeatIntervalMs` | 5000 | 500–60000 |
+| group | `assignmentIntervalMs` | 1000 | 0–60000 |
+| consumer | `protocol` | `CONSUMER` | |
+| consumer | `assignor` | empty | see below |
+| consumer | `staticMember` | false | |
+| consumer | `rackId` | empty | |
+| consumer | `pollTimeoutMs` | 0 | 0–60000 |
+| consumer | `pollDelayMs` | 1000 | 0–120000 |
+| consumer | `maxPollIntervalMs` | 300000 | 1000–600000 |
+
+- `numTopics` and `numConsumers` are counts that a frontend uses for its
+  form; they are not spec fields. The validation enforces only the
+  maximum of `numTopics`, because an empty simulator is valid.
+- Assignors: `CONSUMER` lists `uniform` and `range` and accepts any
+  other name; `CLASSIC` accepts only `range`, `roundrobin`, `sticky` and
+  `cooperative-sticky`. `Assignors` maps the classic names to the client
+  classes.
 
 **Validation**
-- `add…` and `start()` throw `InvalidConfigException` with a list of
-  `Violation(field, message)`.
+- `add…` and `start()` (planned) throw `InvalidConfigException` with a
+  list of `Violation(field, message)`. `field` is a path such as
+  `groups[0].consumers[1].overrides.pollDelayMs`.
 - `Simulator.validate(SimulatorSpec)` runs the same check without side
   effects. The server uses it to return 400 before going async.
+- `ConfigValidator` is a set of pure functions that return every
+  violation at once. Next to the whole-spec check, it checks one topic,
+  producer, group or consumer against the existing topics, for the
+  `add…` calls made while running.
+- The checks:
+  - the ranges of `ConfigMetadata`;
+  - legal topic names, a non-blank group id, a positive finite rate;
+  - the assignor against the protocol, on the `consumerDefaults` of the
+    group, and on the `effective` settings of each consumer that
+    overrides its protocol or its assignor;
+  - a producer or a group names at least one topic, only topics of the
+    spec, and none twice;
+  - topic names, group ids, and assigned producer ids are unique; so are
+    assigned consumer ids within their group.
 
 **Faults are first-class**
 - `Fault` is a sealed type. A new fault is a new `Fault`. It adds no
   methods to `ConsumerHandle`.
+- Faults are values (empty records). Each has an `id()` (`freeze`,
+  `network-isolation`, `connection-reset`), which the HTTP API and
+  `ConfigMetadata` use; `Fault.of(id)` is the reverse.
 - The snapshot lists each consumer's active faults.
 
 | Fault | Where it acts | Effect |
