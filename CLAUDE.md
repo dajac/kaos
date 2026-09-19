@@ -31,26 +31,26 @@ before changing anything.
 | `kaos-server` | Javalin adapter exposing the HTTP API v1 (REST + SSE, OpenAPI); builds the shaded runnable jar |
 | `kaos-ui` | React + TypeScript UI, built by Vite and embedded in the jar under `/ui` |
 
-All three modules are planned; see `docs/ARCHITECTURE.md` for their
-status.
+`kaos-core` and `kaos-server` exist as skeletons and `kaos-ui` is
+planned; see `docs/ARCHITECTURE.md` for their status.
 
 ## Build and run
 
-These commands apply once the Maven build exists (planned).
-
 ```sh
-./mvnw verify                 # unit tests, Testcontainers ITs (needs Docker), UI build + Vitest
-./mvnw verify -DskipITs       # skip the integration tests
-./mvnw verify -DskipUi        # skip the frontend build
+./mvnw verify                 # unit tests; later also Testcontainers ITs (needs Docker) and UI build + Vitest
+./mvnw verify -DskipITs       # skip the integration tests (planned, no effect yet)
+./mvnw verify -DskipUi        # skip the frontend build (planned, no effect yet)
 ./run.sh [bootstrap] [port]   # build and run; defaults localhost:9092 and 8081
-java -jar kaos-server/target/kaos-*.jar --bootstrap-server localhost:9092
+java -jar kaos-server/target/kaos-*.jar --bootstrap-server localhost:9092 [--port 8081]
 ```
+
+The runnable jar is the shaded `kaos-server/target/kaos-server-<version>.jar`.
 
 Frontend dev loop:
 
 ```sh
-./mvnw -pl kaos-server -am -DskipUi exec:java   # backend on localhost:8081
-npm run dev                                     # in kaos-ui/; Vite proxies /api
+./mvnw -pl kaos-server -am -DskipUi compile exec:java   # backend on localhost:8081
+npm run dev                                             # in kaos-ui/ (planned); Vite proxies /api
 ```
 
 A local broker for manual testing:

@@ -4,16 +4,16 @@ This is a living document. It always describes the code as merged. Any
 PR that changes or refines the design updates it in the same PR, and
 reviewers check that it matches the code.
 
-**Status.** Everything described here is **planned**: `main` does not
-contain the build, the modules or the UI yet. When a part lands, its
+**Status.** `main` contains the Maven build and the module skeleton.
+Everything else described here is **planned**. When a part lands, its
 "planned" marker is removed from the status table below and from the
 section that describes it.
 
 | Part | Status |
 |---|---|
-| Maven multi-module build, `run.sh`, shaded jar | planned |
-| `kaos-core` | planned |
-| `kaos-server` | planned |
+| Maven multi-module build, `run.sh`, shaded jar | built |
+| `kaos-core` | skeleton (the two packages, no types); the rest is planned |
+| `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
 | `kaos-ui` | planned |
 
 ## Context
@@ -71,7 +71,10 @@ view is not carried over.
 
 ## Tech stack
 
-Status: planned.
+Status: the Java build rows are in place (Java 21, Kafka, Kroxylicious,
+Javalin, Jackson, logging, packaging, and JUnit 6 with AssertJ). The
+remaining test libraries, failsafe, the frontend and the API contract
+are planned.
 
 The versions below were checked on 2026-09-19. When a tool rejects a
 brand-new major (JUnit 6, TypeScript 7, frontend-maven-plugin 2.x), the
@@ -101,15 +104,26 @@ Notes:
   - `ServicesResourceTransformer` is mandatory, because Kroxylicious
     discovers `FilterFactory` through the ServiceLoader.
   - Manifest with `Main-Class` and `Multi-Release: true`.
-  - License and notice transformers.
+  - License and notice transformers. The per-dependency Apache license
+    copies are dropped, the project `LICENSE` is included once as
+    `META-INF/LICENSE`, and the `NOTICE` files are merged.
   - Signature files and `module-info.class` are excluded.
+  - The shaded jar replaces the module jar,
+    `kaos-server/target/kaos-server-<version>.jar`. The unshaded one is
+    kept as `original-kaos-server-<version>.jar`.
+- **Version.** Maven filters `version.properties` in `kaos-server`, and
+  `/api/v1/meta` reports the version read from it.
 - **Contract enforcement.** The committed `schema.d.ts` is checked with a
   diff, and a Java contract test validates the fixtures against the spec.
 
 ## Project structure
 
-Status: planned, except `LICENSE`, `.gitignore`, `CLAUDE.md` and this
-document.
+Status: the parent POM, the Maven wrapper, `run.sh`, the two
+`package-info` files of `kaos-core`, and `Main`, `Server`, `CliOptions`,
+`Version` and `dto/MetaResponse` of `kaos-server` exist, next to
+`LICENSE`, `.gitignore`, `CLAUDE.md` and this document. Everything else
+in the tree below is planned, including the `kaos-ui` module and the
+`-DskipUi` and `-DskipITs` switches.
 
 ```
 kaos/
@@ -134,7 +148,7 @@ kaos/
       state/    SnapshotAssembler, PartitionClassifier, StatusDeriver, SnapshotPublisher
   kaos-server/                 Javalin adapter + shaded runnable jar
     src/main/java/io/github/dajac/kaos/server/
-      Main (CLI), Server, ApiRoutes, SimulationService, SseHub, ProblemHandler, StaticUi, dto/*
+      Main (CLI), CliOptions, Version, Server, ApiRoutes, SimulationService, SseHub, ProblemHandler, StaticUi, dto/*
     src/main/resources/openapi/kaos-v1.yaml
   kaos-ui/                     packaging jar; vite build -> target/classes/ui
     package.json vite.config.ts tsconfig.json index.html pom.xml
@@ -467,7 +481,10 @@ Status: planned.
 
 ### HTTP API v1 (`kaos-server`)
 
-Status: planned.
+Status: planned, except a stub of `GET /api/v1/meta` that returns only
+`{"version": "<build version>"}`, and the command line:
+`--bootstrap-server <host:port>` (required) and `--port <port>`
+(default 8081).
 
 The HTTP API is resource-oriented and mirrors the Java model. The server
 holds one `Simulator`.
@@ -580,8 +597,10 @@ Status: planned.
 
 **Dev loop**
 - The Vite dev server proxies `/api`, including SSE, to `localhost:8081`.
-- Command: `./mvnw -pl kaos-server -am -DskipUi exec:java` plus
-  `npm run dev`.
+- Command: `./mvnw -pl kaos-server -am -DskipUi compile exec:java` plus
+  `npm run dev`. The `compile` phase lets the reactor resolve
+  `kaos-core` from its `target/classes`. The backend half works today;
+  `exec:java` is skipped in every module except `kaos-server`.
 
 ## Features
 
@@ -661,7 +680,9 @@ Mixed-protocol groups are supported.
 
 ## Verification
 
-Status: planned.
+Status: planned, except that `./mvnw verify` already builds the modules,
+runs the unit tests and produces the shaded jar, and that `./run.sh`
+builds and starts the server.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
