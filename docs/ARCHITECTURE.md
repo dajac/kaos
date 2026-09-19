@@ -148,8 +148,8 @@ kaos/
       kafka/    TopicManager, GroupConfigManager, GroupPoller (-> AdminView), ClientFactory
       proxy/    NetworkProxy, ProxyLauncher, NetworkFaults, NetworkFaultFilterFactory,
                 BoundPluginRegistry (+ META-INF/services FilterFactory entry)
-    src/test/java/io/github/dajac/kaos/test/       IT harness: KafkaClusterExtension, KafkaCluster
       state/    SnapshotAssembler, PartitionClassifier, StatusDeriver, SnapshotPublisher
+    src/test/java/io/github/dajac/kaos/test/       IT harness: KafkaClusterExtension, KafkaCluster
   kaos-server/                 Javalin adapter + shaded runnable jar
     src/main/java/io/github/dajac/kaos/server/
       Main (CLI), CliOptions, Version, Server, ApiRoutes, SimulationService, SseHub, ProblemHandler, StaticUi, dto/*
@@ -714,7 +714,10 @@ starts the server.
   `uniqueName(prefix)`.
 - The broker is a Testcontainers `apache/kafka` container whose tag is
   the version of the kafka-clients on the classpath, so the broker and
-  the clients always match.
+  the clients match by default. The system property `kaos.test.kafka.image`
+  replaces the whole image name, for a clients version that has no
+  published image; failsafe forwards it, as in
+  `./mvnw verify -Dkaos.test.kafka.image=apache/kafka:4.2.0`.
 - The broker starts on first use and is kept in the root store of the
   JUnit engine. All the IT classes of a JVM share it, JUnit stops it
   when the engine finishes, and no static state is involved. Because the

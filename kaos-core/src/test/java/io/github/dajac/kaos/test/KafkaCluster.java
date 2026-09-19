@@ -11,7 +11,8 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * A single-broker Kafka cluster running in a container. Integration tests
- * receive it as a parameter from {@link KafkaClusterExtension}.
+ * receive it as a parameter from {@link KafkaClusterExtension}. See
+ * {@link #image()} for the image it runs.
  *
  * <p>The cluster is shared by all the test classes of a JVM, so tests
  * isolate themselves with {@link #uniqueName(String)} rather than assume an
@@ -19,9 +20,12 @@ import org.testcontainers.utility.DockerImageName;
  */
 public final class KafkaCluster implements AutoCloseable {
 
-    /** The broker runs the same Kafka version as the kafka-clients on the classpath. */
-    static final DockerImageName IMAGE =
-        DockerImageName.parse("apache/kafka").withTag(AppInfoParser.getVersion());
+    /**
+     * System property that replaces the broker image, for example
+     * {@code -Dkaos.test.kafka.image=apache/kafka:4.2.0}. It is meant for a
+     * kafka-clients version that has no published {@code apache/kafka} image.
+     */
+    public static final String IMAGE_PROPERTY = "kaos.test.kafka.image";
 
     private final KafkaContainer container;
 
@@ -31,9 +35,22 @@ public final class KafkaCluster implements AutoCloseable {
 
     /** Starts a broker and returns once it accepts connections. */
     static KafkaCluster start() {
-        KafkaContainer container = new KafkaContainer(IMAGE);
+        KafkaContainer container = new KafkaContainer(image());
         container.start();
         return new KafkaCluster(container);
+    }
+
+    /**
+     * The broker image. By default it is {@code apache/kafka} with the version
+     * of the kafka-clients on the classpath as its tag, so the broker and the
+     * clients match. {@link #IMAGE_PROPERTY} replaces the whole image name.
+     */
+    static DockerImageName image() {
+        String override = System.getProperty(IMAGE_PROPERTY);
+        if (override != null && !override.isBlank()) {
+            return DockerImageName.parse(override.trim()).asCompatibleSubstituteFor("apache/kafka");
+        }
+        return DockerImageName.parse("apache/kafka").withTag(AppInfoParser.getVersion());
     }
 
     /** The {@code bootstrap.servers} value that reaches the broker from the test JVM. */
