@@ -330,8 +330,19 @@ try (Simulator simulator = new Simulator("localhost:9092")
   everything else is inherited. A `GroupSpec` recomputes `effective` for
   its consumers when it is constructed. A `ConsumerSpec` outside of a
   group accepts a `null` `effective`, which resolves against the
-  `ConfigMetadata` defaults; this is what a request body that carries
-  only `overrides` produces.
+  `ConfigMetadata` defaults, and keeps a supplied one as informative
+  only: validating the consumer or adding it to a group resolves again
+  against that group's defaults and never reads the `effective` of its
+  argument.
+- The records are also the door for request bodies, so a value that is
+  left out never surfaces as a `NullPointerException`. The compact
+  constructors read a `null` list as empty, a `null` name or id as
+  empty, `null` overrides (or a `null` component of them) as "inherit",
+  a `null` `consumerDefaults` as the `ConfigMetadata` defaults, and a
+  `null` protocol, assignor or rack id of a `ConsumerSettings` as its
+  default. The accessors never return `null`. What must not be empty (a
+  topic name, a group id, a subscription) is then reported as a
+  `Violation`.
 - Matching `TopicSpec`, `ProducerSpec`, `GroupSpec` and `ConsumerSpec`
   records are accepted by overloads (planned): `addGroup(GroupSpec)` and
   so on. The server uses these overloads for request bodies.
@@ -342,6 +353,8 @@ try (Simulator simulator = new Simulator("localhost:9092")
   - the fields, each with a key, a label, a scope (`SIMULATOR`, `TOPIC`,
     `PRODUCER`, `GROUP` or `CONSUMER`), a type, a default and, for the
     bounded integers, an inclusive range;
+  - the name rule: `[a-zA-Z0-9._-]+`, at most 249 characters, and
+    neither `.` nor `..` (Kafka's legal topic names);
   - the assignor names of each protocol, and whether the protocol
     accepts a custom name;
   - the fault ids.
@@ -354,7 +367,7 @@ try (Simulator simulator = new Simulator("localhost:9092")
 | simulator | `numTopics` | 1 | 1–20 |
 | topic | `partitions` | 36 | 1–100 |
 | producer | `ratePerPartition` | 2.0 (1 record every 500 ms) | > 0 |
-| group | `id` | `kaos` | not blank |
+| group | `id` | `kaos` | the name rule |
 | group | `numConsumers` | 4 | |
 | group | `sessionTimeoutMs` | 45000 | 1000–300000 |
 | group | `heartbeatIntervalMs` | 5000 | 500–60000 |
@@ -387,10 +400,17 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `add…` calls made while running.
 - The checks:
   - the ranges of `ConfigMetadata`;
-  - legal topic names, a non-blank group id, a positive finite rate;
+  - the name rule, on topic names, on group ids, and on the producer
+    and consumer ids that are supplied rather than assigned. Group ids
+    and these ids end up in client ids and in the URL paths of the HTTP
+    API;
+  - a positive finite rate;
   - the assignor against the protocol, on the `consumerDefaults` of the
-    group, and on the `effective` settings of each consumer that
-    overrides its protocol or its assignor;
+    group, and on the effective settings of each consumer that overrides
+    its protocol or its assignor. The violation always names a value
+    that was sent: `consumerDefaults.assignor`, `overrides.assignor`,
+    or `overrides.protocol` when the consumer overrides only its
+    protocol and the inherited assignor does not fit it;
   - a producer or a group names at least one topic, only topics of the
     spec, and none twice;
   - topic names, group ids, and assigned producer ids are unique; so are

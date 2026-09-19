@@ -4,7 +4,8 @@ import java.util.Objects;
 
 /**
  * A complete set of consumer settings. It is used for the {@code consumerDefaults} of a group and
- * for the {@code effective} values of a consumer.
+ * for the {@code effective} values of a consumer. A {@code null} protocol, assignor or rack id is
+ * read as its default in {@link ConfigMetadata}.
  *
  * @param protocol the group protocol
  * @param assignor the assignor name; empty selects the default of the protocol
@@ -24,9 +25,9 @@ public record ConsumerSettings(
     int maxPollIntervalMs
 ) {
     public ConsumerSettings {
-        Objects.requireNonNull(protocol, "protocol");
-        Objects.requireNonNull(assignor, "assignor");
-        Objects.requireNonNull(rackId, "rackId");
+        protocol = Objects.requireNonNullElseGet(protocol, ConfigMetadata.PROTOCOL::protocolDefault);
+        assignor = Objects.requireNonNullElseGet(assignor, ConfigMetadata.ASSIGNOR::stringDefault);
+        rackId = Objects.requireNonNullElseGet(rackId, ConfigMetadata.RACK_ID::stringDefault);
     }
 
     /** The defaults of {@link ConfigMetadata}. */

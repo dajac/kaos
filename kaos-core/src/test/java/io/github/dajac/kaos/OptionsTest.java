@@ -129,7 +129,40 @@ class OptionsTest {
         assertThatThrownBy(() -> ConsumerSpec.of(c -> c.pollDelay(null))).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> ProducerSpec.of(p -> p.topics((String) null)))
             .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> GroupSpec.of(null, g -> { })).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void absentValuesAreNormalised() {
+        assertThat(new SimulatorSpec(null, null, null))
+            .isEqualTo(new SimulatorSpec(List.of(), List.of(), List.of()));
+        assertThat(new TopicSpec(null, 3)).isEqualTo(new TopicSpec("", 3));
+        assertThat(new ProducerSpec(null, null, 1.0)).isEqualTo(new ProducerSpec("", List.of(), 1.0));
+        assertThat(new GroupSpec(null, null, 1, 2, 3, null, null))
+            .isEqualTo(new GroupSpec("", List.of(), 1, 2, 3, ConsumerSettings.defaults(), List.of()));
+        assertThat(new ConsumerSpec(null, null, null)).isEqualTo(ConsumerSpec.inheriting());
+        assertThat(new ConsumerOverrides(null, null, null, null, null, null, null))
+            .isEqualTo(ConsumerOverrides.none());
+        assertThat(new ConsumerSettings(null, null, false, null, 0, 1_000, 300_000))
+            .isEqualTo(ConsumerSettings.defaults());
+    }
+
+    @Test
+    void consumersOfAGroupWithoutDefaultsResolveAgainstTheTableDefaults() {
+        GroupSpec spec = new GroupSpec(
+            "g", List.of("t"), 45_000, 5_000, 1_000, null, List.of(ConsumerSpec.of(c -> c.rackId("a"))));
+
+        assertThat(spec.consumers().get(0).effective())
+            .isEqualTo(new ConsumerSettings(Protocol.CONSUMER, "", false, "a", 0, 1_000, 300_000));
+    }
+
+    @Test
+    void aSuppliedEffectiveIsKeptOnAStandaloneConsumerAndReplacedInAGroup() {
+        ConsumerSettings supplied = new ConsumerSettings(Protocol.CLASSIC, "sticky", true, "z", 1, 2, 3_000);
+        ConsumerSpec consumer = new ConsumerSpec("", ConsumerOverrides.none(), supplied);
+
+        assertThat(consumer.effective()).isEqualTo(supplied);
+        assertThat(new GroupSpec("g", List.of("t"), 45_000, 5_000, 1_000, null, List.of(consumer))
+            .consumers().get(0).effective()).isEqualTo(ConsumerSettings.defaults());
     }
 
     @Test

@@ -107,6 +107,17 @@ class ConfigMetadataTest {
     }
 
     @Test
+    void nameRuleIsTheLegalTopicNameRule() {
+        ConfigMetadata.NameRule rule = ConfigMetadata.get().nameRule();
+
+        assertThat(rule).isEqualTo(new ConfigMetadata.NameRule("[a-zA-Z0-9._-]+", 249));
+        assertThat(rule.accepts("Az09._-")).isTrue();
+        assertThat(rule.accepts("a".repeat(249))).isTrue();
+        assertThat(rule.accepts("a".repeat(250))).isFalse();
+        assertThat(List.of("", ".", "..", "a b", "a/b", "é").stream().map(rule::accepts)).containsOnly(false);
+    }
+
+    @Test
     void listsTheFaults() {
         assertThat(ConfigMetadata.get().faults())
             .containsExactly("freeze", "network-isolation", "connection-reset");

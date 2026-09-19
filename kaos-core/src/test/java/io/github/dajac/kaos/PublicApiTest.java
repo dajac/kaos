@@ -28,6 +28,7 @@ class PublicApiTest {
         ConfigMetadata.class,
         ConfigMetadata.Field.class,
         ConfigMetadata.Range.class,
+        ConfigMetadata.NameRule.class,
         ConfigMetadata.AssignorOptions.class,
         Fault.class,
         Protocol.class,

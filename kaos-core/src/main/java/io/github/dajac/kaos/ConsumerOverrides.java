@@ -6,7 +6,8 @@ import java.util.OptionalInt;
 
 /**
  * The settings a consumer sets itself. An empty value inherits from the {@code consumerDefaults} of
- * the group. The components mirror {@link ConsumerSettings}.
+ * the group. The components mirror {@link ConsumerSettings}. A {@code null} component is read as
+ * empty, so that a request body can leave it out.
  */
 public record ConsumerOverrides(
     Optional<Protocol> protocol,
@@ -27,13 +28,13 @@ public record ConsumerOverrides(
         OptionalInt.empty());
 
     public ConsumerOverrides {
-        Objects.requireNonNull(protocol, "protocol");
-        Objects.requireNonNull(assignor, "assignor");
-        Objects.requireNonNull(staticMember, "staticMember");
-        Objects.requireNonNull(rackId, "rackId");
-        Objects.requireNonNull(pollTimeoutMs, "pollTimeoutMs");
-        Objects.requireNonNull(pollDelayMs, "pollDelayMs");
-        Objects.requireNonNull(maxPollIntervalMs, "maxPollIntervalMs");
+        protocol = Objects.requireNonNullElse(protocol, Optional.empty());
+        assignor = Objects.requireNonNullElse(assignor, Optional.empty());
+        staticMember = Objects.requireNonNullElse(staticMember, Optional.empty());
+        rackId = Objects.requireNonNullElse(rackId, Optional.empty());
+        pollTimeoutMs = Objects.requireNonNullElse(pollTimeoutMs, OptionalInt.empty());
+        pollDelayMs = Objects.requireNonNullElse(pollDelayMs, OptionalInt.empty());
+        maxPollIntervalMs = Objects.requireNonNullElse(maxPollIntervalMs, OptionalInt.empty());
     }
 
     /** No override: the consumer inherits every setting. */

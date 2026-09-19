@@ -11,7 +11,12 @@ import java.util.function.Consumer;
  * <p>{@code effective} is derived: it is {@code overrides} applied on top of the
  * {@code consumerDefaults} of the group. A {@link GroupSpec} always recomputes it for its consumers.
  * A spec that is not part of a group yet resolves against {@link ConsumerSettings#defaults()} when
- * {@code effective} is {@code null}.
+ * {@code effective} is {@code null}, and keeps a non-null {@code effective} as given. That value is
+ * informative only: it is not trusted. Validating the consumer or adding it to a group resolves it
+ * again against the defaults of that group, and never reads the {@code effective} of its argument.
+ *
+ * <p>A {@code null} id is read as empty and {@code null} overrides as
+ * {@link ConsumerOverrides#none()}, so that a request body can leave them out.
  *
  * @param id the consumer id, unique within the group; empty when the group has not assigned it yet
  * @param overrides the settings the consumer sets itself
@@ -19,8 +24,8 @@ import java.util.function.Consumer;
  */
 public record ConsumerSpec(String id, ConsumerOverrides overrides, ConsumerSettings effective) {
     public ConsumerSpec {
-        Objects.requireNonNull(id, "id");
-        Objects.requireNonNull(overrides, "overrides");
+        id = Objects.requireNonNullElse(id, "");
+        overrides = Objects.requireNonNullElseGet(overrides, ConsumerOverrides::none);
         if (effective == null) {
             effective = EffectiveConfigResolver.resolve(ConsumerSettings.defaults(), overrides);
         }

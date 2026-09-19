@@ -5,7 +5,8 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * The description of a load generator.
+ * The description of a load generator. A {@code null} id or list is read as empty, so that a request
+ * body can leave it out.
  *
  * @param id the producer id; empty when the simulator has not assigned it yet
  * @param topics the names of the topics it writes to
@@ -13,8 +14,8 @@ import java.util.function.Consumer;
  */
 public record ProducerSpec(String id, List<String> topics, double ratePerPartition) {
     public ProducerSpec {
-        Objects.requireNonNull(id, "id");
-        topics = List.copyOf(topics);
+        id = Objects.requireNonNullElse(id, "");
+        topics = topics == null ? List.of() : List.copyOf(topics);
     }
 
     /** A producer described by an options lambda. */

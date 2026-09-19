@@ -12,6 +12,10 @@ import java.util.function.Consumer;
  * <p>The {@code effective} settings of each consumer are recomputed from {@code consumerDefaults}
  * and the consumer's {@code overrides}, so they are always consistent with the group.
  *
+ * <p>A request body can leave values out: a {@code null} id or list is read as empty, and a
+ * {@code null} {@code consumerDefaults} as {@link ConsumerSettings#defaults()}. The validation
+ * rejects the empty id and the empty subscription.
+ *
  * @param id the group id
  * @param subscribedTopics the names of the topics the consumers subscribe to
  * @param sessionTimeoutMs the group config {@code consumer.session.timeout.ms}
@@ -30,10 +34,10 @@ public record GroupSpec(
     List<ConsumerSpec> consumers
 ) {
     public GroupSpec {
-        Objects.requireNonNull(id, "id");
-        Objects.requireNonNull(consumerDefaults, "consumerDefaults");
-        subscribedTopics = List.copyOf(subscribedTopics);
-        consumers = EffectiveConfigResolver.resolve(consumerDefaults, consumers);
+        id = Objects.requireNonNullElse(id, "");
+        consumerDefaults = Objects.requireNonNullElseGet(consumerDefaults, ConsumerSettings::defaults);
+        subscribedTopics = subscribedTopics == null ? List.of() : List.copyOf(subscribedTopics);
+        consumers = EffectiveConfigResolver.resolve(consumerDefaults, consumers == null ? List.of() : consumers);
     }
 
     /** A group described by an options lambda. */

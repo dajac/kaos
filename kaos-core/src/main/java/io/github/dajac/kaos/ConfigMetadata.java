@@ -11,11 +11,14 @@ import java.util.Optional;
  * and the {@code /meta} endpoint all read it.
  *
  * @param fields the configurable fields
+ * @param nameRule the rule for topic names, group ids, and the producer and consumer ids that are
+ *     supplied rather than assigned
  * @param assignors the assignors of each protocol
  * @param faults the identifiers of the faults, see {@link Fault#id()}
  */
 public record ConfigMetadata(
     List<Field> fields,
+    NameRule nameRule,
     Map<Protocol, AssignorOptions> assignors,
     List<String> faults
 ) {
@@ -79,6 +82,12 @@ public record ConfigMetadata(
     public static final Field MAX_POLL_INTERVAL_MS =
         Field.ofInt("maxPollIntervalMs", "Max Poll Interval (ms)", Scope.CONSUMER, 300_000, 1_000, 600_000);
 
+    /**
+     * The rule of Kafka's legal topic names. Group ids and supplied producer and consumer ids follow
+     * it too, because they end up in client ids and in the URL paths of the HTTP API.
+     */
+    public static final NameRule NAME_RULE = new NameRule("[a-zA-Z0-9._-]+", 249);
+
     private static final ConfigMetadata INSTANCE = new ConfigMetadata(
         List.of(
             NUM_TOPICS,
@@ -96,6 +105,7 @@ public record ConfigMetadata(
             POLL_TIMEOUT_MS,
             POLL_DELAY_MS,
             MAX_POLL_INTERVAL_MS),
+        NAME_RULE,
         Map.of(
             Protocol.CONSUMER, new AssignorOptions(List.of("uniform", "range"), true),
             Protocol.CLASSIC,
@@ -104,6 +114,7 @@ public record ConfigMetadata(
 
     public ConfigMetadata {
         fields = List.copyOf(fields);
+        Objects.requireNonNull(nameRule, "nameRule");
         assignors = Map.copyOf(assignors);
         faults = List.copyOf(faults);
     }
@@ -147,6 +158,27 @@ public record ConfigMetadata(
         /** Whether the range includes the value. */
         public boolean contains(int value) {
             return value >= min && value <= max;
+        }
+    }
+
+    /**
+     * The rule a name or an id follows: it matches {@code pattern}, has at most {@code maxLength}
+     * characters, and is neither {@code .} nor {@code ..}.
+     *
+     * @param pattern the regular expression the whole name matches
+     * @param maxLength the largest accepted length
+     */
+    public record NameRule(String pattern, int maxLength) {
+        public NameRule {
+            Objects.requireNonNull(pattern, "pattern");
+        }
+
+        /** Whether the name follows the rule. */
+        public boolean accepts(String name) {
+            return name.length() <= maxLength
+                && !name.equals(".")
+                && !name.equals("..")
+                && name.matches(pattern);
         }
     }
 

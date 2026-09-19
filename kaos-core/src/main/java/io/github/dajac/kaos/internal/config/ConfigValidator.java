@@ -2,6 +2,7 @@ package io.github.dajac.kaos.internal.config;
 
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.ConfigMetadata.Field;
+import io.github.dajac.kaos.ConfigMetadata.NameRule;
 import io.github.dajac.kaos.ConfigMetadata.Range;
 import io.github.dajac.kaos.ConsumerOverrides;
 import io.github.dajac.kaos.ConsumerSettings;
@@ -17,8 +18,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Checks specs against {@link ConfigMetadata}. Every method is a pure function that returns all the
@@ -28,9 +27,6 @@ import java.util.stream.Collectors;
  * while the simulator runs is held to the same rules as one declared up front.
  */
 public final class ConfigValidator {
-    private static final int MAX_TOPIC_NAME_LENGTH = 249;
-    private static final Pattern LEGAL_TOPIC_NAME = Pattern.compile("[a-zA-Z0-9._-]+");
-
     private ConfigValidator() {
     }
 
@@ -59,7 +55,7 @@ public final class ConfigValidator {
             ProducerSpec producer = spec.producers().get(i);
             String path = "producers[" + i + "]";
             checkProducer(path, producer, topicNames, violations);
-            if (!producer.id().isEmpty() && !producerIds.add(producer.id())) {
+            if (!producer.id().isBlank() && !producerIds.add(producer.id())) {
                 violations.add(duplicate(path + ".id", "producer", producer.id()));
             }
         }
@@ -106,18 +102,7 @@ public final class ConfigValidator {
     }
 
     private static void checkTopic(String path, TopicSpec topic, List<Violation> violations) {
-        String name = topic.name();
-        if (name.isBlank()) {
-            violations.add(new Violation(join(path, "name"), "must not be blank"));
-        } else if (name.equals(".") || name.equals("..")) {
-            violations.add(new Violation(join(path, "name"), "must not be '.' or '..'"));
-        } else if (name.length() > MAX_TOPIC_NAME_LENGTH) {
-            violations.add(new Violation(
-                join(path, "name"), "must have at most " + MAX_TOPIC_NAME_LENGTH + " characters"));
-        } else if (!LEGAL_TOPIC_NAME.matcher(name).matches()) {
-            violations.add(new Violation(
-                join(path, "name"), "must contain only ASCII letters, digits, '.', '_' and '-'"));
-        }
+        checkName(join(path, "name"), topic.name(), violations);
         checkRange(path, ConfigMetadata.PARTITIONS, topic.partitions(), violations);
     }
 
@@ -127,6 +112,9 @@ public final class ConfigValidator {
         Set<String> topicNames,
         List<Violation> violations
     ) {
+        if (!producer.id().isEmpty()) {
+            checkName(join(path, "id"), producer.id(), violations);
+        }
         checkTopicReferences(join(path, "topics"), producer.topics(), topicNames, violations);
         double rate = producer.ratePerPartition();
         if (!Double.isFinite(rate) || rate <= 0) {
@@ -142,9 +130,7 @@ public final class ConfigValidator {
         Set<String> topicNames,
         List<Violation> violations
     ) {
-        if (group.id().isBlank()) {
-            violations.add(new Violation(join(path, "id"), "must not be blank"));
-        }
+        checkName(join(path, "id"), group.id(), violations);
         checkTopicReferences(join(path, "subscribedTopics"), group.subscribedTopics(), topicNames, violations);
         checkRange(path, ConfigMetadata.SESSION_TIMEOUT_MS, group.sessionTimeoutMs(), violations);
         checkRange(path, ConfigMetadata.HEARTBEAT_INTERVAL_MS, group.heartbeatIntervalMs(), violations);
@@ -162,18 +148,23 @@ public final class ConfigValidator {
             ConsumerSpec consumer = group.consumers().get(i);
             String consumerPath = join(path, "consumers[" + i + "]");
             checkConsumer(consumerPath, consumer, violations);
-            if (!consumer.id().isEmpty() && !consumerIds.add(consumer.id())) {
+            if (!consumer.id().isBlank() && !consumerIds.add(consumer.id())) {
                 violations.add(duplicate(consumerPath + ".id", "consumer", consumer.id()));
             }
         }
     }
 
     /**
-     * Checks the overrides of a consumer whose effective settings are resolved. The assignor is
-     * checked against the effective protocol, and only when the consumer overrides one of the two:
-     * an inherited pair is reported once, on the defaults of the group.
+     * Checks the id and the overrides of a consumer whose effective settings are resolved. The
+     * assignor is checked against the effective protocol, and only when the consumer overrides one
+     * of the two: an inherited pair is reported once, on the defaults of the group. The violation
+     * names the value the consumer set: its assignor, or else its protocol, which the inherited
+     * assignor does not fit.
      */
     private static void checkConsumer(String path, ConsumerSpec consumer, List<Violation> violations) {
+        if (!consumer.id().isEmpty()) {
+            checkName(join(path, "id"), consumer.id(), violations);
+        }
         String overridesPath = join(path, "overrides");
         ConsumerOverrides overrides = consumer.overrides();
         overrides.pollTimeoutMs().ifPresent(value ->
@@ -182,20 +173,42 @@ public final class ConfigValidator {
             checkRange(overridesPath, ConfigMetadata.POLL_DELAY_MS, value, violations));
         overrides.maxPollIntervalMs().ifPresent(value ->
             checkRange(overridesPath, ConfigMetadata.MAX_POLL_INTERVAL_MS, value, violations));
-        if (overrides.protocol().isPresent() || overrides.assignor().isPresent()) {
-            ConsumerSettings effective = consumer.effective();
-            checkAssignor(join(path, "effective"), effective.protocol(), effective.assignor(), violations);
+        ConsumerSettings effective = consumer.effective();
+        if (overrides.assignor().isPresent()) {
+            checkAssignor(overridesPath, effective.protocol(), effective.assignor(), violations);
+        } else if (overrides.protocol().isPresent()
+                && !Assignors.isValid(effective.protocol(), effective.assignor())) {
+            violations.add(new Violation(
+                join(overridesPath, ConfigMetadata.PROTOCOL.key()),
+                "the inherited assignor '" + effective.assignor() + "' is unknown for the "
+                    + effective.protocol().id() + " protocol; override the assignor with one of: "
+                    + knownAssignors(effective.protocol())));
         }
     }
 
     private static void checkAssignor(String path, Protocol protocol, String assignor, List<Violation> violations) {
         if (!Assignors.isValid(protocol, assignor)) {
-            String known = ConfigMetadata.get().assignors(protocol).names().stream()
-                .collect(Collectors.joining(", "));
             violations.add(new Violation(
                 join(path, ConfigMetadata.ASSIGNOR.key()),
                 "unknown assignor '" + assignor + "' for the " + protocol.id()
-                    + " protocol; expected one of: " + known));
+                    + " protocol; expected one of: " + knownAssignors(protocol)));
+        }
+    }
+
+    private static String knownAssignors(Protocol protocol) {
+        return String.join(", ", ConfigMetadata.get().assignors(protocol).names());
+    }
+
+    /** Checks a topic name, a group id, or a supplied producer or consumer id. */
+    private static void checkName(String field, String name, List<Violation> violations) {
+        NameRule rule = ConfigMetadata.get().nameRule();
+        if (name.isBlank()) {
+            violations.add(new Violation(field, "must not be blank"));
+        } else if (name.length() > rule.maxLength()) {
+            violations.add(new Violation(field, "must have at most " + rule.maxLength() + " characters"));
+        } else if (!rule.accepts(name)) {
+            violations.add(new Violation(
+                field, "must contain only ASCII letters, digits, '.', '_' and '-', and not be '.' or '..'"));
         }
     }
 

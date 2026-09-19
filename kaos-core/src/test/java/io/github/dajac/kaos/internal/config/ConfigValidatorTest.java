@@ -174,17 +174,30 @@ class ConfigValidatorTest {
         SimulatorSpec spec = withGroup(group(
             "g", settings(Protocol.CLASSIC, "range"), overriding(Optional.empty(), Optional.of("uniform"))));
 
-        assertThat(ConfigValidator.validate(spec)).extracting(Violation::field)
-            .containsExactly("groups[0].consumers[0].effective.assignor");
+        assertThat(ConfigValidator.validate(spec)).containsExactly(new Violation(
+            "groups[0].consumers[0].overrides.assignor",
+            "unknown assignor 'uniform' for the classic protocol; "
+                + "expected one of: range, roundrobin, sticky, cooperative-sticky"));
     }
 
     @Test
-    void rejectsAClassicOverrideThatInheritsAConsumerOnlyAssignor() {
+    void reportsAnOverriddenAssignorOnTheAssignorEvenWhenTheProtocolIsOverriddenToo() {
+        SimulatorSpec spec = withGroup(group(
+            "g", settings(Protocol.CONSUMER, "uniform"), overriding(Optional.of(Protocol.CLASSIC), Optional.of("uniform"))));
+
+        assertThat(ConfigValidator.validate(spec)).extracting(Violation::field)
+            .containsExactly("groups[0].consumers[0].overrides.assignor");
+    }
+
+    @Test
+    void reportsAClassicOverrideThatInheritsAConsumerOnlyAssignorOnTheProtocol() {
         SimulatorSpec spec = withGroup(group(
             "g", settings(Protocol.CONSUMER, "uniform"), overriding(Optional.of(Protocol.CLASSIC), Optional.empty())));
 
-        assertThat(ConfigValidator.validate(spec)).extracting(Violation::field)
-            .containsExactly("groups[0].consumers[0].effective.assignor");
+        assertThat(ConfigValidator.validate(spec)).containsExactly(new Violation(
+            "groups[0].consumers[0].overrides.protocol",
+            "the inherited assignor 'uniform' is unknown for the classic protocol; "
+                + "override the assignor with one of: range, roundrobin, sticky, cooperative-sticky"));
     }
 
     @Test
@@ -317,6 +330,77 @@ class ConfigValidatorTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {".", "..", "with space", "slash/name", "é", "a?b", "a#b"})
+    void rejectsAnIllegalId(String id) {
+        String message = "must contain only ASCII letters, digits, '.', '_' and '-', and not be '.' or '..'";
+        SimulatorSpec spec = new SimulatorSpec(
+            List.of(TopicSpec.of("orders")),
+            List.of(new ProducerSpec(id, List.of("orders"), 1.0)),
+            List.of(group(id, DEFAULTS, withId(id))));
+
+        assertThat(ConfigValidator.validate(spec)).containsExactly(
+            new Violation("producers[0].id", message),
+            new Violation("groups[0].id", message),
+            new Violation("groups[0].consumers[0].id", message));
+    }
+
+    @Test
+    void enforcesTheIdLength() {
+        String longest = "a".repeat(249);
+        String tooLong = "a".repeat(250);
+
+        assertThat(ConfigValidator.validate(new SimulatorSpec(
+            List.of(TopicSpec.of("orders")),
+            List.of(new ProducerSpec(longest, List.of("orders"), 1.0)),
+            List.of(group(longest, DEFAULTS, withId(longest)))))).isEmpty();
+        assertThat(ConfigValidator.validate(new SimulatorSpec(
+            List.of(TopicSpec.of("orders")),
+            List.of(new ProducerSpec(tooLong, List.of("orders"), 1.0)),
+            List.of(group(tooLong, DEFAULTS, withId(tooLong))))))
+            .extracting(Violation::field, Violation::message).containsExactly(
+                org.assertj.core.groups.Tuple.tuple("producers[0].id", "must have at most 249 characters"),
+                org.assertj.core.groups.Tuple.tuple("groups[0].id", "must have at most 249 characters"),
+                org.assertj.core.groups.Tuple.tuple("groups[0].consumers[0].id", "must have at most 249 characters"));
+    }
+
+    @Test
+    void rejectsASuppliedIdMadeOfWhitespace() {
+        SimulatorSpec spec = new SimulatorSpec(
+            List.of(TopicSpec.of("orders")),
+            List.of(new ProducerSpec(" ", List.of("orders"), 1.0)),
+            List.of(group("g", DEFAULTS, withId(" "))));
+
+        assertThat(ConfigValidator.validate(spec)).containsExactly(
+            new Violation("producers[0].id", "must not be blank"),
+            new Violation("groups[0].consumers[0].id", "must not be blank"));
+    }
+
+    @Test
+    void acceptsEveryLegalCharacterInAnId() {
+        String id = "Az09._-";
+        SimulatorSpec spec = new SimulatorSpec(
+            List.of(TopicSpec.of(id)),
+            List.of(new ProducerSpec(id, List.of(id), 1.0)),
+            List.of(new GroupSpec(id, List.of(id), 45_000, 5_000, 1_000, DEFAULTS, List.of(withId(id)))));
+
+        assertThat(ConfigValidator.validate(spec)).isEmpty();
+    }
+
+    @Test
+    void reportsValuesMissingFromARequestBodyAsViolations() {
+        SimulatorSpec spec = new SimulatorSpec(
+            List.of(new TopicSpec(null, 1)),
+            List.of(new ProducerSpec(null, null, 1.0)),
+            List.of(new GroupSpec(null, null, 45_000, 5_000, 1_000, null, null)));
+
+        assertThat(ConfigValidator.validate(spec)).containsExactly(
+            new Violation("topics[0].name", "must not be blank"),
+            new Violation("producers[0].topics", "must name at least one topic"),
+            new Violation("groups[0].id", "must not be blank"),
+            new Violation("groups[0].subscribedTopics", "must name at least one topic"));
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"", "  "})
     void rejectsABlankGroupId(String id) {
         assertThat(ConfigValidator.validate(withGroup(group(id, DEFAULTS))))
@@ -367,6 +451,6 @@ class ConfigValidatorTest {
 
         assertThat(ConfigValidator.validateConsumer(settings(Protocol.CONSUMER, "range"), consumer)).isEmpty();
         assertThat(ConfigValidator.validateConsumer(settings(Protocol.CONSUMER, "uniform"), consumer))
-            .extracting(Violation::field).containsExactly("effective.assignor");
+            .extracting(Violation::field).containsExactly("overrides.protocol");
     }
 }
