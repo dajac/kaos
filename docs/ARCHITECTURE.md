@@ -12,17 +12,9 @@ section that describes it.
 | Part | Status |
 |---|---|
 | Maven multi-module build, `run.sh`, shaded jar | planned |
-| Integration-test harness (Testcontainers) | planned |
-| `kaos-core`: spec, options and validation model | planned |
-| `kaos-core`: proxy package | planned |
-| `kaos-core`: snapshot model and pure state logic | planned |
-| `kaos-core`: simulator harness, topics and producers | planned |
-| `kaos-core`: consumer groups, consumers, faults, autopilot | planned |
-| `kaos-core`: dynamic add/remove and multiple groups | planned |
-| `kaos-server`: HTTP API v1 and SSE | planned |
-| `kaos-server`: OpenAPI spec and contract test | planned |
-| `kaos-ui`: config panel and Rows view | planned |
-| README | planned |
+| `kaos-core` | planned |
+| `kaos-server` | planned |
+| `kaos-ui` | planned |
 
 ## Context
 
