@@ -26,8 +26,14 @@ public final class Main {
         }
 
         Server server = new Server();
+        try {
+            server.start(options.port());
+        } catch (IllegalStateException e) {
+            System.err.println(e.getMessage());
+            System.exit(1);
+            return;
+        }
         Runtime.getRuntime().addShutdownHook(new Thread(server::close, "kaos-shutdown"));
-        server.start(options.port());
 
         LOG.info("Kaos {} listening on http://localhost:{} (bootstrap: {})",
             Version.read(), server.port(), options.bootstrapServer());

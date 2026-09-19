@@ -484,7 +484,9 @@ Status: planned.
 Status: planned, except a stub of `GET /api/v1/meta` that returns only
 `{"version": "<build version>"}`, and the command line:
 `--bootstrap-server <host:port>` (required) and `--port <port>`
-(default 8081).
+(default 8081). Invalid options print the usage and exit with
+status 2. A failed startup, such as a port already in use, releases the
+server, prints the reason and exits with status 1.
 
 The HTTP API is resource-oriented and mirrors the Java model. The server
 holds one `Simulator`.
