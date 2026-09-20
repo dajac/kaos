@@ -40,6 +40,15 @@ public final class Assignors {
     }
 
     /**
+     * Whether a classic assignor name selects the eager rebalance protocol, in which a consumer
+     * gives up all its partitions before it rejoins. Only {@code cooperative-sticky} is cooperative.
+     * The empty name is eager, because the default of the client lists {@code range} first.
+     */
+    public static boolean isEagerClassic(String assignor) {
+        return !"cooperative-sticky".equals(assignor);
+    }
+
+    /**
      * The value of {@code group.remote.assignor} for a consumer protocol assignor name. It is empty
      * for the empty name, which keeps the default of the broker.
      */
