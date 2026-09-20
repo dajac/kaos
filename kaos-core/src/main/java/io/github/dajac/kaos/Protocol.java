@@ -1,5 +1,6 @@
 package io.github.dajac.kaos;
 
+import java.util.Arrays;
 import java.util.Locale;
 
 /** The group protocol a simulated consumer speaks. */
@@ -20,11 +21,9 @@ public enum Protocol {
      * @throws IllegalArgumentException if no protocol has this identifier
      */
     public static Protocol of(String id) {
-        for (Protocol protocol : values()) {
-            if (protocol.id().equalsIgnoreCase(id)) {
-                return protocol;
-            }
-        }
-        throw new IllegalArgumentException("Unknown protocol: " + id);
+        return Arrays.stream(values())
+            .filter(protocol -> protocol.id().equalsIgnoreCase(id))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Unknown protocol: " + id));
     }
 }

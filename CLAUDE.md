@@ -27,6 +27,22 @@ before changing anything.
   read-only reference (`git show initial-setup:<path>`) and never lands
   on `main`.
 
+## Code style
+
+- An empty body is `{}` on one line: `private Assignors() {}`,
+  `g -> {}`.
+- When the arguments of a call or a declaration span several lines, the
+  closing parenthesis goes on its own line, aligned with the start of
+  the statement: `);`, `) {`, `),`. This applies to main and test code.
+- Prefer `var` for local variables, enhanced-`for` variables included,
+  when the type is evident from the right-hand side or irrelevant to
+  the reader. With a diamond, move the type arguments to the right:
+  `var ids = new HashSet<String>()`.
+- Prefer modern Java 21 idioms when they make the code clearer: records,
+  sealed types with pattern `switch`, pattern matching for `instanceof`,
+  switch expressions, `List.of`, `Stream.toList()`, text blocks. Do not
+  force them where they hurt readability.
+
 ## Module map
 
 | Module | Role |

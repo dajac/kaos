@@ -4,8 +4,7 @@ import java.time.Duration;
 
 /** Converts the durations of the options lambdas to the millisecond values of the specs. */
 final class Durations {
-    private Durations() {
-    }
+    private Durations() {}
 
     /**
      * The duration in milliseconds. A duration outside the {@code int} range saturates, so that the
@@ -18,6 +17,6 @@ final class Durations {
         } catch (ArithmeticException e) {
             millis = duration.isNegative() ? Long.MIN_VALUE : Long.MAX_VALUE;
         }
-        return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, millis));
+        return Math.clamp(millis, Integer.MIN_VALUE, Integer.MAX_VALUE);
     }
 }

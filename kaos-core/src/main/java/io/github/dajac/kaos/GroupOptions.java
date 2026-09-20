@@ -20,13 +20,12 @@ public final class GroupOptions {
     private ConsumerOverrides consumerDefaults = ConsumerOverrides.none();
     private final List<ConsumerSpec> consumers = new ArrayList<>();
 
-    GroupOptions() {
-    }
+    GroupOptions() {}
 
     /** Runs the lambda on fresh options and returns the spec it describes. */
     static GroupSpec spec(String id, Consumer<GroupOptions> options) {
         Objects.requireNonNull(options, "options");
-        GroupOptions target = new GroupOptions();
+        var target = new GroupOptions();
         options.accept(target);
         return new GroupSpec(
             id,
@@ -35,12 +34,13 @@ public final class GroupOptions {
             target.heartbeatIntervalMs,
             target.assignmentIntervalMs,
             EffectiveConfigResolver.resolve(ConsumerSettings.defaults(), target.consumerDefaults),
-            target.consumers);
+            target.consumers
+        );
     }
 
     /** Adds topics the consumers subscribe to, by name. */
     public GroupOptions subscribe(String... topics) {
-        for (String topic : topics) {
+        for (var topic : topics) {
             subscribedTopics.add(Objects.requireNonNull(topic, "topic"));
         }
         return this;

@@ -21,10 +21,10 @@ public final class Assignors {
         "range", RangeAssignor.class.getName(),
         "roundrobin", RoundRobinAssignor.class.getName(),
         "sticky", StickyAssignor.class.getName(),
-        "cooperative-sticky", CooperativeStickyAssignor.class.getName());
+        "cooperative-sticky", CooperativeStickyAssignor.class.getName()
+    );
 
-    private Assignors() {
-    }
+    private Assignors() {}
 
     /** Whether the assignor name can be used with the protocol. */
     public static boolean isValid(Protocol protocol, String assignor) {

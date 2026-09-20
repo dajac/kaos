@@ -11,8 +11,7 @@ import java.util.List;
  * wins, and every other value is inherited from the defaults.
  */
 public final class EffectiveConfigResolver {
-    private EffectiveConfigResolver() {
-    }
+    private EffectiveConfigResolver() {}
 
     /** Applies the overrides on top of the defaults. */
     public static ConsumerSettings resolve(ConsumerSettings defaults, ConsumerOverrides overrides) {
@@ -23,7 +22,8 @@ public final class EffectiveConfigResolver {
             overrides.rackId().orElse(defaults.rackId()),
             overrides.pollTimeoutMs().orElse(defaults.pollTimeoutMs()),
             overrides.pollDelayMs().orElse(defaults.pollDelayMs()),
-            overrides.maxPollIntervalMs().orElse(defaults.maxPollIntervalMs()));
+            overrides.maxPollIntervalMs().orElse(defaults.maxPollIntervalMs())
+        );
     }
 
     /** Returns the consumer with its effective settings recomputed from the defaults. */

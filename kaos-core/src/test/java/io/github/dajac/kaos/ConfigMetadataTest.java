@@ -3,7 +3,6 @@ package io.github.dajac.kaos;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.dajac.kaos.ConfigMetadata.Field;
 import io.github.dajac.kaos.ConfigMetadata.Range;
 import io.github.dajac.kaos.ConfigMetadata.Scope;
 import io.github.dajac.kaos.ConfigMetadata.Type;
@@ -16,7 +15,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Stream;
 
 class ConfigMetadataTest {
@@ -38,7 +36,8 @@ class ConfigMetadataTest {
             Arguments.of(Scope.CONSUMER, "rackId", Type.STRING, "", null),
             Arguments.of(Scope.CONSUMER, "pollTimeoutMs", Type.INT, 0, new Range(0, 60_000)),
             Arguments.of(Scope.CONSUMER, "pollDelayMs", Type.INT, 1_000, new Range(0, 120_000)),
-            Arguments.of(Scope.CONSUMER, "maxPollIntervalMs", Type.INT, 300_000, new Range(1_000, 600_000)));
+            Arguments.of(Scope.CONSUMER, "maxPollIntervalMs", Type.INT, 300_000, new Range(1_000, 600_000))
+        );
     }
 
     @ParameterizedTest
@@ -46,7 +45,7 @@ class ConfigMetadataTest {
     void encodesTheDefaultAndTheRangeOfEachField(
         Scope scope, String key, Type type, Object defaultValue, Range range
     ) {
-        Field field = ConfigMetadata.get().field(scope, key).orElseThrow();
+        var field = ConfigMetadata.get().field(scope, key).orElseThrow();
 
         assertThat(field.type()).isEqualTo(type);
         assertThat(field.defaultValue()).isEqualTo(defaultValue);
@@ -61,17 +60,18 @@ class ConfigMetadataTest {
 
     @Test
     void keysAreUniqueWithinAScope() {
-        Set<String> seen = new HashSet<>();
-        for (Field field : ConfigMetadata.get().fields()) {
+        var seen = new HashSet<String>();
+        for (var field : ConfigMetadata.get().fields()) {
             assertThat(seen.add(field.scope() + "." + field.key())).as(field.key()).isTrue();
         }
     }
 
     @Test
     void everyDefaultIsWithinItsRange() {
-        for (Field field : ConfigMetadata.get().fields()) {
+        for (var field : ConfigMetadata.get().fields()) {
             field.range().ifPresent(range ->
-                assertThat(range.contains(field.intDefault())).as(field.key()).isTrue());
+                assertThat(range.contains(field.intDefault())).as(field.key()).isTrue()
+            );
         }
     }
 
@@ -82,7 +82,7 @@ class ConfigMetadataTest {
 
     @Test
     void listsTheAssignorsOfEachProtocol() {
-        ConfigMetadata metadata = ConfigMetadata.get();
+        var metadata = ConfigMetadata.get();
 
         assertThat(metadata.assignors()).containsOnlyKeys(Protocol.CONSUMER, Protocol.CLASSIC);
         assertThat(metadata.assignors(Protocol.CONSUMER).names()).containsExactly("uniform", "range");
@@ -94,7 +94,7 @@ class ConfigMetadataTest {
 
     @Test
     void classicAcceptsOnlyItsNamesAndTheEmptyName() {
-        ConfigMetadata.AssignorOptions classic = ConfigMetadata.get().assignors(Protocol.CLASSIC);
+        var classic = ConfigMetadata.get().assignors(Protocol.CLASSIC);
 
         assertThat(classic.accepts("sticky")).isTrue();
         assertThat(classic.accepts("")).isTrue();
@@ -108,7 +108,7 @@ class ConfigMetadataTest {
 
     @Test
     void nameRuleIsTheLegalTopicNameRule() {
-        ConfigMetadata.NameRule rule = ConfigMetadata.get().nameRule();
+        var rule = ConfigMetadata.get().nameRule();
 
         assertThat(rule).isEqualTo(new ConfigMetadata.NameRule("[a-zA-Z0-9._-]+", 249));
         assertThat(rule.accepts("Az09._-")).isTrue();
@@ -125,7 +125,7 @@ class ConfigMetadataTest {
 
     @Test
     void isImmutable() {
-        ConfigMetadata metadata = ConfigMetadata.get();
+        var metadata = ConfigMetadata.get();
 
         assertThatThrownBy(() -> metadata.fields().clear()).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> metadata.assignors().clear()).isInstanceOf(UnsupportedOperationException.class);
@@ -136,7 +136,7 @@ class ConfigMetadataTest {
 
     @Test
     void rangeIsInclusive() {
-        Range range = new Range(1, 3);
+        var range = new Range(1, 3);
 
         assertThat(List.of(0, 1, 3, 4).stream().map(range::contains)).containsExactly(false, true, true, false);
         assertThatThrownBy(() -> new Range(2, 1)).isInstanceOf(IllegalArgumentException.class);

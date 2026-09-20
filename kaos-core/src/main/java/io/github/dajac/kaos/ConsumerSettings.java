@@ -39,6 +39,7 @@ public record ConsumerSettings(
             ConfigMetadata.RACK_ID.stringDefault(),
             ConfigMetadata.POLL_TIMEOUT_MS.intDefault(),
             ConfigMetadata.POLL_DELAY_MS.intDefault(),
-            ConfigMetadata.MAX_POLL_INTERVAL_MS.intDefault());
+            ConfigMetadata.MAX_POLL_INTERVAL_MS.intDefault()
+        );
     }
 }

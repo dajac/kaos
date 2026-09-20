@@ -20,13 +20,12 @@ public final class ConsumerOptions {
     private OptionalInt pollDelayMs = OptionalInt.empty();
     private OptionalInt maxPollIntervalMs = OptionalInt.empty();
 
-    ConsumerOptions() {
-    }
+    ConsumerOptions() {}
 
     /** Runs the lambda on fresh options and returns what it set. */
     static ConsumerOverrides overrides(Consumer<ConsumerOptions> options) {
         Objects.requireNonNull(options, "options");
-        ConsumerOptions target = new ConsumerOptions();
+        var target = new ConsumerOptions();
         options.accept(target);
         return new ConsumerOverrides(
             target.protocol,
@@ -35,7 +34,8 @@ public final class ConsumerOptions {
             target.rackId,
             target.pollTimeoutMs,
             target.pollDelayMs,
-            target.maxPollIntervalMs);
+            target.maxPollIntervalMs
+        );
     }
 
     /** The group protocol. */

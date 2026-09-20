@@ -11,13 +11,12 @@ public final class ProducerOptions {
     private final List<String> topics = new ArrayList<>();
     private double ratePerPartition = ConfigMetadata.RATE_PER_PARTITION.doubleDefault();
 
-    ProducerOptions() {
-    }
+    ProducerOptions() {}
 
     /** Runs the lambda on fresh options and returns the spec it describes. */
     static ProducerSpec spec(Consumer<ProducerOptions> options) {
         Objects.requireNonNull(options, "options");
-        ProducerOptions target = new ProducerOptions();
+        var target = new ProducerOptions();
         options.accept(target);
         return new ProducerSpec(target.id, target.topics, target.ratePerPartition);
     }
@@ -30,7 +29,7 @@ public final class ProducerOptions {
 
     /** Adds topics to write to, by name. */
     public ProducerOptions topics(String... topics) {
-        for (String topic : topics) {
+        for (var topic : topics) {
             this.topics.add(Objects.requireNonNull(topic, "topic"));
         }
         return this;

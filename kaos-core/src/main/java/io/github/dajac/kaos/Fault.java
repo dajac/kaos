@@ -37,12 +37,10 @@ public sealed interface Fault permits Fault.Freeze, Fault.NetworkIsolation, Faul
      * @throws IllegalArgumentException if no fault has this identifier
      */
     static Fault of(String id) {
-        for (Fault fault : all()) {
-            if (fault.id().equals(id)) {
-                return fault;
-            }
-        }
-        throw new IllegalArgumentException("Unknown fault: " + id);
+        return all().stream()
+            .filter(fault -> fault.id().equals(id))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Unknown fault: " + id));
     }
 
     /** See {@link Fault#freeze()}. */

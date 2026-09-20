@@ -32,7 +32,8 @@ public record ConfigMetadata(
 
     /** {@link ProducerSpec#ratePerPartition()}: one record per partition every 500 ms. */
     public static final Field RATE_PER_PARTITION = new Field(
-        "ratePerPartition", "Rate per Partition (records/s)", Scope.PRODUCER, Type.DOUBLE, 2.0, Optional.empty());
+        "ratePerPartition", "Rate per Partition (records/s)", Scope.PRODUCER, Type.DOUBLE, 2.0, Optional.empty()
+    );
 
     /** {@link GroupSpec#id()}. */
     public static final Field GROUP_ID =
@@ -104,13 +105,16 @@ public record ConfigMetadata(
             RACK_ID,
             POLL_TIMEOUT_MS,
             POLL_DELAY_MS,
-            MAX_POLL_INTERVAL_MS),
+            MAX_POLL_INTERVAL_MS
+        ),
         NAME_RULE,
         Map.of(
             Protocol.CONSUMER, new AssignorOptions(List.of("uniform", "range"), true),
             Protocol.CLASSIC,
-            new AssignorOptions(List.of("range", "roundrobin", "sticky", "cooperative-sticky"), false)),
-        Fault.all().stream().map(Fault::id).toList());
+            new AssignorOptions(List.of("range", "roundrobin", "sticky", "cooperative-sticky"), false)
+        ),
+        Fault.all().stream().map(Fault::id).toList()
+    );
 
     public ConfigMetadata {
         fields = List.copyOf(fields);

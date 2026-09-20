@@ -18,7 +18,7 @@ class FaultTest {
     void idsRoundTrip() {
         assertThat(Fault.all()).extracting(Fault::id)
             .containsExactly("freeze", "network-isolation", "connection-reset");
-        for (Fault fault : Fault.all()) {
+        for (var fault : Fault.all()) {
             assertThat(Fault.of(fault.id())).isEqualTo(fault);
         }
     }
@@ -30,8 +30,8 @@ class FaultTest {
 
     @Test
     void aSwitchOverTheSealedTypeIsExhaustive() {
-        for (Fault fault : Fault.all()) {
-            String where = switch (fault) {
+        for (var fault : Fault.all()) {
+            var where = switch (fault) {
                 case Fault.Freeze f -> "runner";
                 case Fault.NetworkIsolation f -> "proxy";
                 case Fault.ConnectionReset f -> "proxy";

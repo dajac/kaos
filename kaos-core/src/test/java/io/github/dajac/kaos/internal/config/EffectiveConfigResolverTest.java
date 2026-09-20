@@ -25,14 +25,15 @@ class EffectiveConfigResolverTest {
 
     @Test
     void everyOverrideWins() {
-        ConsumerOverrides overrides = new ConsumerOverrides(
+        var overrides = new ConsumerOverrides(
             Optional.of(Protocol.CLASSIC),
             Optional.of("sticky"),
             Optional.of(true),
             Optional.of("rack-1"),
             OptionalInt.of(11),
             OptionalInt.of(21),
-            OptionalInt.of(31_000));
+            OptionalInt.of(31_000)
+        );
 
         assertThat(EffectiveConfigResolver.resolve(DEFAULTS, overrides))
             .isEqualTo(new ConsumerSettings(Protocol.CLASSIC, "sticky", true, "rack-1", 11, 21, 31_000));
@@ -40,14 +41,15 @@ class EffectiveConfigResolverTest {
 
     @Test
     void eachValueIsResolvedOnItsOwn() {
-        ConsumerOverrides overrides = new ConsumerOverrides(
+        var overrides = new ConsumerOverrides(
             Optional.empty(),
             Optional.empty(),
             Optional.of(true),
             Optional.empty(),
             OptionalInt.empty(),
             OptionalInt.of(0),
-            OptionalInt.empty());
+            OptionalInt.empty()
+        );
 
         assertThat(EffectiveConfigResolver.resolve(DEFAULTS, overrides))
             .isEqualTo(new ConsumerSettings(Protocol.CONSUMER, "uniform", true, "rack-0", 10, 0, 30_000));
@@ -55,12 +57,13 @@ class EffectiveConfigResolverTest {
 
     @Test
     void anOverrideEqualToTheFalsyDefaultStillCounts() {
-        ConsumerSettings staticDefaults = new ConsumerSettings(Protocol.CONSUMER, "uniform", true, "rack-0", 10, 20, 30_000);
-        ConsumerOverrides overrides = new ConsumerOverrides(
+        var staticDefaults = new ConsumerSettings(Protocol.CONSUMER, "uniform", true, "rack-0", 10, 20, 30_000);
+        var overrides = new ConsumerOverrides(
             Optional.empty(), Optional.of(""), Optional.of(false), Optional.of(""),
-            OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty());
+            OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty()
+        );
 
-        ConsumerSettings effective = EffectiveConfigResolver.resolve(staticDefaults, overrides);
+        var effective = EffectiveConfigResolver.resolve(staticDefaults, overrides);
 
         assertThat(effective.staticMember()).isFalse();
         assertThat(effective.assignor()).isEmpty();
@@ -69,16 +72,16 @@ class EffectiveConfigResolverTest {
 
     @Test
     void resolvingAConsumerKeepsItsIdAndOverrides() {
-        ConsumerSpec consumer = new ConsumerSpec("consumer-3", ConsumerOverrides.none(), ConsumerSettings.defaults());
+        var consumer = new ConsumerSpec("consumer-3", ConsumerOverrides.none(), ConsumerSettings.defaults());
 
-        ConsumerSpec resolved = EffectiveConfigResolver.resolve(DEFAULTS, consumer);
+        var resolved = EffectiveConfigResolver.resolve(DEFAULTS, consumer);
 
         assertThat(resolved).isEqualTo(new ConsumerSpec("consumer-3", ConsumerOverrides.none(), DEFAULTS));
     }
 
     @Test
     void resolvingAListReturnsAnImmutableCopy() {
-        List<ConsumerSpec> resolved =
+        var resolved =
             EffectiveConfigResolver.resolve(DEFAULTS, List.of(ConsumerSpec.inheriting(), ConsumerSpec.inheriting()));
 
         assertThat(resolved).extracting(ConsumerSpec::effective).containsExactly(DEFAULTS, DEFAULTS);

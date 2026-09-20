@@ -4,10 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,12 +31,13 @@ class PublicApiTest {
         Protocol.class,
         Violation.class,
         SimulationException.class,
-        InvalidConfigException.class);
+        InvalidConfigException.class
+    );
 
     @Test
     void signaturesExposeNeitherKafkaNorInternalTypes() {
-        for (Class<?> type : PUBLIC_TYPES) {
-            for (String signatureType : signatureTypes(type)) {
+        for (var type : PUBLIC_TYPES) {
+            for (var signatureType : signatureTypes(type)) {
                 assertThat(signatureType).as(type.getSimpleName())
                     .doesNotContain("org.apache.kafka")
                     .doesNotContain("io.github.dajac.kaos.internal");
@@ -49,24 +47,24 @@ class PublicApiTest {
 
     @Test
     void noTypeNameContainsTheProjectName() {
-        for (Class<?> type : PUBLIC_TYPES) {
+        for (var type : PUBLIC_TYPES) {
             assertThat(type.getSimpleName()).doesNotContainIgnoringCase("kaos");
         }
     }
 
     private static List<String> signatureTypes(Class<?> type) {
-        List<String> types = new ArrayList<>();
-        for (Method method : type.getDeclaredMethods()) {
+        var types = new ArrayList<String>();
+        for (var method : type.getDeclaredMethods()) {
             if (isApi(method.getModifiers())) {
                 types.add(method.getGenericReturnType().getTypeName());
-                for (Type parameter : method.getGenericParameterTypes()) {
+                for (var parameter : method.getGenericParameterTypes()) {
                     types.add(parameter.getTypeName());
                 }
             }
         }
-        for (Constructor<?> constructor : type.getDeclaredConstructors()) {
+        for (var constructor : type.getDeclaredConstructors()) {
             if (isApi(constructor.getModifiers())) {
-                for (Type parameter : constructor.getGenericParameterTypes()) {
+                for (var parameter : constructor.getGenericParameterTypes()) {
                     types.add(parameter.getTypeName());
                 }
             }

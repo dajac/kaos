@@ -12,8 +12,8 @@ class AssignorsTest {
 
     @Test
     void everyClassicAssignorOfTheMetadataMapsToAClientAssignor() throws ClassNotFoundException {
-        for (String name : ConfigMetadata.get().assignors(Protocol.CLASSIC).names()) {
-            String className = Assignors.classicAssignorClass(name).orElseThrow();
+        for (var name : ConfigMetadata.get().assignors(Protocol.CLASSIC).names()) {
+            var className = Assignors.classicAssignorClass(name).orElseThrow();
 
             assertThat(ConsumerPartitionAssignor.class).as(name).isAssignableFrom(Class.forName(className));
         }

@@ -25,7 +25,8 @@ public record ConsumerOverrides(
         Optional.empty(),
         OptionalInt.empty(),
         OptionalInt.empty(),
-        OptionalInt.empty());
+        OptionalInt.empty()
+    );
 
     public ConsumerOverrides {
         protocol = Objects.requireNonNullElse(protocol, Optional.empty());
