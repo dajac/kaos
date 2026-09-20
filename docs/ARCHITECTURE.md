@@ -713,9 +713,10 @@ starts the server, and that the CI workflow runs the build.
   Testcontainers, so CI runs exactly the local build.
 - It triggers on every `pull_request`, whatever the base branch, so
   stacked PRs are covered, and on `push` to `main`.
-- `concurrency` cancels the superseded runs of the same ref, the token
-  is limited to `contents: read`, and the surefire and failsafe reports
-  are uploaded as the `test-reports` artifact when the build fails.
+- `concurrency` cancels the superseded runs of a pull request only, so
+  every push to `main` runs to completion. The token is limited to
+  `contents: read`, and the surefire and failsafe reports are uploaded
+  as the `test-reports` artifact when the build fails.
 - The UI build will join the same job through `frontend-maven-plugin`,
   with no workflow change.
 
