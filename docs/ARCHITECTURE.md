@@ -14,7 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
-| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`); the rest is planned |
+| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so is the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)); the rest is planned |
 | `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
 | `kaos-ui` | planned |
 
@@ -76,7 +76,7 @@ view is not carried over.
 
 Status: the Java build rows are in place (Java 21, Kafka, Kroxylicious,
 Javalin, Jackson, the command line, logging, packaging, and JUnit 6 with
-AssertJ, Testcontainers and failsafe). Mockito, Awaitility, the frontend
+AssertJ, Awaitility, Testcontainers and failsafe). Mockito, the frontend
 and the API contract are planned.
 
 The versions below were checked on 2026-09-19. When a tool rejects a
@@ -129,8 +129,9 @@ CI workflow and this document. In `kaos-core`, the spec, options and
 validation model exists: the five spec records with `ConsumerSettings`
 and `ConsumerOverrides`, the three options classes, `ConfigMetadata`,
 `Fault`, `Protocol`, `Violation`, `SimulationException`,
-`InvalidConfigException`, the whole `internal/config` package, and a
-`Simulator` that holds only the static `validate`. Everything else in
+`InvalidConfigException`, the whole `internal/config` package, a
+`Simulator` that holds only the static `validate`, and the whole
+`internal/proxy` package. Everything else in
 the tree below is planned, including the `kaos-ui` module and the
 `-DskipUi` switch. The test harness of `kaos-core` also exists; see
 [Verification](#verification).
@@ -575,7 +576,8 @@ for free):
 
 ### Proxy without static state
 
-Status: planned.
+Status: built, in `io.github.dajac.kaos.internal.proxy`. The `Simulator`
+that owns a proxy is planned.
 
 - There is one proxy and one `NetworkFaults` instance per `Simulator`.
   All groups share them.
@@ -586,28 +588,66 @@ Status: planned.
   - All of a consumer's connections (coordinator, leaders, metadata)
     carry the same id, so they go dark together.
   - Nothing else is affected.
-- `NetworkFaults` maps each client id to a mode: `BLACKHOLE` (drop) or
-  `RESET` (close the connection).
+- `NetworkFaults` maps each client id to a mode. It is a plain
+  thread-safe instance; a change applies to the client's next request.
+  - `BLACKHOLE` drops the request (`drop()` on the filter result).
+  - `RESET` closes the client connection instead of forwarding
+    (`withCloseConnection()` on the filter result, which Kroxylicious
+    supports natively). Kroxylicious closes a connection by draining it
+    first: it waits up to the virtual cluster's `drainTimeout` for the
+    in-flight requests, and the request that triggered the close never
+    completes. The launcher sets `drainTimeout` to 100 ms, so the
+    client sees the disconnect about 100 ms after its request.
 - Adding or removing consumers or groups at runtime needs nothing from
   the proxy.
 - Producers and the admin client bypass the proxy.
-- The `NetworkProxy` interface keeps the topology swappable. A proxy per
-  group or a port per consumer would only matter for connection-level
-  faults that need identity by port.
+- The `NetworkProxy` interface (`bootstrapServers()`, `faults()`,
+  `close()`) keeps the topology swappable. A proxy per group or a port
+  per consumer would only matter for connection-level faults that need
+  identity by port.
 - `NetworkFaultFilterFactory` has two constructors: a no-arg "unbound"
   one used by the ServiceLoader, and a bound one that takes a
   `NetworkFaults`.
+  - The `META-INF/services` entry and the unbound constructor exist
+    because the Kroxylicious configuration parser resolves a filter
+    type through the ServiceLoader. An unbound factory refuses to
+    initialize.
+  - The shade `ServicesResourceTransformer` merges the entry into the
+    runnable jar.
 - `BoundPluginRegistry implements PluginFactoryRegistry` returns the
   bound instance for the Kaos filter type. It delegates everything else
   to `ConfigParser`.
-- `ProxyLauncher` does the following:
-  - It builds the Kroxylicious YAML from a `Map`. It does not use string
-    concatenation or the unstable record constructors.
-  - It discovers node ids with `describeCluster`. It emits explicit
-    `nodeIdRanges`, because the default 0..2 breaks other clusters.
-  - It probes a free contiguous port block starting at `--proxy-port`.
-  - It calls `startup().get(timeout)`.
+- `ProxyLauncher.launch(Admin, NetworkFaults)` does the following:
+  - It discovers node ids with `describeCluster` on the caller's admin
+    client, bounded by a timeout.
+  - It builds the Kroxylicious configuration as a `Map`, renders it to
+    YAML and lets `ConfigParser` parse it. It does not use string
+    concatenation or the unstable record constructors. The target is a
+    `clusterDefinitions` entry, because `targetCluster` on a virtual
+    cluster is deprecated in 0.24.
+  - It emits explicit `nodeIdRanges`, one per run of consecutive node
+    ids, because the default 0..2 breaks other clusters.
+  - It looks for a free contiguous port block starting at the requested
+    port (`--proxy-port`, default 19092): the bootstrap port, then one
+    port per broker. A port is probed on the wildcard and the loopback
+    addresses with address reuse, as the proxy binds it. If a port is
+    taken between the probe and the bind, the launcher moves on to the
+    next block.
+  - It calls `KafkaProxy.startup()`, which in 0.24 binds the ports
+    synchronously; the future it returns completes when the proxy
+    *stops*, so it is not awaited. A failed start closes the proxy.
   - It confines the unavoidable `internal.config.Features` import.
+- `close()` is idempotent and bounded. The configuration sets the Netty
+  shutdown quiet period to 0 and the shutdown timeout to 2 s (the
+  defaults are 2 s and 15 s), and the 100 ms drain timeout also bounds
+  the wait for blackholed requests. After `close()` the ports are free
+  and the proxy's threads are gone.
+- Kroxylicious runs its own Netty event loops, so the proxy's threads
+  are the one exception to the single internal `ThreadFactory`.
+- Several proxies coexist in one JVM, each with its own faults and port
+  block. Kroxylicious itself registers its metrics in Micrometer's
+  global registry, which the proxies share; Kaos does not use these
+  metrics.
 
 ### HTTP API v1 (`kaos-server`)
 
@@ -870,6 +910,11 @@ starts the server, and that the CI workflow runs the build.
   assume an empty cluster.
 - `KafkaClusterTest` is the smoke test: it creates a topic with an
   `Admin` and describes it.
+- `NetworkFaultInjectionTest` drives classic-protocol consumers through
+  the proxy with a 6 s session timeout: blackhole eviction and rejoin,
+  one of two clients isolated, `RESET` disconnects and quick recovery,
+  two proxies in one JVM, the port fallback, and a bounded `close()`
+  that frees its ports and threads.
 - When `kaos-server` needs the harness, `kaos-core` will publish its
   test sources as a `test-jar` that the server consumes in test scope.
   This is planned.

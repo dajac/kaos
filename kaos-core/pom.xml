@@ -25,6 +25,12 @@
             <groupId>io.kroxylicious</groupId>
             <artifactId>kroxylicious-runtime</artifactId>
         </dependency>
+        <!-- Renders the proxy configuration. Kroxylicious brings it too; it is
+             declared because the proxy package uses it directly. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
@@ -38,6 +44,11 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

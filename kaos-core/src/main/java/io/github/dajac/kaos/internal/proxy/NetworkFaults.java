@@ -1,0 +1,56 @@
+package io.github.dajac.kaos.internal.proxy;
+
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * The network faults of one proxy, keyed by Kafka {@code client.id}.
+ *
+ * <p>The proxy filter reads it on every request, from the proxy's I/O threads, while other threads
+ * set and clear faults. All methods are thread-safe, and a change applies to the next request of
+ * the client, on all its connections.
+ */
+public final class NetworkFaults {
+
+    /** What the proxy does with the requests of a faulted client. */
+    public enum Mode {
+        /** Drops the requests silently, like a network partition. The client sees timeouts. */
+        BLACKHOLE,
+        /** Closes the client connection instead of forwarding. The client sees disconnects. */
+        RESET
+    }
+
+    private final ConcurrentHashMap<String, Mode> modes = new ConcurrentHashMap<>();
+
+    /** Applies {@code mode} to the client, replacing its current mode if it has one. */
+    public void set(String clientId, Mode mode) {
+        Objects.requireNonNull(clientId, "clientId");
+        Objects.requireNonNull(mode, "mode");
+        modes.put(clientId, mode);
+    }
+
+    /** Removes the fault of the client. Does nothing if the client has none. */
+    public void clear(String clientId) {
+        Objects.requireNonNull(clientId, "clientId");
+        modes.remove(clientId);
+    }
+
+    /** Removes the faults of all clients. */
+    public void clearAll() {
+        modes.clear();
+    }
+
+    /**
+     * Returns the mode applied to the client, or {@code null} if its requests are forwarded. A
+     * request may carry no client id; {@code null} never has a fault.
+     */
+    public Mode modeOf(String clientId) {
+        return clientId == null ? null : modes.get(clientId);
+    }
+
+    /** Returns an immutable copy of the current faults. */
+    public Map<String, Mode> snapshot() {
+        return Map.copyOf(modes);
+    }
+}
