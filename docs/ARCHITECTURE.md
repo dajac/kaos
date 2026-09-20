@@ -13,6 +13,7 @@ section that describes it.
 |---|---|
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
+| CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
 | `kaos-core` | skeleton (the two packages, no types); the rest is planned |
 | `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
 | `kaos-ui` | planned |
@@ -60,7 +61,8 @@ view is not carried over.
 
 ### Out of scope for now
 
-- CI and quality gates.
+- Quality gates in CI (coverage, static analysis, required checks). The
+  basic CI build is in place, see [Verification](#verification).
 - Docker and docker-compose.
 - Release automation.
 - CONTRIBUTING, community files and templates. Open source polish is
@@ -123,16 +125,17 @@ Notes:
 Status: the parent POM, the Maven wrapper, `run.sh`, the two
 `package-info` files of `kaos-core`, and `Main`, `Server`, `CliOptions`,
 `Version` and `dto/MetaResponse` of `kaos-server` exist, next to
-`LICENSE`, `.gitignore`, `CLAUDE.md` and this document. Everything else
-in the tree below is planned, including the `kaos-ui` module and the
-`-DskipUi` switch. The test harness of `kaos-core` also exists; see
-[Verification](#verification).
+`LICENSE`, `.gitignore`, `CLAUDE.md`, the CI workflow and this document.
+Everything else in the tree below is planned, including the `kaos-ui`
+module and the `-DskipUi` switch. The test harness of `kaos-core` also
+exists; see [Verification](#verification).
 
 ```
 kaos/
   pom.xml                      parent: BOMs, pluginManagement, -DskipUi, -DskipITs
   README.md  LICENSE  .gitignore  run.sh  CLAUDE.md
   docs/ARCHITECTURE.md         living design doc, kept up to date in every PR
+  .github/workflows/ci.yml     CI: ./mvnw verify on every PR and on push to main
   kaos-core/                   library: kafka-clients, kroxylicious-runtime, slf4j-api
     src/main/java/io/github/dajac/kaos/            PUBLIC API
       Simulator, Topic, ProducerHandle, ConsumerGroup, ConsumerHandle, Autopilot, Fault
@@ -695,13 +698,27 @@ Mixed-protocol groups are supported.
 
 Status: planned, except that `./mvnw verify` already builds the modules,
 runs the unit tests and the integration-test harness below, and produces
-the shaded jar, that `-DskipITs` works, and that `./run.sh` builds and
-starts the server.
+the shaded jar, that `-DskipITs` works, that `./run.sh` builds and
+starts the server, and that the CI workflow runs the build.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
   required) and the UI build with Vitest.
 - `-DskipUi` and `-DskipITs` give fast local loops.
+
+**Continuous integration**
+- One GitHub Actions workflow, `.github/workflows/ci.yml`, runs
+  `./mvnw -B -ntp verify` on `ubuntu-latest` with Temurin 21 and the
+  Maven cache. The integration tests use the runner's Docker through
+  Testcontainers, so CI runs exactly the local build.
+- It triggers on every `pull_request`, whatever the base branch, so
+  stacked PRs are covered, and on `push` to `main`.
+- `concurrency` cancels the superseded runs of a pull request only, so
+  every push to `main` runs to completion. The token is limited to
+  `contents: read`, and the surefire and failsafe reports are uploaded
+  as the `test-reports` artifact when the build fails.
+- The UI build will join the same job through `frontend-maven-plugin`,
+  with no workflow change.
 
 **Integration-test harness**
 - All test classes are named `*Test`. An integration test is a test
