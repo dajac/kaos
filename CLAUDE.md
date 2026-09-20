@@ -50,6 +50,11 @@ java -jar kaos-server/target/kaos-*.jar [--bootstrap-server localhost:9092] [--p
 
 The runnable jar is the shaded `kaos-server/target/kaos-server-<version>.jar`.
 
+CI (`.github/workflows/ci.yml`) runs `./mvnw -B -ntp verify`, integration
+tests included, on every pull request, whatever its base branch, and on
+every push to `main`. The test reports are uploaded as an artifact when
+the build fails.
+
 Frontend dev loop:
 
 ```sh

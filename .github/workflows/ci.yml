@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  # No branch filter: stacked PRs have a base other than main.
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      # The integration tests use the runner's Docker through Testcontainers.
+      - run: ./mvnw -B -ntp verify
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports
+            **/target/failsafe-reports
+          if-no-files-found: ignore
