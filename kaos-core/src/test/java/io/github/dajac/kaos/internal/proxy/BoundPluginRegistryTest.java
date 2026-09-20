@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.ServiceLoader;
 
 import io.kroxylicious.proxy.config.ConfigParser;
-import io.kroxylicious.proxy.config.PluginFactory;
 import io.kroxylicious.proxy.filter.FilterFactory;
 import io.kroxylicious.proxy.plugin.PluginConfigurationException;
 import org.junit.jupiter.api.Test;
@@ -20,7 +19,7 @@ class BoundPluginRegistryTest {
     @Test
     @SuppressWarnings("rawtypes")
     void returnsTheBoundInstanceForOurFilterType() {
-        PluginFactory<FilterFactory> factory = registry.pluginFactory(FilterFactory.class);
+        var factory = registry.pluginFactory(FilterFactory.class);
 
         assertThat(factory.pluginInstance(NetworkFaultFilterFactory.class.getName())).isSameAs(bound);
         assertThat(factory.pluginInstance(NetworkFaultFilterFactory.class.getSimpleName())).isSameAs(bound);
@@ -29,8 +28,8 @@ class BoundPluginRegistryTest {
     @Test
     @SuppressWarnings("rawtypes")
     void delegatesTheConfigTypeAndTheNames() {
-        PluginFactory<FilterFactory> factory = registry.pluginFactory(FilterFactory.class);
-        PluginFactory<FilterFactory> delegate = parser.pluginFactory(FilterFactory.class);
+        var factory = registry.pluginFactory(FilterFactory.class);
+        var delegate = parser.pluginFactory(FilterFactory.class);
 
         assertThat(factory.configType(NetworkFaultFilterFactory.class.getName())).isEqualTo(Void.class);
         assertThat(factory.registeredInstanceNames())
@@ -41,7 +40,7 @@ class BoundPluginRegistryTest {
     @Test
     @SuppressWarnings("rawtypes")
     void delegatesOtherFilterTypes() {
-        PluginFactory<FilterFactory> factory = registry.pluginFactory(FilterFactory.class);
+        var factory = registry.pluginFactory(FilterFactory.class);
 
         assertThatThrownBy(() -> factory.pluginInstance("NoSuchFilter"))
             .hasSameClassAs(catchDelegateFailure());
@@ -59,7 +58,7 @@ class BoundPluginRegistryTest {
     @Test
     @SuppressWarnings("rawtypes")
     void theServiceLoaderFindsAnUnboundFactoryThatCannotInitialize() {
-        FilterFactory unbound = ServiceLoader.load(FilterFactory.class).stream()
+        var unbound = ServiceLoader.load(FilterFactory.class).stream()
             .filter(provider -> provider.type() == NetworkFaultFilterFactory.class)
             .findFirst()
             .orElseThrow()

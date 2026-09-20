@@ -22,7 +22,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import io.kroxylicious.proxy.KafkaProxy;
 import io.kroxylicious.proxy.config.ConfigParser;
-import io.kroxylicious.proxy.config.Configuration;
 import io.kroxylicious.proxy.internal.config.Features;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.Node;
@@ -79,7 +78,7 @@ public final class ProxyLauncher {
      * @param timeout the bound on discovering the brokers of the cluster
      */
     public ProxyLauncher(String bootstrapServers, int requestedPort, Duration timeout) {
-        this(bootstrapServers, requestedPort, timeout, port -> { });
+        this(bootstrapServers, requestedPort, timeout, port -> {});
     }
 
     /**
@@ -108,18 +107,18 @@ public final class ProxyLauncher {
         Objects.requireNonNull(admin, "admin");
         Objects.requireNonNull(faults, "faults");
 
-        TreeSet<Integer> nodeIds = discoverNodeIds(admin);
-        int blockSize = 1 + nodeIds.size();
-        ConfigParser parser = new ConfigParser();
-        BoundPluginRegistry registry = new BoundPluginRegistry(parser, new NetworkFaultFilterFactory(faults));
+        var nodeIds = discoverNodeIds(admin);
+        var blockSize = 1 + nodeIds.size();
+        var parser = new ConfigParser();
+        var registry = new BoundPluginRegistry(parser, new NetworkFaultFilterFactory(faults));
 
-        int port = requestedPort;
+        var port = requestedPort;
         RuntimeException lastFailure = null;
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             port = findFreeBlock(port, blockSize);
             afterProbe.accept(port);
-            Configuration configuration = parser.parseConfiguration(toYaml(configuration(bootstrapServers, port, nodeIds)));
-            KafkaProxy proxy = new KafkaProxy(registry, configuration, Features.defaultFeatures());
+            var configuration = parser.parseConfiguration(toYaml(configuration(bootstrapServers, port, nodeIds)));
+            var proxy = new KafkaProxy(registry, configuration, Features.defaultFeatures());
             try {
                 // startup() binds the ports before it returns. The future it returns completes
                 // when the proxy stops, so it is not awaited.
@@ -130,7 +129,7 @@ public final class ProxyLauncher {
                 // The bind failure of the proxy depends on its transport, so the exception is
                 // not inspected. The block is probed again instead: if one of its ports is now
                 // busy, someone took it between the probe and the bind.
-                int busy = firstBusyPort(port, blockSize);
+                var busy = firstBusyPort(port, blockSize);
                 if (busy < 0) {
                     throw new IllegalStateException("The proxy failed to start on port " + port, e);
                 }
@@ -146,7 +145,8 @@ public final class ProxyLauncher {
         }
         throw new IllegalStateException(
             "The proxy ports were taken during startup " + MAX_ATTEMPTS + " times in a row, from port " + requestedPort,
-            lastFailure);
+            lastFailure
+        );
     }
 
     private TreeSet<Integer> discoverNodeIds(Admin admin) {
@@ -159,7 +159,7 @@ public final class ProxyLauncher {
         } catch (ExecutionException | TimeoutException e) {
             throw new IllegalStateException("Could not describe the cluster " + bootstrapServers, e);
         }
-        TreeSet<Integer> nodeIds = new TreeSet<>();
+        var nodeIds = new TreeSet<Integer>();
         nodes.forEach(node -> nodeIds.add(node.id()));
         if (nodeIds.isEmpty()) {
             throw new IllegalStateException("The cluster " + bootstrapServers + " reports no brokers");
@@ -173,25 +173,25 @@ public final class ProxyLauncher {
      * the node ids 0 to 2.
      */
     static Map<String, Object> configuration(String bootstrapServers, int proxyPort, TreeSet<Integer> nodeIds) {
-        Map<String, Object> shutdown = new LinkedHashMap<>();
+        var shutdown = new LinkedHashMap<String, Object>();
         shutdown.put("shutdownQuietPeriod", SHUTDOWN_QUIET_PERIOD);
         shutdown.put("shutdownTimeout", SHUTDOWN_TIMEOUT);
-        Map<String, Object> proxyNetwork = new LinkedHashMap<>(shutdown);
-        Map<String, Object> managementNetwork = new LinkedHashMap<>(shutdown);
+        var proxyNetwork = new LinkedHashMap<String, Object>(shutdown);
+        var managementNetwork = new LinkedHashMap<String, Object>(shutdown);
         // The management endpoint is not enabled, so its event loop stays idle.
         managementNetwork.put("workerThreadCount", 1);
 
-        Map<String, Object> portIdentifiesNode = new LinkedHashMap<>();
+        var portIdentifiesNode = new LinkedHashMap<String, Object>();
         portIdentifiesNode.put("bootstrapAddress", HOST + ":" + proxyPort);
         portIdentifiesNode.put("nodeIdRanges", nodeIdRanges(nodeIds));
 
-        Map<String, Object> virtualCluster = new LinkedHashMap<>();
+        var virtualCluster = new LinkedHashMap<String, Object>();
         virtualCluster.put("name", "kaos");
         virtualCluster.put("target", Map.of("cluster", CLUSTER_NAME));
         virtualCluster.put("gateways", List.of(Map.of("name", "default", "portIdentifiesNode", portIdentifiesNode)));
         virtualCluster.put("drainTimeout", DRAIN_TIMEOUT);
 
-        Map<String, Object> configuration = new LinkedHashMap<>();
+        var configuration = new LinkedHashMap<String, Object>();
         configuration.put("clusterDefinitions", List.of(Map.of("name", CLUSTER_NAME, "bootstrapServers", bootstrapServers)));
         configuration.put("filterDefinitions", List.of(Map.of("name", FILTER_NAME, "type", NetworkFaultFilterFactory.class.getName())));
         configuration.put("defaultFilters", List.of(FILTER_NAME));
@@ -202,10 +202,10 @@ public final class ProxyLauncher {
 
     /** Groups the node ids into inclusive ranges of consecutive ids. */
     static List<Map<String, Object>> nodeIdRanges(TreeSet<Integer> nodeIds) {
-        List<Map<String, Object>> ranges = new ArrayList<>();
+        var ranges = new ArrayList<Map<String, Object>>();
         Integer start = null;
         Integer end = null;
-        for (int nodeId : nodeIds) {
+        for (var nodeId : nodeIds) {
             if (start == null) {
                 start = nodeId;
             } else if (nodeId != end + 1) {
@@ -221,7 +221,7 @@ public final class ProxyLauncher {
     }
 
     private static Map<String, Object> range(int index, int start, int end) {
-        Map<String, Object> range = new LinkedHashMap<>();
+        var range = new LinkedHashMap<String, Object>();
         range.put("name", "brokers-" + index);
         range.put("start", start);
         range.put("end", end);
@@ -241,9 +241,9 @@ public final class ProxyLauncher {
      * free. When a port of a candidate block is busy, the search resumes right after it.
      */
     static int findFreeBlock(int from, int size) {
-        int base = from;
+        var base = from;
         while (base + size - 1 <= MAX_PORT) {
-            int busy = firstBusyPort(base, size);
+            var busy = firstBusyPort(base, size);
             if (busy < 0) {
                 return base;
             }
@@ -272,7 +272,7 @@ public final class ProxyLauncher {
     }
 
     private static boolean canBind(InetSocketAddress address) {
-        try (ServerSocket socket = new ServerSocket()) {
+        try (var socket = new ServerSocket()) {
             socket.setReuseAddress(true);
             socket.bind(address);
             return true;

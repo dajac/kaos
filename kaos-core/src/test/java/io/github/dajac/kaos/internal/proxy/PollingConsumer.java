@@ -3,7 +3,6 @@ package io.github.dajac.kaos.internal.proxy;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,7 +34,7 @@ final class PollingConsumer implements AutoCloseable {
      *     waits on a request that the proxy dropped
      */
     PollingConsumer(String bootstrapServers, String groupId, String clientId, String topic, Duration requestTimeout) {
-        Map<String, Object> config = new HashMap<>();
+        var config = new HashMap<String, Object>();
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         config.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);

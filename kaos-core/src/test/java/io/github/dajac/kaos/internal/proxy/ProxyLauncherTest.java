@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.TreeSet;
 
 import io.kroxylicious.proxy.config.ConfigParser;
-import io.kroxylicious.proxy.config.Configuration;
 import io.kroxylicious.proxy.config.NamedRange;
 import io.kroxylicious.proxy.config.PortIdentifiesNodeIdentificationStrategy;
 import org.junit.jupiter.api.Test;
@@ -25,15 +24,17 @@ class ProxyLauncherTest {
             .containsExactly(
                 Map.of("name", "brokers-0", "start", 1, "end", 3),
                 Map.of("name", "brokers-1", "start", 7, "end", 8),
-                Map.of("name", "brokers-2", "start", 100, "end", 100));
+                Map.of("name", "brokers-2", "start", 100, "end", 100)
+            );
     }
 
     @Test
     void theProxyParsesTheRenderedConfiguration() {
-        String yaml = ProxyLauncher.toYaml(
-            ProxyLauncher.configuration("broker-a:9092,broker-b:9092", 19092, new TreeSet<>(List.of(1, 2, 5))));
+        var yaml = ProxyLauncher.toYaml(
+            ProxyLauncher.configuration("broker-a:9092,broker-b:9092", 19092, new TreeSet<>(List.of(1, 2, 5)))
+        );
 
-        Configuration configuration = new ConfigParser().parseConfiguration(yaml);
+        var configuration = new ConfigParser().parseConfiguration(yaml);
 
         assertThat(configuration.clusterDefinitions()).singleElement()
             .satisfies(cluster -> assertThat(cluster.bootstrapServers()).isEqualTo("broker-a:9092,broker-b:9092"));
@@ -55,15 +56,15 @@ class ProxyLauncherTest {
 
     @Test
     void findsTheRequestedBlockWhenItIsFree() throws Exception {
-        int free = freePort();
+        var free = freePort();
 
         assertThat(ProxyLauncher.findFreeBlock(free, 1)).isEqualTo(free);
     }
 
     @Test
     void skipsABlockThatContainsABusyPort() throws Exception {
-        try (ServerSocket busy = new ServerSocket(0)) {
-            int busyPort = busy.getLocalPort();
+        try (var busy = new ServerSocket(0)) {
+            var busyPort = busy.getLocalPort();
 
             assertThat(ProxyLauncher.findFreeBlock(busyPort, 2)).isGreaterThan(busyPort);
             // The busy port is the last of the requested block, so the whole block moves past it.
@@ -85,7 +86,7 @@ class ProxyLauncherTest {
     }
 
     private static int freePort() throws Exception {
-        try (ServerSocket socket = new ServerSocket(0)) {
+        try (var socket = new ServerSocket(0)) {
             return socket.getLocalPort();
         }
     }

@@ -53,7 +53,7 @@ class NetworkFaultsTest {
     @Test
     void snapshotIsAnImmutableCopy() {
         faults.set("a", Mode.BLACKHOLE);
-        Map<String, Mode> snapshot = faults.snapshot();
+        var snapshot = faults.snapshot();
 
         faults.clear("a");
 
@@ -63,7 +63,7 @@ class NetworkFaultsTest {
 
     @Test
     void instancesAreIndependent() {
-        NetworkFaults other = new NetworkFaults();
+        var other = new NetworkFaults();
         faults.set("a", Mode.BLACKHOLE);
 
         assertThat(other.modeOf("a")).isNull();

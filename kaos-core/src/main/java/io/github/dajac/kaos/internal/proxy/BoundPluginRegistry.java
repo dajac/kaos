@@ -27,7 +27,7 @@ public final class BoundPluginRegistry implements PluginFactoryRegistry {
 
     @Override
     public <P> PluginFactory<P> pluginFactory(Class<P> pluginClass) {
-        PluginFactory<P> delegateFactory = delegate.pluginFactory(pluginClass);
+        var delegateFactory = delegate.pluginFactory(pluginClass);
         if (pluginClass != FilterFactory.class) {
             return delegateFactory;
         }

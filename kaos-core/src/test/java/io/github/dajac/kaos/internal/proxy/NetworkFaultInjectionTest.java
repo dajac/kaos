@@ -15,12 +15,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntConsumer;
-import java.util.stream.Collectors;
 
 import io.github.dajac.kaos.internal.proxy.NetworkFaults.Mode;
 import io.github.dajac.kaos.test.IntegrationTest;
 import io.github.dajac.kaos.test.KafkaCluster;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -71,8 +71,8 @@ class NetworkFaultInjectionTest {
 
     @Test
     void blackholeEvictsTheClientAndClearingLetsItRejoin() throws Exception {
-        NetworkProxy proxy = launch(ProxyLauncher.DEFAULT_PORT);
-        PollingConsumer consumer = consumer(proxy, group, "isolated", SHORT_REQUEST_TIMEOUT);
+        var proxy = launch(ProxyLauncher.DEFAULT_PORT);
+        var consumer = consumer(proxy, group, "isolated", SHORT_REQUEST_TIMEOUT);
         awaitMembers(group, "isolated");
 
         proxy.faults().set("isolated", Mode.BLACKHOLE);
@@ -89,8 +89,8 @@ class NetworkFaultInjectionTest {
 
     @Test
     void isolatingOneClientLeavesTheOtherClientOfTheProxyUnaffected() throws Exception {
-        NetworkProxy proxy = launch(ProxyLauncher.DEFAULT_PORT);
-        PollingConsumer healthy = consumer(proxy, group, "healthy", SHORT_REQUEST_TIMEOUT);
+        var proxy = launch(ProxyLauncher.DEFAULT_PORT);
+        var healthy = consumer(proxy, group, "healthy", SHORT_REQUEST_TIMEOUT);
         consumer(proxy, group, "isolated", SHORT_REQUEST_TIMEOUT);
         awaitMembers(group, "healthy", "isolated");
 
@@ -99,7 +99,7 @@ class NetworkFaultInjectionTest {
         // Only the isolated client is evicted. The healthy one stays in the group, takes over all
         // the partitions and keeps consuming through the same proxy.
         awaitMembers(group, "healthy");
-        List<String> values = produceToEveryPartition("while-isolated");
+        var values = produceToEveryPartition("while-isolated");
         await().atMost(GROUP_CHANGE).untilAsserted(() -> assertThat(healthy.values()).containsAll(values));
 
         proxy.faults().clear("isolated");
@@ -109,14 +109,14 @@ class NetworkFaultInjectionTest {
 
     @Test
     void resetDisconnectsTheClientAndClearingRecoversQuickly() throws Exception {
-        NetworkProxy proxy = launch(ProxyLauncher.DEFAULT_PORT);
+        var proxy = launch(ProxyLauncher.DEFAULT_PORT);
         // With the default request timeout, a client whose requests were dropped would be stuck
         // for 30 s. A client whose connections are closed notices at once.
-        PollingConsumer consumer = consumer(proxy, group, "reset", DEFAULT_REQUEST_TIMEOUT);
+        var consumer = consumer(proxy, group, "reset", DEFAULT_REQUEST_TIMEOUT);
         awaitMembers(group, "reset");
         produce("before-reset");
         await().atMost(GROUP_CHANGE).untilAsserted(() -> assertThat(consumer.values()).contains("before-reset"));
-        double closedBefore = consumer.closedConnections();
+        var closedBefore = consumer.closedConnections();
 
         proxy.faults().set("reset", Mode.RESET);
 
@@ -133,15 +133,15 @@ class NetworkFaultInjectionTest {
 
     @Test
     void twoProxiesInOneJvmHaveIndependentFaults() throws Exception {
-        NetworkProxy first = launch(ProxyLauncher.DEFAULT_PORT);
-        NetworkProxy second = launch(ProxyLauncher.DEFAULT_PORT);
+        var first = launch(ProxyLauncher.DEFAULT_PORT);
+        var second = launch(ProxyLauncher.DEFAULT_PORT);
         assertThat(second.bootstrapServers()).isNotEqualTo(first.bootstrapServers());
         assertThat(second.faults()).isNotSameAs(first.faults());
 
         // The same client id goes through both proxies, in two groups.
-        String otherGroup = cluster.uniqueName("group");
+        var otherGroup = cluster.uniqueName("group");
         consumer(first, group, "same-id", SHORT_REQUEST_TIMEOUT);
-        PollingConsumer viaSecond = consumer(second, otherGroup, "same-id", SHORT_REQUEST_TIMEOUT);
+        var viaSecond = consumer(second, otherGroup, "same-id", SHORT_REQUEST_TIMEOUT);
         awaitMembers(group, "same-id");
         awaitMembers(otherGroup, "same-id");
 
@@ -152,21 +152,21 @@ class NetworkFaultInjectionTest {
 
         // Closing one proxy leaves the other one serving.
         first.close();
-        List<String> values = produceToEveryPartition("first-closed");
+        var values = produceToEveryPartition("first-closed");
         await().atMost(GROUP_CHANGE).untilAsserted(() -> assertThat(viaSecond.values()).containsAll(values));
         assertThat(members(otherGroup)).containsExactly("same-id");
     }
 
     @Test
     void fallsBackToTheNextFreeBlockWhenTheRequestedPortIsBusy() throws Exception {
-        try (ServerSocket busy = new ServerSocket()) {
+        try (var busy = new ServerSocket()) {
             busy.bind(new InetSocketAddress(0));
-            int busyPort = busy.getLocalPort();
+            var busyPort = busy.getLocalPort();
 
-            NetworkProxy proxy = launch(busyPort);
+            var proxy = launch(busyPort);
 
             assertThat(port(proxy)).isGreaterThan(busyPort);
-            PollingConsumer consumer = consumer(proxy, group, "fallback", SHORT_REQUEST_TIMEOUT);
+            var consumer = consumer(proxy, group, "fallback", SHORT_REQUEST_TIMEOUT);
             produce("through-fallback");
             await().atMost(GROUP_CHANGE)
                 .untilAsserted(() -> assertThat(consumer.values()).contains("through-fallback"));
@@ -175,12 +175,12 @@ class NetworkFaultInjectionTest {
 
     @Test
     void fallsBackWhenABrokerPortOfTheBlockIsBusy() throws Exception {
-        try (ServerSocket busy = new ServerSocket()) {
+        try (var busy = new ServerSocket()) {
             busy.bind(new InetSocketAddress(0));
-            int busyPort = busy.getLocalPort();
+            var busyPort = busy.getLocalPort();
 
             // The block is the bootstrap port plus one port for the single broker.
-            NetworkProxy proxy = launch(busyPort - 1);
+            var proxy = launch(busyPort - 1);
 
             assertThat(port(proxy)).isGreaterThan(busyPort);
         }
@@ -188,8 +188,8 @@ class NetworkFaultInjectionTest {
 
     @Test
     void movesToTheNextBlockWhenAPortIsTakenBetweenTheProbeAndTheBind() throws Exception {
-        Set<Thread> threadsBefore = Thread.getAllStackTraces().keySet();
-        List<Integer> probed = new ArrayList<>();
+        var threadsBefore = Thread.getAllStackTraces().keySet();
+        var probed = new ArrayList<Integer>();
         // Takes the broker port of the first block found free, right after the probe.
         IntConsumer takeBrokerPortOnce = port -> {
             probed.add(port);
@@ -198,7 +198,7 @@ class NetworkFaultInjectionTest {
             }
         };
 
-        NetworkProxy proxy = new ProxyLauncher(cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, takeBrokerPortOnce)
+        var proxy = new ProxyLauncher(cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, takeBrokerPortOnce)
             .launch(admin, new NetworkFaults());
         resources.add(proxy);
 
@@ -206,7 +206,7 @@ class NetworkFaultInjectionTest {
         assertThat(port(proxy)).isEqualTo(probed.get(1)).isGreaterThan(probed.get(0) + 1);
         // The failed attempt released the bootstrap port it had bound.
         assertThat(ProxyLauncher.isFree(probed.get(0))).isTrue();
-        PollingConsumer consumer = consumer(proxy, group, "after-race", SHORT_REQUEST_TIMEOUT);
+        var consumer = consumer(proxy, group, "after-race", SHORT_REQUEST_TIMEOUT);
         produce("after-race");
         await().atMost(GROUP_CHANGE).untilAsserted(() -> assertThat(consumer.values()).contains("after-race"));
 
@@ -217,15 +217,15 @@ class NetworkFaultInjectionTest {
 
     @Test
     void aLaunchThatKeepsLosingItsPortsFailsAndLeaksNothing() throws Exception {
-        Set<Thread> threadsBefore = Thread.getAllStackTraces().keySet();
-        List<Integer> probed = new ArrayList<>();
-        List<ServerSocket> taken = new ArrayList<>();
+        var threadsBefore = Thread.getAllStackTraces().keySet();
+        var probed = new ArrayList<Integer>();
+        var taken = new ArrayList<ServerSocket>();
         IntConsumer alwaysTakeBootstrapPort = port -> {
             probed.add(port);
             taken.add(listenOn(port));
         };
         resources.add(() -> {
-            for (ServerSocket socket : taken) {
+            for (var socket : taken) {
                 socket.close();
             }
         });
@@ -239,7 +239,7 @@ class NetworkFaultInjectionTest {
         assertThat(probed).hasSize(10);
         // Once the test gives its ports back, nothing listens on any block that was tried: every
         // failed attempt released the broker port it had bound.
-        for (ServerSocket socket : taken) {
+        for (var socket : taken) {
             socket.close();
         }
         for (int port = probed.get(0); port <= probed.get(probed.size() - 1) + 1; port++) {
@@ -250,9 +250,9 @@ class NetworkFaultInjectionTest {
 
     @Test
     void aStartupFailureThatIsNotAboutPortsFailsTheLaunchAndLeaksNothing() throws Exception {
-        Set<Thread> threadsBefore = Thread.getAllStackTraces().keySet();
-        List<Integer> probed = new ArrayList<>();
-        ProxyLauncher launcher = new ProxyLauncher("not a bootstrap address", ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, probed::add);
+        var threadsBefore = Thread.getAllStackTraces().keySet();
+        var probed = new ArrayList<Integer>();
+        var launcher = new ProxyLauncher("not a bootstrap address", ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, probed::add);
 
         assertThatThrownBy(() -> launcher.launch(admin, new NetworkFaults()))
             .isInstanceOf(IllegalStateException.class)
@@ -268,7 +268,7 @@ class NetworkFaultInjectionTest {
 
     private static ServerSocket listenOn(int port) {
         try {
-            ServerSocket socket = new ServerSocket();
+            var socket = new ServerSocket();
             socket.bind(new InetSocketAddress(port));
             return socket;
         } catch (IOException e) {
@@ -278,9 +278,9 @@ class NetworkFaultInjectionTest {
 
     @Test
     void closeIsIdempotentBoundedAndReleasesPortsAndThreads() throws Exception {
-        Set<Thread> threadsBefore = Thread.getAllStackTraces().keySet();
-        NetworkProxy proxy = launch(ProxyLauncher.DEFAULT_PORT);
-        int port = port(proxy);
+        var threadsBefore = Thread.getAllStackTraces().keySet();
+        var proxy = launch(ProxyLauncher.DEFAULT_PORT);
+        var port = port(proxy);
         // The eviction proves that the proxy dropped requests of the client. With the default
         // request timeout the client still waits for them, so its connections are open, with
         // requests that never complete, when the proxy closes.
@@ -289,10 +289,10 @@ class NetworkFaultInjectionTest {
         proxy.faults().set("in-flight", Mode.BLACKHOLE);
         awaitMembers(group);
 
-        long start = System.nanoTime();
+        var start = System.nanoTime();
         proxy.close();
         proxy.close();
-        Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+        var elapsed = Duration.ofNanos(System.nanoTime() - start);
 
         assertThat(elapsed).isLessThan(Duration.ofSeconds(10));
         // The block is the bootstrap port plus one port for the single broker.
@@ -310,24 +310,24 @@ class NetworkFaultInjectionTest {
             .map(Thread::getName)
             .filter(name -> !name.startsWith("test-") && !name.startsWith("kafka-") && !name.startsWith("awaitility"))
             .sorted()
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private NetworkProxy launch(int requestedPort) {
-        NetworkProxy proxy = new ProxyLauncher(cluster.bootstrapServers(), requestedPort, LAUNCH_TIMEOUT)
+        var proxy = new ProxyLauncher(cluster.bootstrapServers(), requestedPort, LAUNCH_TIMEOUT)
             .launch(admin, new NetworkFaults());
         resources.add(proxy);
         return proxy;
     }
 
     private PollingConsumer consumer(NetworkProxy proxy, String groupId, String clientId, Duration requestTimeout) {
-        PollingConsumer consumer = new PollingConsumer(proxy.bootstrapServers(), groupId, clientId, topic, requestTimeout);
+        var consumer = new PollingConsumer(proxy.bootstrapServers(), groupId, clientId, topic, requestTimeout);
         resources.add(consumer);
         return consumer;
     }
 
     private static int port(NetworkProxy proxy) {
-        String bootstrapServers = proxy.bootstrapServers();
+        var bootstrapServers = proxy.bootstrapServers();
         return Integer.parseInt(bootstrapServers.substring(bootstrapServers.lastIndexOf(':') + 1));
     }
 
@@ -345,22 +345,22 @@ class NetworkFaultInjectionTest {
             .get(30, TimeUnit.SECONDS)
             .members()
             .stream()
-            .map(member -> member.clientId())
-            .collect(Collectors.toList());
+            .map(MemberDescription::clientId)
+            .toList();
     }
 
     private void produce(String value) throws Exception {
-        try (KafkaProducer<String, String> producer = producer()) {
+        try (var producer = producer()) {
             producer.send(new ProducerRecord<>(topic, value)).get(30, TimeUnit.SECONDS);
         }
     }
 
     /** Produces one record to each partition of the topic, and returns the values. */
     private List<String> produceToEveryPartition(String prefix) throws Exception {
-        List<String> values = new ArrayList<>();
-        try (KafkaProducer<String, String> producer = producer()) {
+        var values = new ArrayList<String>();
+        try (var producer = producer()) {
             for (int partition = 0; partition < 4; partition++) {
-                String value = prefix + "-" + partition;
+                var value = prefix + "-" + partition;
                 producer.send(new ProducerRecord<>(topic, partition, null, value)).get(30, TimeUnit.SECONDS);
                 values.add(value);
             }
@@ -372,6 +372,7 @@ class NetworkFaultInjectionTest {
         return new KafkaProducer<>(Map.of(
             ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class));
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class
+        ));
     }
 }

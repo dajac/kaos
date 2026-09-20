@@ -44,7 +44,8 @@ public final class NetworkFaultFilterFactory implements FilterFactory<Void, Void
         if (faults == null) {
             throw new PluginConfigurationException(
                 getClass().getSimpleName() + " is not bound to a NetworkFaults instance;"
-                    + " the proxy must be started by ProxyLauncher");
+                    + " the proxy must be started by ProxyLauncher"
+            );
         }
         return null;
     }
@@ -80,8 +81,9 @@ public final class NetworkFaultFilterFactory implements FilterFactory<Void, Void
                 short apiVersion,
                 RequestHeaderData header,
                 ApiMessage request,
-                FilterContext context) {
-            NetworkFaults.Mode mode = faults.modeOf(header.clientId());
+                FilterContext context
+        ) {
+            var mode = faults.modeOf(header.clientId());
             if (mode == null) {
                 return context.forwardRequest(header, request);
             }
