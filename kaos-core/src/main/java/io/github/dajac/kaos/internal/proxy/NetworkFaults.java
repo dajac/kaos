@@ -8,16 +8,29 @@ import java.util.concurrent.ConcurrentHashMap;
  * The network faults of one proxy, keyed by Kafka {@code client.id}.
  *
  * <p>The proxy filter reads it on every request, from the proxy's I/O threads, while other threads
- * set and clear faults. All methods are thread-safe, and a change applies to the next request of
- * the client, on all its connections.
+ * set and clear faults. All methods are thread-safe. Setting a fault applies to the next request
+ * of the client, on all its connections. Clearing one forwards the next request again, but see
+ * {@link Mode#BLACKHOLE} for when the client actually recovers.
  */
 public final class NetworkFaults {
 
     /** What the proxy does with the requests of a faulted client. */
     public enum Mode {
-        /** Drops the requests silently, like a network partition. The client sees timeouts. */
+        /**
+         * Drops the requests silently, like a network partition. The client sees timeouts.
+         *
+         * <p>A connection that had a request dropped does not heal when the fault is cleared.
+         * The proxy delivers responses in request order, so the responses to later requests on
+         * that connection wait behind the dropped request, which is never answered. The client
+         * recovers when it gives up on the dropped request and reconnects, that is within its
+         * {@code request.timeout.ms} after the fault is cleared, or earlier if it closes the
+         * connection itself, as the classic coordinator does on a session timeout.
+         */
         BLACKHOLE,
-        /** Closes the client connection instead of forwarding. The client sees disconnects. */
+        /**
+         * Closes the client connection instead of forwarding. The client sees disconnects, and
+         * recovers on its first reconnection after the fault is cleared.
+         */
         RESET
     }
 

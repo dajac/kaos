@@ -591,6 +591,16 @@ that owns a proxy is planned.
 - `NetworkFaults` maps each client id to a mode. It is a plain
   thread-safe instance; a change applies to the client's next request.
   - `BLACKHOLE` drops the request (`drop()` on the filter result).
+    Clearing it does not heal a connection that had a request dropped:
+    Kroxylicious delivers responses in request order, so later
+    responses on that connection wait behind the dropped request. The
+    client recovers when it times out on that request and reconnects,
+    within its `request.timeout.ms`, or earlier if it closes the
+    connection itself (the classic coordinator does on a session
+    timeout). A filter only acts while handling a request, so it cannot
+    close the connection when the fault is cleared. Simulated consumers
+    should therefore keep `request.timeout.ms` short, and a frontend
+    must not promise instant healing.
   - `RESET` closes the client connection instead of forwarding
     (`withCloseConnection()` on the filter result, which Kroxylicious
     supports natively). Kroxylicious closes a connection by draining it
@@ -630,9 +640,13 @@ that owns a proxy is planned.
   - It looks for a free contiguous port block starting at the requested
     port (`--proxy-port`, default 19092): the bootstrap port, then one
     port per broker. A port is probed on the wildcard and the loopback
-    addresses with address reuse, as the proxy binds it. If a port is
-    taken between the probe and the bind, the launcher moves on to the
-    next block.
+    addresses with address reuse, as the proxy binds it. If `startup()`
+    fails, the launcher closes that proxy and probes the block again:
+    when a port of it is now busy, it was taken between the probe and
+    the bind, and the launcher moves on to the next block, at most 10
+    times; when the block is still free, the launch fails. The
+    exception is not inspected, because the bind failure depends on the
+    Netty transport (`NativeIoException` with kqueue and epoll).
   - It calls `KafkaProxy.startup()`, which in 0.24 binds the ports
     synchronously; the future it returns completes when the proxy
     *stops*, so it is not awaited. A failed start closes the proxy.
@@ -913,8 +927,9 @@ starts the server, and that the CI workflow runs the build.
 - `NetworkFaultInjectionTest` drives classic-protocol consumers through
   the proxy with a 6 s session timeout: blackhole eviction and rejoin,
   one of two clients isolated, `RESET` disconnects and quick recovery,
-  two proxies in one JVM, the port fallback, and a bounded `close()`
-  that frees its ports and threads.
+  two proxies in one JVM, the port fallback, a port taken between the
+  probe and the bind, failed launches that leak no port and no thread,
+  and a bounded `close()` that frees its ports and threads.
 - When `kaos-server` needs the harness, `kaos-core` will publish its
   test sources as a `test-jar` that the server consumes in test scope.
   This is planned.

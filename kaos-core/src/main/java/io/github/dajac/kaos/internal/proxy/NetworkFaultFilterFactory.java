@@ -61,6 +61,10 @@ public final class NetworkFaultFilterFactory implements FilterFactory<Void, Void
      * Decides the fate of every request from the client id in its header. A connection is never
      * marked: a client's connections all carry the same id, so they fail and recover together,
      * and the decision follows the faults as they change.
+     *
+     * <p>A filter only acts while it handles a request, so it cannot close a connection at the
+     * moment a fault is cleared. A connection with a dropped request stays unusable until the
+     * client times out on it; see {@link NetworkFaults.Mode#BLACKHOLE}.
      */
     private static final class NetworkFaultFilter implements RequestFilter {
 

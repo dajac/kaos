@@ -1,8 +1,11 @@
 package io.github.dajac.kaos.internal.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.time.Duration;
@@ -11,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 
 import io.github.dajac.kaos.internal.proxy.NetworkFaults.Mode;
@@ -183,14 +187,107 @@ class NetworkFaultInjectionTest {
     }
 
     @Test
+    void movesToTheNextBlockWhenAPortIsTakenBetweenTheProbeAndTheBind() throws Exception {
+        Set<Thread> threadsBefore = Thread.getAllStackTraces().keySet();
+        List<Integer> probed = new ArrayList<>();
+        // Takes the broker port of the first block found free, right after the probe.
+        IntConsumer takeBrokerPortOnce = port -> {
+            probed.add(port);
+            if (probed.size() == 1) {
+                resources.add(listenOn(port + 1));
+            }
+        };
+
+        NetworkProxy proxy = new ProxyLauncher(cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, takeBrokerPortOnce)
+            .launch(admin, new NetworkFaults());
+        resources.add(proxy);
+
+        assertThat(probed).hasSize(2);
+        assertThat(port(proxy)).isEqualTo(probed.get(1)).isGreaterThan(probed.get(0) + 1);
+        // The failed attempt released the bootstrap port it had bound.
+        assertThat(ProxyLauncher.isFree(probed.get(0))).isTrue();
+        PollingConsumer consumer = consumer(proxy, group, "after-race", SHORT_REQUEST_TIMEOUT);
+        produce("after-race");
+        await().atMost(GROUP_CHANGE).untilAsserted(() -> assertThat(consumer.values()).contains("after-race"));
+
+        consumer.close();
+        proxy.close();
+        await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(proxyThreads(threadsBefore)).isEmpty());
+    }
+
+    @Test
+    void aLaunchThatKeepsLosingItsPortsFailsAndLeaksNothing() throws Exception {
+        Set<Thread> threadsBefore = Thread.getAllStackTraces().keySet();
+        List<Integer> probed = new ArrayList<>();
+        List<ServerSocket> taken = new ArrayList<>();
+        IntConsumer alwaysTakeBootstrapPort = port -> {
+            probed.add(port);
+            taken.add(listenOn(port));
+        };
+        resources.add(() -> {
+            for (ServerSocket socket : taken) {
+                socket.close();
+            }
+        });
+        ProxyLauncher launcher =
+            new ProxyLauncher(cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, alwaysTakeBootstrapPort);
+
+        assertThatThrownBy(() -> launcher.launch(admin, new NetworkFaults()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("taken during startup");
+
+        assertThat(probed).hasSize(10);
+        // Once the test gives its ports back, nothing listens on any block that was tried: every
+        // failed attempt released the broker port it had bound.
+        for (ServerSocket socket : taken) {
+            socket.close();
+        }
+        for (int port = probed.get(0); port <= probed.get(probed.size() - 1) + 1; port++) {
+            assertThat(ProxyLauncher.isFree(port)).as("port %d", port).isTrue();
+        }
+        await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(proxyThreads(threadsBefore)).isEmpty());
+    }
+
+    @Test
+    void aStartupFailureThatIsNotAboutPortsFailsTheLaunchAndLeaksNothing() throws Exception {
+        Set<Thread> threadsBefore = Thread.getAllStackTraces().keySet();
+        List<Integer> probed = new ArrayList<>();
+        ProxyLauncher launcher = new ProxyLauncher("not a bootstrap address", ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, probed::add);
+
+        assertThatThrownBy(() -> launcher.launch(admin, new NetworkFaults()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("failed to start");
+
+        assertThat(probed).hasSize(1);
+        probed.forEach(port -> {
+            assertThat(ProxyLauncher.isFree(port)).isTrue();
+            assertThat(ProxyLauncher.isFree(port + 1)).isTrue();
+        });
+        await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(proxyThreads(threadsBefore)).isEmpty());
+    }
+
+    private static ServerSocket listenOn(int port) {
+        try {
+            ServerSocket socket = new ServerSocket();
+            socket.bind(new InetSocketAddress(port));
+            return socket;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    @Test
     void closeIsIdempotentBoundedAndReleasesPortsAndThreads() throws Exception {
         Set<Thread> threadsBefore = Thread.getAllStackTraces().keySet();
         NetworkProxy proxy = launch(ProxyLauncher.DEFAULT_PORT);
         int port = port(proxy);
-        // A blackholed client leaves requests in flight on its connections at close time.
+        // The eviction proves that the proxy dropped requests of the client. With the default
+        // request timeout the client still waits for them, so its connections are open, with
+        // requests that never complete, when the proxy closes.
         consumer(proxy, group, "in-flight", DEFAULT_REQUEST_TIMEOUT);
         awaitMembers(group, "in-flight");
         proxy.faults().set("in-flight", Mode.BLACKHOLE);
+        awaitMembers(group);
 
         long start = System.nanoTime();
         proxy.close();

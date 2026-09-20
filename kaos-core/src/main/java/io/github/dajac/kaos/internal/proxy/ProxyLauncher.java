@@ -1,7 +1,6 @@
 package io.github.dajac.kaos.internal.proxy;
 
 import java.io.IOException;
-import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -17,6 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.IntConsumer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
@@ -53,8 +53,8 @@ public final class ProxyLauncher {
     private static final String FILTER_NAME = "network-faults";
     private static final int MAX_PORT = 65535;
 
-    /** How many candidate blocks are tried before the launch fails. */
-    private static final int MAX_ATTEMPTS = 100;
+    /** How many times a block that was free when probed may turn out taken at startup. */
+    private static final int MAX_ATTEMPTS = 10;
 
     /**
      * How long the proxy waits for the in-flight requests of a connection before it closes it,
@@ -71,6 +71,7 @@ public final class ProxyLauncher {
     private final String bootstrapServers;
     private final int requestedPort;
     private final Duration timeout;
+    private final IntConsumer afterProbe;
 
     /**
      * @param bootstrapServers the cluster the proxy forwards to
@@ -78,12 +79,21 @@ public final class ProxyLauncher {
      * @param timeout the bound on discovering the brokers of the cluster
      */
     public ProxyLauncher(String bootstrapServers, int requestedPort, Duration timeout) {
+        this(bootstrapServers, requestedPort, timeout, port -> { });
+    }
+
+    /**
+     * @param afterProbe called with the bootstrap port of each block found free, before the proxy
+     *     binds it. Tests use it to take a port of the block at that point.
+     */
+    ProxyLauncher(String bootstrapServers, int requestedPort, Duration timeout, IntConsumer afterProbe) {
         this.bootstrapServers = Objects.requireNonNull(bootstrapServers, "bootstrapServers");
         if (requestedPort < 1 || requestedPort > MAX_PORT) {
             throw new IllegalArgumentException("Invalid proxy port: " + requestedPort);
         }
         this.requestedPort = requestedPort;
         this.timeout = Objects.requireNonNull(timeout, "timeout");
+        this.afterProbe = Objects.requireNonNull(afterProbe, "afterProbe");
     }
 
     /**
@@ -104,8 +114,10 @@ public final class ProxyLauncher {
         BoundPluginRegistry registry = new BoundPluginRegistry(parser, new NetworkFaultFilterFactory(faults));
 
         int port = requestedPort;
+        RuntimeException lastFailure = null;
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             port = findFreeBlock(port, blockSize);
+            afterProbe.accept(port);
             Configuration configuration = parser.parseConfiguration(toYaml(configuration(bootstrapServers, port, nodeIds)));
             KafkaProxy proxy = new KafkaProxy(registry, configuration, Features.defaultFeatures());
             try {
@@ -113,13 +125,18 @@ public final class ProxyLauncher {
                 // when the proxy stops, so it is not awaited.
                 proxy.startup();
             } catch (RuntimeException e) {
+                // Releases whatever the failed startup bound or started.
                 proxy.close();
-                if (!causedByBind(e)) {
+                // The bind failure of the proxy depends on its transport, so the exception is
+                // not inspected. The block is probed again instead: if one of its ports is now
+                // busy, someone took it between the probe and the bind.
+                int busy = firstBusyPort(port, blockSize);
+                if (busy < 0) {
                     throw new IllegalStateException("The proxy failed to start on port " + port, e);
                 }
-                // Another process took a port of the block between the probe and the bind.
-                LOG.debug("Proxy ports {}-{} were taken during startup, trying further", port, port + blockSize - 1);
-                port++;
+                LOG.debug("Proxy port {} was taken during startup, trying further", busy);
+                lastFailure = e;
+                port = busy + 1;
                 continue;
             }
             if (port != requestedPort) {
@@ -127,7 +144,9 @@ public final class ProxyLauncher {
             }
             return new RunningProxy(proxy, HOST + ":" + port, faults);
         }
-        throw new IllegalStateException("No free block of " + blockSize + " ports found from port " + requestedPort);
+        throw new IllegalStateException(
+            "The proxy ports were taken during startup " + MAX_ATTEMPTS + " times in a row, from port " + requestedPort,
+            lastFailure);
     }
 
     private TreeSet<Integer> discoverNodeIds(Admin admin) {
@@ -260,15 +279,6 @@ public final class ProxyLauncher {
         } catch (IOException e) {
             return false;
         }
-    }
-
-    private static boolean causedByBind(Throwable throwable) {
-        for (Throwable t = throwable; t != null; t = t.getCause()) {
-            if (t instanceof BindException) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static final class RunningProxy implements NetworkProxy {
