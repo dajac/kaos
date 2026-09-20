@@ -8,14 +8,13 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 /**
  * JUnit extension that provides a {@link KafkaCluster} to integration tests.
  *
- * <p>A test class registers it with
- * {@code @ExtendWith(KafkaClusterExtension.class)} and declares a
- * {@link KafkaCluster} parameter on its constructor, on a lifecycle method
+ * <p>A test class registers it through {@link IntegrationTest} and declares
+ * a {@link KafkaCluster} parameter on its constructor, on a lifecycle method
  * or on a test method:
  *
  * <pre>{@code
- * @ExtendWith(KafkaClusterExtension.class)
- * class ExampleIT {
+ * @IntegrationTest
+ * class ExampleTest {
  *     @Test
  *     void example(KafkaCluster cluster) {
  *         String bootstrapServers = cluster.bootstrapServers();

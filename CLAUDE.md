@@ -19,6 +19,10 @@ before changing anything.
 - No Java type name contains "Kaos".
 - No static mutable state. Several `Simulator`s can coexist in one JVM.
 - All threads are created through the single internal `ThreadFactory`.
+- All test classes are named `*Test`; there is no `*IT` suffix. A test
+  that needs Docker or a broker is annotated with `@IntegrationTest`
+  (JUnit tag `integration`): surefire excludes the tag, failsafe runs
+  only the tagged tests, and `-DskipITs` skips them.
 - The prototype lives on the frozen `initial-setup` branch. It is a
   read-only reference (`git show initial-setup:<path>`) and never lands
   on `main`.
@@ -38,7 +42,7 @@ planned; see `docs/ARCHITECTURE.md` for their status.
 
 ```sh
 ./mvnw verify                 # unit tests and Testcontainers ITs (needs Docker); later also UI build + Vitest
-./mvnw verify -DskipITs       # skip the integration tests (*IT), keep the unit tests
+./mvnw verify -DskipITs       # skip the integration tests, keep the unit tests
 ./mvnw verify -DskipUi        # skip the frontend build (planned, no effect yet)
 ./run.sh [options]            # build and run; all options go to the app, see ./run.sh --help
 java -jar kaos-server/target/kaos-*.jar [--bootstrap-server localhost:9092] [--port 8081]

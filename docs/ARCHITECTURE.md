@@ -91,7 +91,7 @@ build steps back one major.
 | Command line | picocli 4.7.x in server, through reflection (no annotation processor) |
 | Logging | `slf4j-api` only in core; logback-classic 1.5.x in server |
 | Packaging | `maven-shade-plugin` 3.6.x |
-| Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for `*IT` |
+| Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration` |
 | Frontend | Node 24 LTS (pinned by frontend-maven-plugin + `.nvmrc`), Vite 8, React 19, TypeScript, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
 | Frontend tests | Vitest, React Testing Library. Playwright is deferred. |
 | API contract | Hand-written OpenAPI 3.1 YAML, with `openapi-typescript` generating the TS types |
@@ -149,7 +149,7 @@ kaos/
       proxy/    NetworkProxy, ProxyLauncher, NetworkFaults, NetworkFaultFilterFactory,
                 BoundPluginRegistry (+ META-INF/services FilterFactory entry)
       state/    SnapshotAssembler, PartitionClassifier, StatusDeriver, SnapshotPublisher
-    src/test/java/io/github/dajac/kaos/test/       IT harness: KafkaClusterExtension, KafkaCluster
+    src/test/java/io/github/dajac/kaos/test/       IT harness: IntegrationTest, KafkaClusterExtension, KafkaCluster
   kaos-server/                 Javalin adapter + shaded runnable jar
     src/main/java/io/github/dajac/kaos/server/
       Main (CLI), CliOptions, Version, Server, ApiRoutes, SimulationService, SseHub, ProblemHandler, StaticUi, dto/*
@@ -704,13 +704,18 @@ starts the server.
 - `-DskipUi` and `-DskipITs` give fast local loops.
 
 **Integration-test harness**
-- The parent POM binds failsafe to every module. Classes named `*IT` run
-  in the `integration-test` phase, and surefire keeps running the other
-  tests. `-DskipITs` skips the ITs only.
-- ITs get a broker from the JUnit extension `KafkaClusterExtension`, in
-  the `kaos-core` test sources (`io.github.dajac.kaos.test`). A test
-  class registers it with `@ExtendWith` and declares a `KafkaCluster`
-  parameter, which gives `bootstrapServers()`, `createAdmin()` and
+- All test classes are named `*Test`. An integration test is a test
+  class annotated with `@IntegrationTest`, which tags it with the JUnit
+  tag `integration`. The class name plays no role in the split.
+- The parent POM configures the split once for every module: surefire
+  excludes the tag `integration` and runs the unit tests; failsafe scans
+  the `*Test` classes, runs only the tagged ones in the
+  `integration-test` phase, and `-DskipITs` skips them only. Each test
+  runs exactly once.
+- `@IntegrationTest` lives in the `kaos-core` test sources
+  (`io.github.dajac.kaos.test`) and also registers the JUnit extension
+  `KafkaClusterExtension`. A test declares a `KafkaCluster` parameter,
+  which gives `bootstrapServers()`, `createAdmin()` and
   `uniqueName(prefix)`.
 - The broker is a Testcontainers `apache/kafka` container whose tag is
   the version of the kafka-clients on the classpath, so the broker and
@@ -719,11 +724,11 @@ starts the server.
   published image; failsafe forwards it, as in
   `./mvnw verify -Dkaos.test.kafka.image=apache/kafka:4.2.0`.
 - The broker starts on first use and is kept in the root store of the
-  JUnit engine. All the IT classes of a JVM share it, JUnit stops it
+  JUnit engine. All the integration tests of a JVM share it, JUnit stops it
   when the engine finishes, and no static state is involved. Because the
   cluster is shared, tests use unique topic and group names and never
   assume an empty cluster.
-- `KafkaClusterIT` is the smoke test: it creates a topic with an
+- `KafkaClusterTest` is the smoke test: it creates a topic with an
   `Admin` and describes it.
 - When `kaos-server` needs the harness, `kaos-core` will publish its
   test sources as a `test-jar` that the server consumes in test scope.

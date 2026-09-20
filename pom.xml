@@ -149,6 +149,14 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-failsafe-plugin</artifactId>
                     <version>${maven-failsafe-plugin.version}</version>
+                    <!-- Integration tests are *Test classes tagged
+                         "integration". Failsafe runs only those. -->
+                    <configuration>
+                        <includes>
+                            <include>**/*Test.java</include>
+                        </includes>
+                        <groups>integration</groups>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -164,6 +172,11 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
+                    <!-- Surefire runs the unit tests: every test that is
+                         not tagged "integration". -->
+                    <configuration>
+                        <excludedGroups>integration</excludedGroups>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
@@ -203,8 +216,9 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- Runs the *IT classes of every module during "verify". They
-                 need Docker; -DskipITs skips them and keeps the unit tests. -->
+            <!-- Runs the tests tagged "integration" of every module during
+                 "verify". They need Docker; -DskipITs skips them and keeps
+                 the unit tests. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>

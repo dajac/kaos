@@ -9,11 +9,10 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 /** Smoke test of the integration-test harness. */
-@ExtendWith(KafkaClusterExtension.class)
-class KafkaClusterIT {
+@IntegrationTest
+class KafkaClusterTest {
 
     @Test
     void createsAndDescribesTopic(KafkaCluster cluster) throws Exception {
