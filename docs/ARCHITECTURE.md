@@ -131,8 +131,8 @@ and `ConsumerOverrides`, the three options classes, `ConfigMetadata`,
 `Fault`, `Protocol`, `Violation`, `SimulationException`,
 `InvalidConfigException`, the whole `internal/config` package, a
 `Simulator` that holds only the static `validate`, and the whole
-`internal/proxy` package. The snapshot model
-exists too: the six snapshot records, the six enums next to `Protocol`,
+`internal/proxy` package. The snapshot model exists too: the seven
+snapshot records, the six enums next to `Protocol`,
 and `internal/state` without `SnapshotPublisher`. Everything else in
 the tree below is planned, including the `kaos-ui` module and the
 `-DskipUi` switch. The test harness of `kaos-core` also exists; see
@@ -150,7 +150,8 @@ kaos/
       ProducerOptions, GroupOptions, ConsumerOptions, Registration, SnapshotListener
       SimulatorSpec, TopicSpec, ProducerSpec, GroupSpec, ConsumerSpec (records), ConfigMetadata
       ConsumerSettings, ConsumerOverrides (records), Violation
-      SimulatorSnapshot, ProducerSnapshot, GroupSnapshot, ConsumerSnapshot, PartitionView, PartitionRef
+      SimulatorSnapshot, ProducerSnapshot, GroupSnapshot, AutopilotSnapshot, ConsumerSnapshot,
+      PartitionView, PartitionRef
       enums: Protocol, Phase, GroupState, GroupType, PartitionState, ConsumerStatus, ProducerState
       SimulationException, InvalidConfigException (List<Violation>), SimulationStateException
     src/main/java/io/github/dajac/kaos/internal/   NOT API
@@ -545,7 +546,8 @@ Status: planned.
 **Runtime failures**
 - A runner poll error is logged to `kaos.events` and the loop continues.
 - An unrecoverable runner error sets the consumer status to `FAILED`
-  with a message. The simulator keeps running.
+  with a message, the `failure` of the consumer snapshot. The simulator
+  keeps running.
 - A poller error keeps the last `AdminView` and sets `stale` on the
   snapshot.
 - Autopilot validates `min ≤ max`. It does nothing when its group has no
@@ -587,11 +589,15 @@ fill them.
     `assignment` and an optional `targetAssignment`.
   - `AdminView.unknown()` stands for a group that is not reported yet.
 - `GroupLocalState` is what the simulator knows about the group: `id`,
-  the subscribed topics with their partition counts, `autopilot` and one
-  `ConsumerLocalState` per consumer.
+  the subscribed topics with their partition counts, the `autopilot`
+  state (an `AutopilotSnapshot`) and one `ConsumerLocalState` per
+  consumer.
 - `ConsumerLocalState` is the copy of a runner's state: `id`,
   `clientId`, the current `protocol`, the effective `assignor`,
-  `subscribed`, `faults`, `failed`, `generation` and `localAssignment`.
+  `subscribed`, `faults`, `failure`, `generation` and
+  `localAssignment`. `failure` is the message of the unrecoverable error
+  of the runner. It is never empty for a failed runner and empty
+  otherwise, so it is the single source of "failed".
 - A consumer and a member are matched by `client.id`. A member without a
   simulated consumer behind it is ignored.
 
@@ -638,9 +644,12 @@ for free):
 - Status priority `FAILED > STOPPED > FROZEN > ISOLATED > …`, where `…`
   is the coordinator state with the override above. `STOPPED` means not
   subscribed, so `STOPPING` only shows in `coordinatorState`.
-  `connectionReset` counts as ISOLATED. `FAILED` comes first because a
-  failed runner no longer reacts to anything else.
-- Dense lag: one array per subscribed topic, indexed by partition.
+  `connectionReset` counts as ISOLATED. `FAILED` applies when the
+  consumer has a failure message. It comes first because a failed runner
+  no longer reacts to anything else.
+- Dense lag: one array per subscribed topic, indexed by partition. A
+  partition whose lag is not known yet has `-1`, which keeps it apart
+  from a partition that is caught up (`0`).
 - Group generation: the highest generation its consumers report.
 - Effective config.
 - Consumer ids.
@@ -815,8 +824,10 @@ GET    /api/v1/openapi.yaml
 **Snapshot shape**
 
 Status: the records behind this shape are built; their JSON form is
-planned with the server. An unknown epoch or generation is `-1` and an
-unknown member or instance id is empty.
+planned with the server. Unknown values follow two conventions: a
+number (epoch, generation, lag) is `-1`, and a string (member id,
+instance id) is empty. `failure` is empty when the consumer has not
+failed.
 
 - `revision`, `phase`, `stale`.
 - `topics[{name,partitions}]` (`TopicSpec`).
@@ -824,14 +835,17 @@ unknown member or instance id is empty.
 - `groups[]`, each with:
   - `id`, `type`, `state`, `epoch`, `targetAssignmentEpoch`,
     `generation`;
-  - `subscribedTopics`, `autopilot` (whether it is on);
-  - `lag{topic:[…dense…]}`, where an unknown lag is 0;
+  - `subscribedTopics`;
+  - `autopilot{enabled,minIntervalMs,maxIntervalMs}`, the body of the
+    autopilot endpoint; the intervals are the last ones given and are
+    kept while it is off;
+  - `lag{topic:[…dense…]}`, where an unknown lag is `-1`;
   - `consumers[]`.
 - Each entry of `consumers[]` has:
   - `id`, `clientId`, `protocol`;
   - `subscribed`, `faults[]`;
   - `memberId`, `instanceId`, `memberEpoch`, `generation`;
-  - `coordinatorState`, `status` (both a `ConsumerStatus`);
+  - `coordinatorState`, `status` (both a `ConsumerStatus`), `failure`;
   - `partitions[{topic,partition,state}]`, sorted, without the `EMPTY`
     ones;
   - `raw{assignment,targetAssignment,localAssignment}`, each a sorted

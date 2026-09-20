@@ -35,6 +35,7 @@ class PublicApiTest {
         SimulatorSnapshot.class,
         ProducerSnapshot.class,
         GroupSnapshot.class,
+        AutopilotSnapshot.class,
         ConsumerSnapshot.class,
         ConsumerSnapshot.Raw.class,
         PartitionView.class,

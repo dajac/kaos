@@ -85,34 +85,35 @@ class StatusDeriverTest {
     }
 
     /**
-     * The priority of the status. {@code faults} lists fault ids separated by "|". The assignments
-     * are in sync, so the coordinator state is the last resort.
+     * The priority of the status. {@code failure} is the failure message of the runner, empty when
+     * it has not failed, and {@code faults} lists fault ids separated by "|". The assignments are in
+     * sync, so the coordinator state is the last resort.
      */
-    @ParameterizedTest(name = "failed={0} subscribed={1} faults={2} coordinator={3} -> {4}")
+    @ParameterizedTest(name = "failure={0} subscribed={1} faults={2} coordinator={3} -> {4}")
     @CsvSource({
-        "true,  true,  '',                                          STABLE,      FAILED",
-        "true,  false, freeze|network-isolation,                    STOPPING,    FAILED",
-        "false, false, '',                                          STOPPED,     STOPPED",
-        "false, false, '',                                          STOPPING,    STOPPED",
-        "false, false, freeze|network-isolation|connection-reset,   STOPPING,    STOPPED",
-        "false, true,  freeze,                                      STABLE,      FROZEN",
-        "false, true,  freeze|network-isolation,                    STABLE,      FROZEN",
-        "false, true,  freeze|connection-reset,                     JOINING,     FROZEN",
-        "false, true,  network-isolation,                           STABLE,      ISOLATED",
-        "false, true,  connection-reset,                            STABLE,      ISOLATED",
-        "false, true,  network-isolation|connection-reset,          RECONCILING, ISOLATED",
-        "false, true,  '',                                          JOINING,     JOINING",
-        "false, true,  '',                                          RECONCILING, RECONCILING",
-        "false, true,  '',                                          STABLE,      STABLE",
+        "boom,  true,  '',                                          STABLE,      FAILED",
+        "boom,  false, freeze|network-isolation,                    STOPPING,    FAILED",
+        "'',    false, '',                                          STOPPED,     STOPPED",
+        "'',    false, '',                                          STOPPING,    STOPPED",
+        "'',    false, freeze|network-isolation|connection-reset,   STOPPING,    STOPPED",
+        "'',    true,  freeze,                                      STABLE,      FROZEN",
+        "'',    true,  freeze|network-isolation,                    STABLE,      FROZEN",
+        "'',    true,  freeze|connection-reset,                     JOINING,     FROZEN",
+        "'',    true,  network-isolation,                           STABLE,      ISOLATED",
+        "'',    true,  connection-reset,                            STABLE,      ISOLATED",
+        "'',    true,  network-isolation|connection-reset,          RECONCILING, ISOLATED",
+        "'',    true,  '',                                          JOINING,     JOINING",
+        "'',    true,  '',                                          RECONCILING, RECONCILING",
+        "'',    true,  '',                                          STABLE,      STABLE",
     })
     void statusPriority(
-        boolean failed,
+        String failure,
         boolean subscribed,
         String faults,
         ConsumerStatus coordinatorState,
         ConsumerStatus expected
     ) {
-        var consumer = consumer(Protocol.CONSUMER, subscribed, faults(faults), failed, Set.of(T0));
+        var consumer = consumer(Protocol.CONSUMER, subscribed, faults(faults), failure, Set.of(T0));
 
         assertThat(StatusDeriver.status(consumer, coordinatorState, Set.of(T0), Set.of(T0))).isEqualTo(expected);
     }
@@ -140,7 +141,7 @@ class StatusDeriverTest {
         String local,
         ConsumerStatus expected
     ) {
-        var consumer = consumer(protocol, true, Set.of(), false, refs(local));
+        var consumer = consumer(protocol, true, Set.of(), "", refs(local));
 
         assertThat(StatusDeriver.status(consumer, coordinatorState, refs(assignment), refs(target)))
             .isEqualTo(expected);
@@ -172,7 +173,7 @@ class StatusDeriverTest {
         Protocol protocol,
         boolean subscribed,
         Set<Fault> faults,
-        boolean failed,
+        String failure,
         Set<PartitionRef> localAssignment
     ) {
         return new ConsumerLocalState(
@@ -182,7 +183,7 @@ class StatusDeriverTest {
             "",
             subscribed,
             faults,
-            failed,
+            failure,
             -1,
             localAssignment
         );

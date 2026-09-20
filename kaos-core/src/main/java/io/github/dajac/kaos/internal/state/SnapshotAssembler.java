@@ -17,6 +17,8 @@ import java.util.Set;
  * the {@link GroupSnapshot} of that group. A pure function.
  */
 public final class SnapshotAssembler {
+    private static final long UNKNOWN_LAG = -1L;
+
     private SnapshotAssembler() {}
 
     /**
@@ -64,6 +66,7 @@ public final class SnapshotAssembler {
             consumer.generation(),
             coordinatorState,
             StatusDeriver.status(consumer, coordinatorState, assignment, targetAssignment),
+            consumer.failure(),
             PartitionClassifier.classify(consumer, view.state(), assignment, targetAssignment),
             new ConsumerSnapshot.Raw(
                 sorted(assignment),
@@ -75,14 +78,14 @@ public final class SnapshotAssembler {
 
     /**
      * One list per subscribed topic, with one entry per partition indexed by partition number. A
-     * partition without a known lag gets 0.
+     * partition without a known lag gets -1.
      */
     private static Map<String, List<Long>> denseLag(List<TopicSpec> topics, Map<PartitionRef, Long> lag) {
         var dense = new LinkedHashMap<String, List<Long>>();
         for (var topic : topics) {
             var values = new ArrayList<Long>(topic.partitions());
             for (var partition = 0; partition < topic.partitions(); partition++) {
-                values.add(lag.getOrDefault(new PartitionRef(topic.name(), partition), 0L));
+                values.add(lag.getOrDefault(new PartitionRef(topic.name(), partition), UNKNOWN_LAG));
             }
             dense.put(topic.name(), values);
         }

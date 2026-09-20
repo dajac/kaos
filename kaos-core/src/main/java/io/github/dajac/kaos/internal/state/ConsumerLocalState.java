@@ -19,7 +19,8 @@ import java.util.Set;
  *     protocol
  * @param subscribed whether the consumer is asked to be in the group
  * @param faults the active faults
- * @param failed whether the runner stopped on an unrecoverable error
+ * @param failure the message of the unrecoverable error the runner stopped on, never empty for a
+ *     failed runner; empty while the runner has not failed
  * @param generation the generation the consumer reports; {@code -1} when it has none
  * @param localAssignment the partitions the consumer holds, as its rebalance listener saw them
  */
@@ -30,7 +31,7 @@ public record ConsumerLocalState(
     String assignor,
     boolean subscribed,
     Set<Fault> faults,
-    boolean failed,
+    String failure,
     int generation,
     Set<PartitionRef> localAssignment
 ) {
@@ -40,6 +41,12 @@ public record ConsumerLocalState(
         Objects.requireNonNull(protocol, "protocol");
         assignor = Objects.requireNonNullElse(assignor, "");
         faults = Set.copyOf(faults);
+        failure = Objects.requireNonNullElse(failure, "");
         localAssignment = Set.copyOf(localAssignment);
+    }
+
+    /** Whether the runner stopped on an unrecoverable error: it has a failure message. */
+    public boolean failed() {
+        return !failure.isEmpty();
     }
 }

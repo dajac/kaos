@@ -18,9 +18,9 @@ import java.util.Objects;
  * @param generation the highest generation reported by the consumers of the group; the classic
  *     protocol counterpart of the epoch
  * @param subscribedTopics the names of the topics the group subscribes to
- * @param autopilot whether the autopilot of the group is on
+ * @param autopilot the autopilot of the group
  * @param lag the lag of each subscribed topic, in the order of {@code subscribedTopics}; the list
- *     of a topic has one entry per partition, indexed by partition number, and an unknown lag is 0
+ *     of a topic has one entry per partition, indexed by partition number, and a lag that is not known is {@code -1}
  * @param consumers the consumers of the group
  */
 public record GroupSnapshot(
@@ -31,7 +31,7 @@ public record GroupSnapshot(
     int targetAssignmentEpoch,
     int generation,
     List<String> subscribedTopics,
-    boolean autopilot,
+    AutopilotSnapshot autopilot,
     Map<String, List<Long>> lag,
     List<ConsumerSnapshot> consumers
 ) {
@@ -39,6 +39,7 @@ public record GroupSnapshot(
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(state, "state");
+        Objects.requireNonNull(autopilot, "autopilot");
         subscribedTopics = List.copyOf(subscribedTopics);
         lag = copyInOrder(lag);
         consumers = List.copyOf(consumers);

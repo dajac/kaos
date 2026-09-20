@@ -56,7 +56,7 @@ public final class StatusDeriver {
      * The single status shown for a consumer. The first rule that applies wins:
      *
      * <ol>
-     *   <li>{@code FAILED} when the runner failed.</li>
+     *   <li>{@code FAILED} when the runner failed, that is when it has a failure message.</li>
      *   <li>{@code STOPPED} when the consumer is not subscribed.</li>
      *   <li>{@code FROZEN} when {@link Fault#freeze()} is active.</li>
      *   <li>{@code ISOLATED} when {@link Fault#networkIsolation()} or

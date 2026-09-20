@@ -96,6 +96,7 @@ class SnapshotRecordsTest {
             -1,
             ConsumerStatus.JOINING,
             ConsumerStatus.FROZEN,
+            null,
             partitions,
             new ConsumerSnapshot.Raw(refs, refs, refs)
         );
@@ -111,6 +112,7 @@ class SnapshotRecordsTest {
         assertThat(consumer.raw().localAssignment()).hasSize(1);
         assertThat(consumer.memberId()).isEmpty();
         assertThat(consumer.instanceId()).isEmpty();
+        assertThat(consumer.failure()).isEmpty();
     }
 
     private static ProducerSnapshot producer() {
@@ -126,7 +128,7 @@ class SnapshotRecordsTest {
             3,
             -1,
             List.of("t", "a"),
-            false,
+            new AutopilotSnapshot(false, 10_000, 30_000),
             lag,
             consumers
         );
@@ -145,6 +147,7 @@ class SnapshotRecordsTest {
             -1,
             ConsumerStatus.STABLE,
             ConsumerStatus.STABLE,
+            "",
             partitions,
             new ConsumerSnapshot.Raw(List.of(), List.of(), List.of())
         );

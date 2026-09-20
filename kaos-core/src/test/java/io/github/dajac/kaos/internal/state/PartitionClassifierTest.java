@@ -160,7 +160,7 @@ class PartitionClassifierTest {
             assignor,
             subscribed,
             Set.of(),
-            false,
+            "",
             -1,
             localAssignment
         );

@@ -7,7 +7,7 @@ import java.util.Objects;
  * The live view of one consumer. It is immutable.
  *
  * <p>The member id and the instance id are empty, and the member epoch and the generation are
- * {@code -1}, when they are not known.
+ * {@code -1}, when they are not known. The failure is empty when the consumer has not failed.
  *
  * @param id the consumer id, unique within the group
  * @param clientId the {@code client.id} of the consumer, unique across groups
@@ -23,6 +23,7 @@ import java.util.Objects;
  *     {@code STOPPED}, {@code STOPPING}, {@code JOINING}, {@code RECONCILING} and {@code STABLE}
  * @param status the single state to show for the consumer, which also accounts for the faults and
  *     for the assignment the consumer holds locally
+ * @param failure the message of the unrecoverable error behind the {@code FAILED} status
  * @param partitions the partitions that concern the consumer, in the order of {@link PartitionRef};
  *     a partition in the {@code EMPTY} state is left out
  * @param raw the assignments the partition states are derived from
@@ -39,6 +40,7 @@ public record ConsumerSnapshot(
     int generation,
     ConsumerStatus coordinatorState,
     ConsumerStatus status,
+    String failure,
     List<PartitionView> partitions,
     Raw raw
 ) {
@@ -51,6 +53,7 @@ public record ConsumerSnapshot(
         instanceId = Objects.requireNonNullElse(instanceId, "");
         Objects.requireNonNull(coordinatorState, "coordinatorState");
         Objects.requireNonNull(status, "status");
+        failure = Objects.requireNonNullElse(failure, "");
         partitions = List.copyOf(partitions);
         Objects.requireNonNull(raw, "raw");
     }
