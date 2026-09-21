@@ -1,10 +1,10 @@
 package io.github.dajac.kaos.internal.config;
 
+import java.util.List;
+
 import io.github.dajac.kaos.ConsumerOverrides;
 import io.github.dajac.kaos.ConsumerSettings;
 import io.github.dajac.kaos.ConsumerSpec;
-
-import java.util.List;
 
 /**
  * The one place where the effective settings of a consumer are computed: each override that is set

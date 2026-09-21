@@ -2,11 +2,11 @@ package io.github.dajac.kaos;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.Test;
-
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 /** Checks the rules of the public package on the types of the public API. */
 class PublicApiTest {

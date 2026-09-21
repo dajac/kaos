@@ -2,9 +2,17 @@ package io.github.dajac.kaos.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Set;
+import java.util.function.IntFunction;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.ConfigMetadata.Field;
-import io.github.dajac.kaos.ConfigMetadata.Range;
 import io.github.dajac.kaos.ConsumerOverrides;
 import io.github.dajac.kaos.ConsumerSettings;
 import io.github.dajac.kaos.ConsumerSpec;
@@ -14,21 +22,11 @@ import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.SimulatorSpec;
 import io.github.dajac.kaos.TopicSpec;
 import io.github.dajac.kaos.Violation;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import java.time.Duration;
-import java.util.List;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.Set;
-import java.util.function.IntFunction;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 class ConfigValidatorTest {
     private static final ConsumerSettings DEFAULTS = ConsumerSettings.defaults();
@@ -90,17 +88,17 @@ class ConfigValidatorTest {
      */
     static Stream<Arguments> rangedFields() {
         return Stream.of(
-            rangedField(ConfigMetadata.PARTITIONS, "topics[0].partitions", value ->
-                new SimulatorSpec(List.of(new TopicSpec("orders", value)), List.of(), List.of())
+            rangedField(ConfigMetadata.PARTITIONS, "topics[0].partitions",
+                value -> new SimulatorSpec(List.of(new TopicSpec("orders", value)), List.of(), List.of())
             ),
-            rangedField(ConfigMetadata.SESSION_TIMEOUT_MS, "groups[0].sessionTimeoutMs", value ->
-                withGroup(new GroupSpec("g", List.of("orders"), value, 5_000, 1_000, DEFAULTS, List.of()))
+            rangedField(ConfigMetadata.SESSION_TIMEOUT_MS, "groups[0].sessionTimeoutMs",
+                value -> withGroup(new GroupSpec("g", List.of("orders"), value, 5_000, 1_000, DEFAULTS, List.of()))
             ),
-            rangedField(ConfigMetadata.HEARTBEAT_INTERVAL_MS, "groups[0].heartbeatIntervalMs", value ->
-                withGroup(new GroupSpec("g", List.of("orders"), 45_000, value, 1_000, DEFAULTS, List.of()))
+            rangedField(ConfigMetadata.HEARTBEAT_INTERVAL_MS, "groups[0].heartbeatIntervalMs",
+                value -> withGroup(new GroupSpec("g", List.of("orders"), 45_000, value, 1_000, DEFAULTS, List.of()))
             ),
-            rangedField(ConfigMetadata.ASSIGNMENT_INTERVAL_MS, "groups[0].assignmentIntervalMs", value ->
-                withGroup(new GroupSpec("g", List.of("orders"), 45_000, 5_000, value, DEFAULTS, List.of()))
+            rangedField(ConfigMetadata.ASSIGNMENT_INTERVAL_MS, "groups[0].assignmentIntervalMs",
+                value -> withGroup(new GroupSpec("g", List.of("orders"), 45_000, 5_000, value, DEFAULTS, List.of()))
             ),
             rangedField(ConfigMetadata.POLL_TIMEOUT_MS, "groups[0].consumerDefaults.pollTimeoutMs",
                 value -> withGroup(group(

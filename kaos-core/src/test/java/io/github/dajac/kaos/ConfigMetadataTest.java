@@ -3,19 +3,18 @@ package io.github.dajac.kaos;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.dajac.kaos.ConfigMetadata.Range;
-import io.github.dajac.kaos.ConfigMetadata.Scope;
-import io.github.dajac.kaos.ConfigMetadata.Type;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
+
+import io.github.dajac.kaos.ConfigMetadata.Range;
+import io.github.dajac.kaos.ConfigMetadata.Scope;
+import io.github.dajac.kaos.ConfigMetadata.Type;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class ConfigMetadataTest {
 

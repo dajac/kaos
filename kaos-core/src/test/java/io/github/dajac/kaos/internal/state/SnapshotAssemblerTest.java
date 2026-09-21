@@ -3,6 +3,11 @@ package io.github.dajac.kaos.internal.state;
 import static io.github.dajac.kaos.internal.state.StatusDeriverTest.refs;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
 import io.github.dajac.kaos.AutopilotSnapshot;
 import io.github.dajac.kaos.ConsumerSnapshot;
 import io.github.dajac.kaos.ConsumerStatus;
@@ -14,15 +19,9 @@ import io.github.dajac.kaos.PartitionState;
 import io.github.dajac.kaos.PartitionView;
 import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.TopicSpec;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 class SnapshotAssemblerTest {
     private static final List<TopicSpec> TOPICS = List.of(new TopicSpec("t", 3), new TopicSpec("a", 2));

@@ -1,15 +1,14 @@
 package io.github.dajac.kaos.internal.config;
 
+import java.util.Map;
+import java.util.Optional;
+
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.Protocol;
-
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.clients.consumer.StickyAssignor;
-
-import java.util.Map;
-import java.util.Optional;
 
 /**
  * Maps the assignor names of {@link ConfigMetadata} to what the Kafka clients need. The names and

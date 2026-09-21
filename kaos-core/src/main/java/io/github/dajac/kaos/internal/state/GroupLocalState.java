@@ -1,10 +1,10 @@
 package io.github.dajac.kaos.internal.state;
 
-import io.github.dajac.kaos.AutopilotSnapshot;
-import io.github.dajac.kaos.TopicSpec;
-
 import java.util.List;
 import java.util.Objects;
+
+import io.github.dajac.kaos.AutopilotSnapshot;
+import io.github.dajac.kaos.TopicSpec;
 
 /**
  * An immutable copy of what the simulator itself knows about one group.

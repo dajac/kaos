@@ -1,16 +1,16 @@
 package io.github.dajac.kaos.internal.state;
 
-import io.github.dajac.kaos.ConsumerSnapshot;
-import io.github.dajac.kaos.Fault;
-import io.github.dajac.kaos.GroupSnapshot;
-import io.github.dajac.kaos.PartitionRef;
-import io.github.dajac.kaos.TopicSpec;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import io.github.dajac.kaos.ConsumerSnapshot;
+import io.github.dajac.kaos.Fault;
+import io.github.dajac.kaos.GroupSnapshot;
+import io.github.dajac.kaos.PartitionRef;
+import io.github.dajac.kaos.TopicSpec;
 
 /**
  * Merges what the simulator knows about one group with what the coordinator reports about it into

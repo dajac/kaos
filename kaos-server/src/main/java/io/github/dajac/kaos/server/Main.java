@@ -1,6 +1,7 @@
 package io.github.dajac.kaos.server;
 
 import java.util.concurrent.Callable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -40,8 +41,7 @@ public final class Main implements Callable<Integer> {
 
     private Server server;
 
-    Main() {
-    }
+    Main() {}
 
     public static void main(String[] args) {
         Main command = new Main();

@@ -1,13 +1,13 @@
 package io.github.dajac.kaos.internal.state;
 
+import java.util.Optional;
+import java.util.Set;
+
 import io.github.dajac.kaos.ConsumerStatus;
 import io.github.dajac.kaos.Fault;
 import io.github.dajac.kaos.GroupState;
 import io.github.dajac.kaos.PartitionRef;
 import io.github.dajac.kaos.Protocol;
-
-import java.util.Optional;
-import java.util.Set;
 
 /** Derives the coordinator-side state and the displayed status of one consumer. Pure functions. */
 public final class StatusDeriver {
@@ -81,13 +81,17 @@ public final class StatusDeriver {
         if (consumer.faults().contains(Fault.freeze())) {
             return ConsumerStatus.FROZEN;
         }
-        if (consumer.faults().contains(Fault.networkIsolation())
-            || consumer.faults().contains(Fault.connectionReset())) {
+        if (
+            consumer.faults().contains(Fault.networkIsolation())
+                || consumer.faults().contains(Fault.connectionReset())
+        ) {
             return ConsumerStatus.ISOLATED;
         }
-        if (consumer.protocol() == Protocol.CONSUMER
-            && coordinatorState == ConsumerStatus.STABLE
-            && hasMismatch(assignment, targetAssignment, consumer.localAssignment())) {
+        if (
+            consumer.protocol() == Protocol.CONSUMER
+                && coordinatorState == ConsumerStatus.STABLE
+                && hasMismatch(assignment, targetAssignment, consumer.localAssignment())
+        ) {
             return ConsumerStatus.RECONCILING;
         }
         return coordinatorState;

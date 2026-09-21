@@ -5,5 +5,4 @@ package io.github.dajac.kaos.server.dto;
  *
  * @param version the version of the running build
  */
-public record MetaResponse(String version) {
-}
+public record MetaResponse(String version) {}

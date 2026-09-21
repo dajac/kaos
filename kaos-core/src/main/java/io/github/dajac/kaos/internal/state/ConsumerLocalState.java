@@ -1,11 +1,11 @@
 package io.github.dajac.kaos.internal.state;
 
+import java.util.Objects;
+import java.util.Set;
+
 import io.github.dajac.kaos.Fault;
 import io.github.dajac.kaos.PartitionRef;
 import io.github.dajac.kaos.Protocol;
-
-import java.util.Objects;
-import java.util.Set;
 
 /**
  * An immutable copy of what one simulated consumer knows about itself: its identity, its effective
