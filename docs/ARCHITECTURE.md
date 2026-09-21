@@ -443,11 +443,13 @@ try (Simulator simulator = new Simulator("localhost:9092")
 **Own small types**
 - The enums are `Protocol`, `Phase`, `GroupState`, `GroupType`,
   `PartitionState`, `ConsumerStatus` and `ProducerState`.
+  - `Protocol`: `CONSUMER`, `CLASSIC`.
   - `Phase`: `IDLE`, `STARTING`, `RUNNING`, `STOPPING`.
-  - `GroupType`: `UNKNOWN`, `CONSUMER`, `CLASSIC`. `GroupState`:
-    `UNKNOWN`, `EMPTY`, `ASSIGNING`, `RECONCILING`, `STABLE`,
-    `PREPARING_REBALANCE`, `COMPLETING_REBALANCE`, `DEAD`. `UNKNOWN`
-    stands for a group the coordinator has not reported yet.
+  - `GroupType`: `UNKNOWN`, `CONSUMER`, `CLASSIC`.
+  - `GroupState`: `UNKNOWN`, `EMPTY`, `ASSIGNING`, `RECONCILING`,
+    `STABLE`, `PREPARING_REBALANCE`, `COMPLETING_REBALANCE`, `DEAD`.
+  - In both `GroupType` and `GroupState`, `UNKNOWN` stands for a group
+    the coordinator has not reported yet.
   - `PartitionState`: `ASSIGNED`, `PENDING`, `REVOKING`, `EMPTY`.
   - `ConsumerStatus`: `FAILED`, `STOPPED`, `FROZEN`, `ISOLATED`,
     `STOPPING`, `JOINING`, `RECONCILING`, `STABLE`.
