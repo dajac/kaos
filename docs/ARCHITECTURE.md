@@ -14,7 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
-| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so is the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)); the rest is planned |
+| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)) and the snapshot model with its pure logic (the snapshot records and enums, `internal/state` except `SnapshotPublisher`); the rest is planned |
 | `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
 | `kaos-ui` | planned |
 
@@ -131,7 +131,9 @@ and `ConsumerOverrides`, the three options classes, `ConfigMetadata`,
 `Fault`, `Protocol`, `Violation`, `SimulationException`,
 `InvalidConfigException`, the whole `internal/config` package, a
 `Simulator` that holds only the static `validate`, and the whole
-`internal/proxy` package. Everything else in
+`internal/proxy` package. The snapshot model exists too: the seven
+snapshot records, the six enums next to `Protocol`,
+and `internal/state` without `SnapshotPublisher`. Everything else in
 the tree below is planned, including the `kaos-ui` module and the
 `-DskipUi` switch. The test harness of `kaos-core` also exists; see
 [Verification](#verification).
@@ -148,7 +150,8 @@ kaos/
       ProducerOptions, GroupOptions, ConsumerOptions, Registration, SnapshotListener
       SimulatorSpec, TopicSpec, ProducerSpec, GroupSpec, ConsumerSpec (records), ConfigMetadata
       ConsumerSettings, ConsumerOverrides (records), Violation
-      SimulatorSnapshot, ProducerSnapshot, GroupSnapshot, ConsumerSnapshot, PartitionView, PartitionRef
+      SimulatorSnapshot, ProducerSnapshot, GroupSnapshot, AutopilotSnapshot, ConsumerSnapshot,
+      PartitionView, PartitionRef
       enums: Protocol, Phase, GroupState, GroupType, PartitionState, ConsumerStatus, ProducerState
       SimulationException, InvalidConfigException (List<Violation>), SimulationStateException
     src/main/java/io/github/dajac/kaos/internal/   NOT API
@@ -158,7 +161,8 @@ kaos/
       kafka/    TopicManager, GroupConfigManager, GroupPoller (-> AdminView), ClientFactory
       proxy/    NetworkProxy, ProxyLauncher, NetworkFaults, NetworkFaultFilterFactory,
                 BoundPluginRegistry (+ META-INF/services FilterFactory entry)
-      state/    SnapshotAssembler, PartitionClassifier, StatusDeriver, SnapshotPublisher
+      state/    SnapshotAssembler, PartitionClassifier, StatusDeriver, SnapshotPublisher,
+                AdminView, GroupLocalState, ConsumerLocalState (input records)
     src/test/java/io/github/dajac/kaos/test/       IT harness: IntegrationTest, KafkaClusterExtension, KafkaCluster
   kaos-server/                 Javalin adapter + shaded runnable jar
     src/main/java/io/github/dajac/kaos/server/
@@ -187,10 +191,11 @@ never imports one.
 Status: the spec, options and validation model is built. This covers
 the paragraphs "Options lambdas", "Records as the data view" and
 "Validation" below, the `Fault` type and the `Protocol` enum. The
-harness is planned: `Simulator` has only the static `validate`, the
-components (`Topic`, `ProducerHandle`, `ConsumerGroup`,
-`ConsumerHandle`) do not exist, and neither do `describe()`, the `add…`
-overloads, the snapshot types and the other enums.
+snapshot records and the enums of "Own small types" are built as well;
+see [Snapshot pipeline](#snapshot-pipeline). The harness is planned:
+`Simulator` has only the static `validate`, the components (`Topic`,
+`ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`) do not exist, and
+neither do `describe()`, `snapshot()` and the `add…` overloads.
 
 The model is a harness, `Simulator`, with independent components under
 it. The style is Testcontainers-like: construct, configure, `start()`,
@@ -438,7 +443,20 @@ try (Simulator simulator = new Simulator("localhost:9092")
 **Own small types**
 - The enums are `Protocol`, `Phase`, `GroupState`, `GroupType`,
   `PartitionState`, `ConsumerStatus` and `ProducerState`.
-- There is a `PartitionRef` record.
+  - `Protocol`: `CONSUMER`, `CLASSIC`.
+  - `Phase`: `IDLE`, `STARTING`, `RUNNING`, `STOPPING`.
+  - `GroupType`: `UNKNOWN`, `CONSUMER`, `CLASSIC`.
+  - `GroupState`: `UNKNOWN`, `EMPTY`, `ASSIGNING`, `RECONCILING`,
+    `STABLE`, `PREPARING_REBALANCE`, `COMPLETING_REBALANCE`, `DEAD`.
+  - In both `GroupType` and `GroupState`, `UNKNOWN` stands for a group
+    the coordinator has not reported yet.
+  - `PartitionState`: `ASSIGNED`, `PENDING`, `REVOKING`, `EMPTY`.
+  - `ConsumerStatus`: `FAILED`, `STOPPED`, `FROZEN`, `ISOLATED`,
+    `STOPPING`, `JOINING`, `RECONCILING`, `STABLE`.
+  - `ProducerState`: `STOPPED` (declared, not running), `RUNNING`,
+    `PAUSED`.
+- There is a `PartitionRef` record, ordered by topic and then by
+  partition.
 - No kafka-clients class appears in the public API or in the JSON.
 - `ConsumerGroup` does not clash with kafka-clients.
 - `ProducerHandle` and `ConsumerHandle` avoid Kafka's `Producer` and
@@ -530,7 +548,8 @@ Status: planned.
 **Runtime failures**
 - A runner poll error is logged to `kaos.events` and the loop continues.
 - An unrecoverable runner error sets the consumer status to `FAILED`
-  with a message. The simulator keeps running.
+  with a message, the `failure` of the consumer snapshot. The simulator
+  keeps running.
 - A poller error keeps the last `AdminView` and sets `stale` on the
   snapshot.
 - Autopilot validates `min ≤ max`. It does nothing when its group has no
@@ -538,13 +557,19 @@ Status: planned.
 
 ### Snapshot pipeline
 
-Status: planned.
+Status: the snapshot records, `SnapshotAssembler`,
+`PartitionClassifier`, `StatusDeriver` and their input records are
+built. `GroupPoller`, `SnapshotPublisher`, and therefore steps 1 and 3
+to 5 below, are planned.
 
 1. `GroupPoller` polls every 200 ms, with one `describeConsumerGroups`
    call for all groups plus the offsets. It produces an `AdminView` per
    group.
-2. `SnapshotAssembler`, a pure function, merges each group's view with
-   the local state of its consumers, and adds the topics and producers.
+2. `SnapshotAssembler`, a pure function, merges each group's
+   `AdminView` with the group's `GroupLocalState` into a
+   `GroupSnapshot`. The publisher puts the group snapshots together
+   with the phase, the topics and the producers into a
+   `SimulatorSnapshot`.
 3. `SnapshotPublisher` compares the result with the last snapshot and
    ignores the revision number.
 4. If the snapshot changed, the publisher bumps `revision`, stores it in
@@ -555,15 +580,79 @@ Status: planned.
 `simulator.snapshot()`, `group.snapshot()` (one slice of it),
 `GET /snapshot` and SSE all read the same reference.
 
+**Inputs of the assembler.** They are immutable records in
+`internal/state` and hold no Kafka type; the poller and the publisher
+fill them.
+- `AdminView` is what the coordinator and the offsets say about one
+  group: `type`, `state`, `epoch`, `targetAssignmentEpoch`, the
+  `members` and the `lag` per `PartitionRef` (end offset minus committed
+  offset, never negative).
+  - A member has `clientId`, `memberId`, `instanceId`, `memberEpoch`,
+    `assignment` and an optional `targetAssignment`.
+  - `AdminView.unknown()` stands for a group that is not reported yet.
+- `GroupLocalState` is what the simulator knows about the group: `id`,
+  the subscribed topics with their partition counts, the `autopilot`
+  state (an `AutopilotSnapshot`) and one `ConsumerLocalState` per
+  consumer.
+- `ConsumerLocalState` is the copy of a runner's state: `id`,
+  `clientId`, the current `protocol`, the effective `assignor`,
+  `subscribed`, `faults`, `failure`, `generation` and
+  `localAssignment`. `failure` is the message of the unrecoverable error
+  of the runner. It is never empty for a failed runner and empty
+  otherwise, so it is the single source of "failed".
+- A consumer and a member are matched by `client.id`. A member without a
+  simulated consumer behind it is ignored.
+
 **Domain logic owned by core** (any frontend, a TUI included, gets it
 for free):
-- Partition classification (assigned, pending, revoking, empty).
-- Out-of-group blanking.
-- Classic eager mid-rebalance blanking. It uses the **per-consumer**
-  effective assignor. (The prototype uses the group-level assignor.)
-- The Stable→Reconciling override.
-- Status priority `STOPPED > FROZEN > ISOLATED > …`. `connectionReset`
-  counts as ISOLATED.
+- Target mirroring (`AdminView.targetAssignmentOf`). A member without a
+  reported target has an empty target in a consumer group. In any other
+  group, which has no notion of target, the target mirrors the current
+  assignment.
+- Coordinator state (`StatusDeriver`), one of `STOPPED`, `STOPPING`,
+  `JOINING`, `RECONCILING` and `STABLE`:
+  - a consumer the coordinator does not list is `JOINING` when it is
+    subscribed and `STOPPED` otherwise;
+  - a listed consumer that is not subscribed is `STOPPING`;
+  - a listed member of a consumer group is `RECONCILING` while its
+    assignment differs from its target or its epoch is behind the target
+    assignment epoch, and `STABLE` otherwise;
+  - a listed member of any other group is `RECONCILING` while the group
+    is in `PREPARING_REBALANCE` or `COMPLETING_REBALANCE`, and `STABLE`
+    otherwise.
+- Partition classification (`PartitionClassifier`: assigned, pending,
+  revoking, empty).
+  - Consumer protocol: a target partition is assigned when the consumer
+    holds it locally and pending otherwise; a partition that is not a
+    target and that the consumer or the coordinator still holds is
+    revoking.
+  - Classic protocol: a partition of the current assignment is assigned.
+    There is no pending or revoking.
+- Out-of-group blanking. A consumer that is not subscribed, or for which
+  the coordinator has neither a current nor a target partition, has no
+  partition. Not being subscribed counts at once, before the coordinator
+  catches up.
+- Classic eager mid-rebalance blanking. A classic consumer whose
+  assignor is eager (every classic assignor except `cooperative-sticky`,
+  the client default included) has no partition while the group is in
+  `PREPARING_REBALANCE` or `COMPLETING_REBALANCE`: it gave them all up
+  to rejoin, while the coordinator still reports the last assignment. It
+  uses the **per-consumer** effective assignor, so the consumers of one
+  group can differ. (The prototype uses the group-level assignor.)
+- The Stable→Reconciling override. A consumer of the consumer protocol
+  that is `STABLE` for the coordinator has the status `RECONCILING`
+  while a partition is in flight: a target it does not hold locally, or
+  a partition held locally or by the coordinator that is not a target.
+- Status priority `FAILED > STOPPED > FROZEN > ISOLATED > …`, where `…`
+  is the coordinator state with the override above. `STOPPED` means not
+  subscribed, so `STOPPING` only shows in `coordinatorState`.
+  `connectionReset` counts as ISOLATED. `FAILED` applies when the
+  consumer has a failure message. It comes first because a failed runner
+  no longer reacts to anything else.
+- Dense lag: one array per subscribed topic, indexed by partition. A
+  partition whose lag is not known yet has `-1`, which keeps it apart
+  from a partition that is caught up (`0`).
+- Group generation: the highest generation its consumers report.
 - Effective config.
 - Consumer ids.
 
@@ -735,22 +824,34 @@ GET    /api/v1/openapi.yaml
 - Jackson runs with `FAIL_ON_UNKNOWN_PROPERTIES`.
 
 **Snapshot shape**
+
+Status: the records behind this shape are built; their JSON form is
+planned with the server. Unknown values follow two conventions: a
+number (epoch, generation, lag) is `-1`, and a string (member id,
+instance id) is empty. `failure` is empty when the consumer has not
+failed.
+
 - `revision`, `phase`, `stale`.
-- `topics[{name,partitions}]`.
+- `topics[{name,partitions}]` (`TopicSpec`).
 - `producers[{id,topics,state,ratePerPartition}]`.
 - `groups[]`, each with:
   - `id`, `type`, `state`, `epoch`, `targetAssignmentEpoch`,
     `generation`;
-  - `subscribedTopics`, `autopilot`;
-  - `lag{topic:[…dense…]}`;
+  - `subscribedTopics`;
+  - `autopilot{enabled,minIntervalMs,maxIntervalMs}`, the body of the
+    autopilot endpoint; the intervals are the last ones given and are
+    kept while it is off;
+  - `lag{topic:[…dense…]}`, where an unknown lag is `-1`;
   - `consumers[]`.
 - Each entry of `consumers[]` has:
   - `id`, `clientId`, `protocol`;
   - `subscribed`, `faults[]`;
   - `memberId`, `instanceId`, `memberEpoch`, `generation`;
-  - `coordinatorState`, `status`;
-  - `partitions[{topic,partition,state}]`;
-  - `raw{assignment,targetAssignment,localAssignment}`.
+  - `coordinatorState`, `status` (both a `ConsumerStatus`), `failure`;
+  - `partitions[{topic,partition,state}]`, sorted, without the `EMPTY`
+    ones;
+  - `raw{assignment,targetAssignment,localAssignment}`, each a sorted
+    list of `{topic,partition}`.
 
 **Lifecycle handling**
 - `SimulationService` owns a single-thread `kaos-lifecycle` executor.

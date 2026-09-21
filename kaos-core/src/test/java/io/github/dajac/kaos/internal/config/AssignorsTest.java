@@ -7,6 +7,8 @@ import io.github.dajac.kaos.Protocol;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class AssignorsTest {
 
@@ -35,6 +37,18 @@ class AssignorsTest {
     void theEmptyAndUnknownNamesHaveNoClassicClass() {
         assertThat(Assignors.classicAssignorClass("")).isEmpty();
         assertThat(Assignors.classicAssignorClass("uniform")).isEmpty();
+    }
+
+    @ParameterizedTest(name = "{0} -> {1}")
+    @CsvSource({
+        "'',                 true",
+        "range,              true",
+        "roundrobin,         true",
+        "sticky,             true",
+        "cooperative-sticky, false",
+    })
+    void onlyCooperativeStickyIsNotEager(String assignor, boolean expected) {
+        assertThat(Assignors.isEagerClassic(assignor)).isEqualTo(expected);
     }
 
     @Test

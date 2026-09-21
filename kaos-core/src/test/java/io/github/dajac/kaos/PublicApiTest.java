@@ -8,7 +8,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Checks the rules of the public package on the types of the spec and validation model. */
+/** Checks the rules of the public package on the types of the public API. */
 class PublicApiTest {
     private static final List<Class<?>> PUBLIC_TYPES = List.of(
         Simulator.class,
@@ -31,7 +31,21 @@ class PublicApiTest {
         Protocol.class,
         Violation.class,
         SimulationException.class,
-        InvalidConfigException.class
+        InvalidConfigException.class,
+        SimulatorSnapshot.class,
+        ProducerSnapshot.class,
+        GroupSnapshot.class,
+        AutopilotSnapshot.class,
+        ConsumerSnapshot.class,
+        ConsumerSnapshot.Raw.class,
+        PartitionView.class,
+        PartitionRef.class,
+        Phase.class,
+        GroupState.class,
+        GroupType.class,
+        PartitionState.class,
+        ConsumerStatus.class,
+        ProducerState.class
     );
 
     @Test
