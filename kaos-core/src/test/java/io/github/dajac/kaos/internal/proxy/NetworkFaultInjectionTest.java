@@ -198,8 +198,10 @@ class NetworkFaultInjectionTest {
             }
         };
 
-        var proxy = new ProxyLauncher(cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, takeBrokerPortOnce)
-            .launch(admin, new NetworkFaults());
+        var launcher = new ProxyLauncher(
+            cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, takeBrokerPortOnce
+        );
+        var proxy = launcher.launch(admin, new NetworkFaults());
         resources.add(proxy);
 
         assertThat(probed).hasSize(2);
@@ -229,8 +231,9 @@ class NetworkFaultInjectionTest {
                 socket.close();
             }
         });
-        ProxyLauncher launcher =
-            new ProxyLauncher(cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, alwaysTakeBootstrapPort);
+        ProxyLauncher launcher = new ProxyLauncher(
+            cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, alwaysTakeBootstrapPort
+        );
 
         assertThatThrownBy(() -> launcher.launch(admin, new NetworkFaults()))
             .isInstanceOf(IllegalStateException.class)
@@ -252,7 +255,9 @@ class NetworkFaultInjectionTest {
     void aStartupFailureThatIsNotAboutPortsFailsTheLaunchAndLeaksNothing() throws Exception {
         var threadsBefore = Thread.getAllStackTraces().keySet();
         var probed = new ArrayList<Integer>();
-        var launcher = new ProxyLauncher("not a bootstrap address", ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, probed::add);
+        var launcher = new ProxyLauncher(
+            "not a bootstrap address", ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, probed::add
+        );
 
         assertThatThrownBy(() -> launcher.launch(admin, new NetworkFaults()))
             .isInstanceOf(IllegalStateException.class)

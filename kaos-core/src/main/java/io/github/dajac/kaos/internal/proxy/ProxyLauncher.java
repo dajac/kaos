@@ -192,8 +192,12 @@ public final class ProxyLauncher {
         virtualCluster.put("drainTimeout", DRAIN_TIMEOUT);
 
         var configuration = new LinkedHashMap<String, Object>();
-        configuration.put("clusterDefinitions", List.of(Map.of("name", CLUSTER_NAME, "bootstrapServers", bootstrapServers)));
-        configuration.put("filterDefinitions", List.of(Map.of("name", FILTER_NAME, "type", NetworkFaultFilterFactory.class.getName())));
+        configuration.put(
+            "clusterDefinitions", List.of(Map.of("name", CLUSTER_NAME, "bootstrapServers", bootstrapServers))
+        );
+        configuration.put(
+            "filterDefinitions", List.of(Map.of("name", FILTER_NAME, "type", NetworkFaultFilterFactory.class.getName()))
+        );
         configuration.put("defaultFilters", List.of(FILTER_NAME));
         configuration.put("virtualClusters", List.of(virtualCluster));
         configuration.put("network", Map.of("proxy", proxyNetwork, "management", managementNetwork));
@@ -268,7 +272,8 @@ public final class ProxyLauncher {
      * would then receive the clients' connections; the second bind detects that listener.
      */
     static boolean isFree(int port) {
-        return canBind(new InetSocketAddress(port)) && canBind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+        return canBind(new InetSocketAddress(port))
+            && canBind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
     }
 
     private static boolean canBind(InetSocketAddress address) {

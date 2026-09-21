@@ -51,8 +51,8 @@ class StatusDeriverTest {
 
     /** A group that is not a consumer group: only the group state counts, for every group state. */
     static Stream<Arguments> groupStateCases() {
-        return Stream.of(GroupType.CLASSIC, GroupType.UNKNOWN).flatMap(type ->
-            Arrays.stream(GroupState.values()).map(state -> {
+        return Stream.of(GroupType.CLASSIC, GroupType.UNKNOWN).flatMap(
+            type -> Arrays.stream(GroupState.values()).map(state -> {
                 var rebalancing =
                     state == GroupState.PREPARING_REBALANCE || state == GroupState.COMPLETING_REBALANCE;
                 return Arguments.of(type, state, rebalancing ? ConsumerStatus.RECONCILING : ConsumerStatus.STABLE);
@@ -166,7 +166,9 @@ class StatusDeriverTest {
     }
 
     private static AdminView.Member member(int memberEpoch, Set<PartitionRef> assignment, Set<PartitionRef> target) {
-        return new AdminView.Member("g-consumer-0", "member-0", "", memberEpoch, assignment, Optional.ofNullable(target));
+        return new AdminView.Member(
+            "g-consumer-0", "member-0", "", memberEpoch, assignment, Optional.ofNullable(target)
+        );
     }
 
     private static ConsumerLocalState consumer(

@@ -102,23 +102,35 @@ class ConfigValidatorTest {
             rangedField(ConfigMetadata.ASSIGNMENT_INTERVAL_MS, "groups[0].assignmentIntervalMs", value ->
                 withGroup(new GroupSpec("g", List.of("orders"), 45_000, 5_000, value, DEFAULTS, List.of()))
             ),
-            rangedField(ConfigMetadata.POLL_TIMEOUT_MS, "groups[0].consumerDefaults.pollTimeoutMs", value ->
-                withGroup(group("g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", value, 1_000, 300_000)))
+            rangedField(ConfigMetadata.POLL_TIMEOUT_MS, "groups[0].consumerDefaults.pollTimeoutMs",
+                value -> withGroup(group(
+                    "g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", value, 1_000, 300_000)
+                ))
             ),
-            rangedField(ConfigMetadata.POLL_DELAY_MS, "groups[0].consumerDefaults.pollDelayMs", value ->
-                withGroup(group("g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", 0, value, 300_000)))
+            rangedField(ConfigMetadata.POLL_DELAY_MS, "groups[0].consumerDefaults.pollDelayMs",
+                value -> withGroup(group(
+                    "g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", 0, value, 300_000)
+                ))
             ),
-            rangedField(ConfigMetadata.MAX_POLL_INTERVAL_MS, "groups[0].consumerDefaults.maxPollIntervalMs", value ->
-                withGroup(group("g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", 0, 1_000, value)))
+            rangedField(ConfigMetadata.MAX_POLL_INTERVAL_MS, "groups[0].consumerDefaults.maxPollIntervalMs",
+                value -> withGroup(group(
+                    "g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", 0, 1_000, value)
+                ))
             ),
-            rangedField(ConfigMetadata.POLL_TIMEOUT_MS, "groups[0].consumers[0].overrides.pollTimeoutMs", value ->
-                withGroup(group("g", DEFAULTS, intOverrides(OptionalInt.of(value), OptionalInt.empty(), OptionalInt.empty())))
+            rangedField(ConfigMetadata.POLL_TIMEOUT_MS, "groups[0].consumers[0].overrides.pollTimeoutMs",
+                value -> withGroup(group(
+                    "g", DEFAULTS, intOverrides(OptionalInt.of(value), OptionalInt.empty(), OptionalInt.empty())
+                ))
             ),
-            rangedField(ConfigMetadata.POLL_DELAY_MS, "groups[0].consumers[0].overrides.pollDelayMs", value ->
-                withGroup(group("g", DEFAULTS, intOverrides(OptionalInt.empty(), OptionalInt.of(value), OptionalInt.empty())))
+            rangedField(ConfigMetadata.POLL_DELAY_MS, "groups[0].consumers[0].overrides.pollDelayMs",
+                value -> withGroup(group(
+                    "g", DEFAULTS, intOverrides(OptionalInt.empty(), OptionalInt.of(value), OptionalInt.empty())
+                ))
             ),
-            rangedField(ConfigMetadata.MAX_POLL_INTERVAL_MS, "groups[0].consumers[0].overrides.maxPollIntervalMs", value ->
-                withGroup(group("g", DEFAULTS, intOverrides(OptionalInt.empty(), OptionalInt.empty(), OptionalInt.of(value))))
+            rangedField(ConfigMetadata.MAX_POLL_INTERVAL_MS, "groups[0].consumers[0].overrides.maxPollIntervalMs",
+                value -> withGroup(group(
+                    "g", DEFAULTS, intOverrides(OptionalInt.empty(), OptionalInt.empty(), OptionalInt.of(value))
+                ))
             )
         );
     }
@@ -127,7 +139,11 @@ class ConfigValidatorTest {
         return Arguments.of(path, field, spec);
     }
 
-    private static ConsumerSpec intOverrides(OptionalInt pollTimeoutMs, OptionalInt pollDelayMs, OptionalInt maxPollIntervalMs) {
+    private static ConsumerSpec intOverrides(
+        OptionalInt pollTimeoutMs,
+        OptionalInt pollDelayMs,
+        OptionalInt maxPollIntervalMs
+    ) {
         return ConsumerSpec.of(new ConsumerOverrides(
             Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
             pollTimeoutMs, pollDelayMs, maxPollIntervalMs
@@ -207,7 +223,9 @@ class ConfigValidatorTest {
     @Test
     void reportsAnOverriddenAssignorOnTheAssignorEvenWhenTheProtocolIsOverriddenToo() {
         var spec = withGroup(group(
-            "g", settings(Protocol.CONSUMER, "uniform"), overriding(Optional.of(Protocol.CLASSIC), Optional.of("uniform"))
+            "g",
+            settings(Protocol.CONSUMER, "uniform"),
+            overriding(Optional.of(Protocol.CLASSIC), Optional.of("uniform"))
         ));
 
         assertThat(ConfigValidator.validate(spec)).extracting(Violation::field)
@@ -230,7 +248,9 @@ class ConfigValidatorTest {
     @Test
     void acceptsAClassicOverrideWithItsOwnAssignor() {
         var spec = withGroup(group(
-            "g", settings(Protocol.CONSUMER, "uniform"), overriding(Optional.of(Protocol.CLASSIC), Optional.of("sticky"))
+            "g",
+            settings(Protocol.CONSUMER, "uniform"),
+            overriding(Optional.of(Protocol.CLASSIC), Optional.of("sticky"))
         ));
 
         assertThat(ConfigValidator.validate(spec)).isEmpty();

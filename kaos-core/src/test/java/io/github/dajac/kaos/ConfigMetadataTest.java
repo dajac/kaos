@@ -69,8 +69,8 @@ class ConfigMetadataTest {
     @Test
     void everyDefaultIsWithinItsRange() {
         for (var field : ConfigMetadata.get().fields()) {
-            field.range().ifPresent(range ->
-                assertThat(range.contains(field.intDefault())).as(field.key()).isTrue()
+            field.range().ifPresent(
+                range -> assertThat(range.contains(field.intDefault())).as(field.key()).isTrue()
             );
         }
     }

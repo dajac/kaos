@@ -267,7 +267,10 @@ class SnapshotAssemblerTest {
             Map.entry("t", List.of(0L, -1L, 9L)),
             Map.entry("a", List.of(-1L, 2L))
         );
-        assertThat(SnapshotAssembler.assemble(new GroupLocalState("g", TOPICS, AUTOPILOT_OFF, List.of()), AdminView.unknown()).lag())
+        var unknown = SnapshotAssembler.assemble(
+            new GroupLocalState("g", TOPICS, AUTOPILOT_OFF, List.of()), AdminView.unknown()
+        );
+        assertThat(unknown.lag())
             .containsExactly(Map.entry("t", List.of(-1L, -1L, -1L)), Map.entry("a", List.of(-1L, -1L)));
     }
 

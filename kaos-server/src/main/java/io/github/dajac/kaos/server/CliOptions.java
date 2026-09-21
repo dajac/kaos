@@ -18,7 +18,8 @@ final class CliOptions {
         paramLabel = "<host:port>",
         defaultValue = DEFAULT_BOOTSTRAP_SERVER,
         converter = BootstrapServerConverter.class,
-        description = "Kafka bootstrap servers (default: ${DEFAULT-VALUE})")
+        description = "Kafka bootstrap servers (default: ${DEFAULT-VALUE})"
+    )
     private String bootstrapServer = DEFAULT_BOOTSTRAP_SERVER;
 
     @Option(
@@ -26,7 +27,8 @@ final class CliOptions {
         paramLabel = "<port>",
         defaultValue = "" + DEFAULT_PORT,
         converter = PortConverter.class,
-        description = "HTTP port; 0 picks a free port (default: ${DEFAULT-VALUE})")
+        description = "HTTP port; 0 picks a free port (default: ${DEFAULT-VALUE})"
+    )
     private int port = DEFAULT_PORT;
 
     /**

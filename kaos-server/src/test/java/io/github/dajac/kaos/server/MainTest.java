@@ -61,8 +61,8 @@ class MainTest {
         assertThat(execute("--bootstrap-server", "x", "--port", "0")).isEqualTo(Main.EXIT_OK);
 
         assertThat(command.server()).isNotNull();
-        HttpRequest request = HttpRequest.newBuilder(
-            URI.create("http://localhost:" + command.server().port() + "/api/v1/meta")).build();
+        var uri = URI.create("http://localhost:" + command.server().port() + "/api/v1/meta");
+        HttpRequest request = HttpRequest.newBuilder(uri).build();
         HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
     }
