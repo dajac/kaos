@@ -53,6 +53,7 @@
         <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
         <exec-maven-plugin.version>3.6.4</exec-maven-plugin.version>
+        <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -196,6 +197,27 @@
                         <mainClass>none</mainClass>
                     </configuration>
                 </plugin>
+                <plugin>
+                    <groupId>com.diffplug.spotless</groupId>
+                    <artifactId>spotless-maven-plugin</artifactId>
+                    <version>${spotless-maven-plugin.version}</version>
+                    <!-- Formats the main and test Java sources of every module
+                         with the Eclipse JDT formatter. "spotless:check" runs in
+                         "verify"; "./mvnw spotless:apply" fixes the sources. -->
+                    <configuration>
+                        <java>
+                            <importOrder>
+                                <order>\#,java|javax,</order>
+                            </importOrder>
+                            <removeUnusedImports/>
+                            <eclipse>
+                                <file>${maven.multiModuleProjectDirectory}/config/eclipse-formatter.xml</file>
+                            </eclipse>
+                            <trimTrailingWhitespace/>
+                            <endWithNewline/>
+                        </java>
+                    </configuration>
+                </plugin>
             </plugins>
         </pluginManagement>
 
@@ -218,6 +240,45 @@
                                     <version>[3.9,)</version>
                                 </requireMavenVersion>
                             </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>check-format</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- The formatter leaves the parentheses of calls where the author
+                 put them. This check, run once from the root, fails when a
+                 closing parenthesis is left behind the last argument. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <inherited>false</inherited>
+                <executions>
+                    <execution>
+                        <id>check-parentheses</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <skip>false</skip>
+                            <executable>${java.home}/bin/java</executable>
+                            <arguments>
+                                <argument>${project.basedir}/config/CheckParentheses.java</argument>
+                                <argument>${project.basedir}/config</argument>
+                                <argument>${project.basedir}/kaos-core/src</argument>
+                                <argument>${project.basedir}/kaos-server/src</argument>
+                            </arguments>
                         </configuration>
                     </execution>
                 </executions>

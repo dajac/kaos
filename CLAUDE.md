@@ -29,11 +29,41 @@ before changing anything.
 
 ## Code style
 
+The build enforces the layout: `./mvnw verify` fails on unformatted
+code, and `./mvnw spotless:apply` fixes it. Run it before every commit.
+Spotless applies the Eclipse JDT profile `config/eclipse-formatter.xml`
+to the main and test sources of every module.
+
+Enforced and fixed by `spotless:apply`:
+
+- 4 spaces, 120 columns. The formatter keeps the line breaks of the
+  author and only wraps what is too long.
 - An empty body is `{}` on one line: `private Assignors() {}`,
   `g -> {}`.
-- When the arguments of a call or a declaration span several lines, the
+- When a declaration (method, constructor, record) or the condition of
+  an `if`, `while`, `for`, `switch`, `try` or `catch` spans several
+  lines, the closing parenthesis goes on its own line: `) {`.
+- Imports: static imports, then `java` and `javax`, then the rest, each
+  group sorted and separated by a blank line. Unused imports go away.
+- Comments and Javadoc are left as written.
+
+Enforced by `config/CheckParentheses.java` in `verify`, fixed by hand:
+
+- When the arguments of a call or an annotation span several lines, the
   closing parenthesis goes on its own line, aligned with the start of
-  the statement: `);`, `) {`, `),`. This applies to main and test code.
+  the statement: `);`, `),`, and `));` when the last argument is itself
+  such a call. The check fails on a line that closes more parentheses
+  than it opens and does not start with `)` or `}`. The formatter does
+  not move these parentheses, so wrap a call that is too long by hand
+  before it does it.
+
+Guidance, not checked:
+
+- In a wrapped call, put the arguments on one line, or one per line, or
+  in meaningful groups such as the key and value pairs of `Map.of`.
+- A lambda that does not fit behind its arrow moves to its own line
+  whole (`value -> body`): the formatter never breaks after `->` unless
+  the body is a block.
 - Prefer `var` for local variables, enhanced-`for` variables included,
   when the type is evident from the right-hand side or irrelevant to
   the reader. With a diamond, move the type arguments to the right:
@@ -42,6 +72,17 @@ before changing anything.
   sealed types with pattern `switch`, pattern matching for `instanceof`,
   switch expressions, `List.of`, `Stream.toList()`, text blocks. Do not
   force them where they hurt readability.
+- OpenRewrite can propose the `var` changes on demand. It is not part of
+  the build, and its output must be reviewed: it also rewrites loop
+  counters and can produce code that does not compile, such as `var`
+  for a lambda. Run the `dryRun` goal to get a patch in
+  `target/rewrite/`, or `run` to change the sources:
+
+  ```sh
+  ./mvnw org.openrewrite.maven:rewrite-maven-plugin:6.46.1:dryRun \
+      -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-migrate-java:3.42.1 \
+      -Drewrite.activeRecipes=org.openrewrite.java.migrate.lang.UseVar
+  ```
 
 ## Module map
 
@@ -57,7 +98,8 @@ planned; see `docs/ARCHITECTURE.md` for their status.
 ## Build and run
 
 ```sh
-./mvnw verify                 # unit tests and Testcontainers ITs (needs Docker); later also UI build + Vitest
+./mvnw verify                 # unit tests, Testcontainers ITs (needs Docker) and format checks; later also UI build + Vitest
+./mvnw spotless:apply         # format the Java sources; verify fails on unformatted code
 ./mvnw verify -DskipITs       # skip the integration tests, keep the unit tests
 ./mvnw verify -DskipUi        # skip the frontend build (planned, no effect yet)
 ./run.sh [options]            # build and run; all options go to the app, see ./run.sh --help

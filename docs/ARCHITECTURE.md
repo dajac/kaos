@@ -75,9 +75,9 @@ view is not carried over.
 ## Tech stack
 
 Status: the Java build rows are in place (Java 21, Kafka, Kroxylicious,
-Javalin, Jackson, the command line, logging, packaging, and JUnit 6 with
-AssertJ, Awaitility, Testcontainers and failsafe). Mockito, the frontend
-and the API contract are planned.
+Javalin, Jackson, the command line, logging, packaging, the code format,
+and JUnit 6 with AssertJ, Awaitility, Testcontainers and failsafe).
+Mockito, the frontend and the API contract are planned.
 
 The versions below were checked on 2026-09-19. When a tool rejects a
 brand-new major (JUnit 6, TypeScript 7, frontend-maven-plugin 2.x), the
@@ -93,6 +93,7 @@ build steps back one major.
 | Command line | picocli 4.7.x in server, through reflection (no annotation processor) |
 | Logging | `slf4j-api` only in core; logback-classic 1.5.x in server |
 | Packaging | `maven-shade-plugin` 3.6.x |
+| Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`), plus `config/CheckParentheses.java`; both checked in `verify` |
 | Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration` |
 | Frontend | Node 24 LTS (pinned by frontend-maven-plugin + `.nvmrc`), Vite 8, React 19, TypeScript, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
 | Frontend tests | Vitest, React Testing Library. Playwright is deferred. |
@@ -115,6 +116,23 @@ Notes:
   - The shaded jar replaces the module jar,
     `kaos-server/target/kaos-server-<version>.jar`. The unshaded one is
     kept as `original-kaos-server-<version>.jar`.
+- **Code format.**
+  - Spotless formats the main and test Java sources of every module:
+    the Eclipse JDT formatter with the committed profile (4 spaces, 120
+    columns, the author's line breaks kept, `{}` for empty bodies, the
+    closing parenthesis of a wrapped declaration or control statement on
+    its own line, comments untouched), the import order (static, then
+    `java`/`javax`, then the rest) and the removal of unused imports.
+  - `spotless:check` runs in `verify` in every module, and
+    `./mvnw spotless:apply` fixes the sources. `pom.xml` and Markdown
+    files are not formatted.
+  - The JDT formatter cannot keep `foo(new Bar(` ... `));` and still move
+    a lone closing parenthesis of a call to its own line, so it leaves
+    the parentheses of calls and annotations where the author put them.
+    `config/CheckParentheses.java`, a single-file program that the root
+    build runs in `verify` with the Java source launcher, fails on a
+    line that closes more parentheses than it opens and does not start
+    with `)` or `}`.
 - **Version.** Maven filters `version.properties` in `kaos-server`, and
   `/api/v1/meta` reports the version read from it.
 - **Contract enforcement.** The committed `schema.d.ts` is checked with a
@@ -125,7 +143,7 @@ Notes:
 Status: the parent POM, the Maven wrapper, `run.sh`, and `Main`,
 `Server`, `CliOptions`, `Version` and `dto/MetaResponse` of
 `kaos-server` exist, next to `LICENSE`, `.gitignore`, `CLAUDE.md`, the
-CI workflow and this document. In `kaos-core`, the spec, options and
+CI workflow, `config/` and this document. In `kaos-core`, the spec, options and
 validation model exists: the five spec records with `ConsumerSettings`
 and `ConsumerOverrides`, the three options classes, `ConfigMetadata`,
 `Fault`, `Protocol`, `Violation`, `SimulationException`,
@@ -143,6 +161,7 @@ kaos/
   pom.xml                      parent: BOMs, pluginManagement, -DskipUi, -DskipITs
   README.md  LICENSE  .gitignore  run.sh  CLAUDE.md
   docs/ARCHITECTURE.md         living design doc, kept up to date in every PR
+  config/                      eclipse-formatter.xml (Spotless), CheckParentheses.java
   .github/workflows/ci.yml     CI: ./mvnw verify on every PR and on push to main
   kaos-core/                   library: kafka-clients, kroxylicious-runtime, slf4j-api
     src/main/java/io/github/dajac/kaos/            PUBLIC API
@@ -975,13 +994,13 @@ Mixed-protocol groups are supported.
 ## Verification
 
 Status: planned, except that `./mvnw verify` already builds the modules,
-runs the unit tests and the integration-test harness below, and produces
-the shaded jar, that `-DskipITs` works, that `./run.sh` builds and
+runs the unit tests, the integration-test harness below and the code
+format checks, and produces the shaded jar, that `-DskipITs` works, that `./run.sh` builds and
 starts the server, and that the CI workflow runs the build.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
-  required) and the UI build with Vitest.
+  required), the code format checks and the UI build with Vitest.
 - `-DskipUi` and `-DskipITs` give fast local loops.
 
 **Continuous integration**
