@@ -148,6 +148,28 @@ class ProducerRunnerTest {
         assertThat(flaky.history().get(0).partition()).isZero();
     }
 
+    @Test
+    void anUnexpectedErrorEndsTheLoopAndShowsTheProducerAsStopped() {
+        var broken = new MockProducer<>(true, null, new StringSerializer(), new StringSerializer()) {
+            @Override
+            public synchronized Future<RecordMetadata> send(ProducerRecord<String, String> record, Callback callback) {
+                throw new UnsupportedOperationException("unexpected");
+            }
+        };
+
+        runner.start(() -> broken, threads, resources);
+
+        await().atMost(TIMEOUT).untilAsserted(() -> {
+            assertThat(runner.state()).isEqualTo(ProducerState.STOPPED);
+            assertThat(loopThreads()).isEmpty();
+        });
+        // The start and the end of the loop are both reported.
+        assertThat(changes).hasValue(2);
+
+        resources.close();
+        assertThat(broken.closed()).isTrue();
+    }
+
     /** Waits until nothing is written for a while, and returns the number of records written. */
     private int awaitNoMoreWrites() {
         var last = new AtomicInteger(-1);

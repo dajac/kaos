@@ -37,6 +37,10 @@ import org.slf4j.LoggerFactory;
  * <p>The thread runs between {@link #start()} and {@link #stop()}, which the owner serializes.
  * The other methods can be called from any thread at any time, and take no lock. Without the
  * thread, a poke has no effect until the next start.
+ *
+ * <p>{@link #stop()}, {@link #flush()} and {@link #await} wait for the publisher thread, so they
+ * refuse to run on it, that is in a listener. The owner checks {@link #onPublisherThread()} before
+ * it takes a lock that a caller of these methods may hold.
  */
 public final class SnapshotPublisher {
 
@@ -82,6 +86,11 @@ public final class SnapshotPublisher {
         return () -> listeners.remove(registered);
     }
 
+    /** Whether the caller runs on the publisher thread, which means in a listener. */
+    public boolean onPublisherThread() {
+        return Thread.currentThread() == thread;
+    }
+
     /** Starts the publisher thread, which first publishes the current state. Idempotent. */
     public void start() {
         if (thread != null) {
@@ -95,29 +104,30 @@ public final class SnapshotPublisher {
     }
 
     /**
-     * Publishes the current state one last time and stops the publisher thread. Idempotent. When
-     * a listener calls it, the thread stops once that listener has returned.
+     * Publishes the current state one last time and stops the publisher thread. Idempotent. The
+     * thread has ended when the call returns, so a following start never runs next to it.
+     *
+     * @throws IllegalStateException on the publisher thread
      */
     public void stop() {
+        refusePublisherThread("stop");
         var stopped = thread;
         if (stopped == null) {
             return;
         }
         stopping = true;
         LockSupport.unpark(stopped);
-        if (Thread.currentThread() != stopped) {
-            var interrupted = false;
-            while (stopped.isAlive()) {
-                try {
-                    stopped.join();
-                } catch (InterruptedException e) {
-                    // The last snapshot is part of the contract of stop(), so the wait goes on.
-                    interrupted = true;
-                }
+        var interrupted = false;
+        while (stopped.isAlive()) {
+            try {
+                stopped.join();
+            } catch (InterruptedException e) {
+                // The last snapshot is part of the contract of stop(), so the wait goes on.
+                interrupted = true;
             }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
         }
         thread = null;
     }
@@ -130,13 +140,15 @@ public final class SnapshotPublisher {
 
     /**
      * Asks for a publication and waits until the publisher thread has done it, listeners
-     * included. It does not wait when the thread does not run, when the caller is the publisher
-     * thread itself, or when the caller is interrupted.
+     * included. It does not wait when the thread does not run or when the caller is interrupted.
+     *
+     * @throws IllegalStateException on the publisher thread
      */
     public void flush() {
+        refusePublisherThread("flush");
         var publisher = thread;
         var caller = Thread.currentThread();
-        if (publisher == null || publisher == caller) {
+        if (publisher == null) {
             poke();
             return;
         }
@@ -157,8 +169,10 @@ public final class SnapshotPublisher {
      *
      * @throws SimulationException if no snapshot matches within the timeout, if the condition
      *     throws or if the caller is interrupted
+     * @throws IllegalStateException on the publisher thread
      */
     public SimulatorSnapshot await(Predicate<SimulatorSnapshot> condition, Duration timeout) {
+        refusePublisherThread("await");
         Objects.requireNonNull(condition, "condition");
         Objects.requireNonNull(timeout, "timeout");
         var match = new CompletableFuture<SimulatorSnapshot>();
@@ -188,6 +202,12 @@ public final class SnapshotPublisher {
             throw new SimulationException("Interrupted while waiting for a snapshot", e);
         } finally {
             registration.close();
+        }
+    }
+
+    private void refusePublisherThread(String method) {
+        if (onPublisherThread()) {
+            throw new IllegalStateException(method + "() waits for the publisher thread and was called on it");
         }
     }
 

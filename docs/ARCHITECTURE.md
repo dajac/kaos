@@ -299,10 +299,16 @@ try (Simulator simulator = new Simulator("localhost:9092")
   a `SimulationException`, and brings the phase back to `IDLE` with the
   components still declared, so the start can be tried again. The
   failure is observable on the snapshot: `lastError` holds the message
-  of the last failed `start()` or `stop()` and is empty otherwise; the
-  next `start()` or `stop()` resets it. A listener attached before
-  `start()` therefore receives `STARTING`, then `IDLE` with a non-empty
-  `lastError`. The HTTP API serves the same value as `lastError`.
+  of the last failed `start()` or `stop()` and is empty otherwise. A
+  listener attached before `start()` therefore receives `STARTING`, then
+  `IDLE` with a non-empty `lastError`. The HTTP API serves the same
+  value as `lastError`.
+- The next `start()` resets `lastError`, and so does the `stop()` of a
+  running simulator. A `stop()` that finds nothing running keeps it, so
+  a caller that removes the declared components after a failed start,
+  as the server does, does not lose the failure.
+- A `stop()` or `close()` that is concurrent with `start()` waits for
+  the start to finish and then stops what it started.
 - **Listeners.** `withListener(listener)` attaches a listener for the
   life of the simulator. `addListener(listener)` works at any time and
   returns a `Registration`, whose `close()` removes the listener. A
@@ -310,6 +316,10 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `snapshot()` gives the current one. `awaitSnapshot(condition,
   timeout)` tests the current snapshot and then every new one, returns
   the first match, and throws `SimulationException` at the timeout.
+- A listener must not call a blocking method of the simulator (`start`,
+  `stop`, `close`, `with…`, `add…`, `awaitSnapshot`): they throw
+  `SimulationStateException` on the publisher thread. See "Locks" in
+  [Threading and failure model](#threading-and-failure-model).
 - `Topic` and `ProducerHandle` are interfaces, implemented in
   `internal/engine`. `topics()` and `producers()` list them.
 
@@ -567,7 +577,9 @@ groups, the poller and the autopilot is planned.
   snapshot, and calls the listeners. It runs from the first declaration
   (or `start()`) until `stop()`, so that declarations show up in the
   snapshot, and it is the only thread of an idle simulator. A simulator
-  with nothing declared has no thread at all.
+  with nothing declared has no thread at all. `stop()` joins the thread
+  before it returns, so a stop and start cycle never runs two
+  publishers.
 - There is one `kaos-<groupId>-autopilot` thread while that group's
   autopilot is on.
 - `inject`, `clear`, `join`, `leave`, `pause` and `resume` only flip
@@ -582,7 +594,9 @@ groups, the poller and the autopilot is planned.
   `engine/`, `Threads`, one instance per simulator. Switching to
   virtual threads later is then a one-line change. The threads are
   daemons, so a simulator that is never closed does not keep the JVM
-  alive.
+  alive. An exception that ends one of them is logged through an
+  uncaught exception handler. For a producer loop, the unexpected
+  exception also brings the producer back to `STOPPED` in the snapshot.
 - The Kafka clients of a simulator have client ids that start with
   `kaos-` (`kaos-admin`, `kaos-producer-<id>`), so their threads can be
   told apart as well.
@@ -614,9 +628,15 @@ groups, the poller and the autopilot is planned.
   until the publisher thread has published it and the listeners have
   returned (`SnapshotPublisher.flush()`), so `STARTING`, `STOPPING` and
   a start failure are never coalesced away, and `start()` only returns
-  or throws once the listeners have seen its outcome. A listener
-  therefore returns quickly and never calls a blocking method of the
-  simulator, which would wait for the thread it runs on.
+  or throws once the listeners have seen its outcome.
+- A listener that called a method taking the `structureLock` during
+  such a flush would wait for the lock while its holder waits for the
+  listener. So every method that takes the lock (`start`, `stop`,
+  `close`, `with…`, `add…`), and `awaitSnapshot`, fails fast: on the
+  publisher thread it throws `SimulationStateException` before taking
+  the lock. The publisher logs it like any listener exception and the
+  simulator stays healthy. `SnapshotPublisher.stop()`, `flush()` and
+  `await()` likewise refuse to run on the publisher thread.
 
 **Teardown**
 - `Resources` is a stack of undo actions. Each component has its own
@@ -1152,9 +1172,11 @@ the build.
   broker: start and close with topics and a producer (topics created and
   deleted, proxy port taken and released, threads gone); pausing a
   producer stops the offsets from advancing; a start that fails on a
-  topic that already exists, and one against an unreachable cluster,
-  leak no thread, no port and no topic, are seen by a listener as
-  `STARTING` then `IDLE` with `lastError`, and can be retried; `with…`
+  topic that already exists, one on a producer whose client cannot be
+  created, and one against an unreachable cluster, leak no thread, no
+  port and no topic, are seen by a listener as `STARTING` then `IDLE`
+  with `lastError`, and can be retried; a `stop()` after a failed start
+  keeps `lastError`; `with…`
   and `add…` after the start throw; two simulators run in one JVM.
 - When `kaos-server` needs the harness, `kaos-core` will publish its
   test sources as a `test-jar` that the server consumes in test scope.

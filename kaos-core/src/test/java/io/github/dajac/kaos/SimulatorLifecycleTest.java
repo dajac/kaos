@@ -11,6 +11,7 @@ import io.github.dajac.kaos.test.KafkaCluster;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -169,6 +170,63 @@ class SimulatorLifecycleTest {
         }
 
         assertThat(topicNames()).doesNotContain(created, conflicting);
+        await().atMost(THREADS_GONE).untilAsserted(() -> assertThat(simulatorThreads()).isEmpty());
+    }
+
+    @Test
+    void aFailedProducerStartUndoesTheProxyTheTopicsAndTheOtherProducers() throws Exception {
+        var orders = cluster.uniqueName("orders");
+        var payments = cluster.uniqueName("payments");
+        var proxyPort = freePortBlock();
+        var snapshots = new CopyOnWriteArrayList<SimulatorSnapshot>();
+
+        // The admin client ignores the property and the Kafka producer refuses it, so the start
+        // fails at its last step, with the proxy and both topics to undo.
+        try (
+            var simulator = new Simulator(cluster.bootstrapServers())
+                .withClientProperty("compression.type", "bogus")
+                .withProxyPort(proxyPort)
+                .withListener(snapshots::add)
+        ) {
+            simulator.addTopic(orders, 2);
+            simulator.addTopic(payments, 2);
+            simulator.addProducer(p -> p.topics(orders));
+            simulator.addProducer(p -> p.topics(payments));
+
+            var failure = catchThrowable(simulator::start);
+
+            assertThat(failure)
+                .isInstanceOf(SimulationException.class)
+                .hasMessageContaining("The simulator failed to start")
+                .hasMessageContaining("compression.type")
+                .hasCauseInstanceOf(KafkaException.class);
+            assertThat(failure.getSuppressed()).isEmpty();
+            assertThat(topicNames()).doesNotContain(orders, payments);
+            assertThat(isFree(proxyPort)).isTrue();
+            assertThat(isFree(proxyPort + 1)).isTrue();
+            await().atMost(THREADS_GONE).untilAsserted(() -> assertThat(simulatorThreads()).containsExactly("kaos-publisher"));
+            assertThat(snapshots).extracting(SimulatorSnapshot::phase).containsSubsequence(Phase.STARTING, Phase.IDLE);
+            assertThat(snapshots).extracting(SimulatorSnapshot::phase).doesNotContain(Phase.RUNNING);
+            assertThat(simulator.snapshot().lastError()).isEqualTo(failure.getMessage());
+            assertThat(simulator.snapshot().producers())
+                .extracting(ProducerSnapshot::state)
+                .containsExactly(ProducerState.STOPPED, ProducerState.STOPPED);
+
+            // Removing the declared components keeps the failure; the next start resets it.
+            simulator.stop();
+            assertThat(simulator.snapshot().topics()).isEmpty();
+            assertThat(simulator.snapshot().lastError()).isEqualTo(failure.getMessage());
+            assertThat(snapshots.get(snapshots.size() - 1)).isEqualTo(simulator.snapshot());
+
+            simulator.withClientProperty("compression.type", "none");
+            simulator.addTopic(orders, 2);
+            simulator.addProducer(p -> p.topics(orders));
+            simulator.start();
+            assertThat(simulator.snapshot().phase()).isEqualTo(Phase.RUNNING);
+            assertThat(simulator.snapshot().lastError()).isEmpty();
+        }
+
+        assertThat(topicNames()).doesNotContain(orders, payments);
         await().atMost(THREADS_GONE).untilAsserted(() -> assertThat(simulatorThreads()).isEmpty());
     }
 

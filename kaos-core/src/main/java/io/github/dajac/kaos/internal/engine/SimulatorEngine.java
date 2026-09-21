@@ -44,6 +44,10 @@ import org.slf4j.LoggerFactory;
  *
  * <p>The publisher thread runs from the first declaration, or the start, until the stop. It is
  * the only thread of an idle simulator.
+ *
+ * <p>Phase changes are flushed while the lock is held, that is the lifecycle thread waits for the
+ * publisher thread. A listener that took the lock would then wait for it forever, so every method
+ * that takes the lock, or waits for a snapshot, refuses to run on the publisher thread.
  */
 public final class SimulatorEngine {
 
@@ -105,6 +109,7 @@ public final class SimulatorEngine {
     }
 
     private void configure(Runnable change) {
+        refuseListenerThread();
         structureLock.lock();
         try {
             if (state.phase() != Phase.IDLE) {
@@ -122,6 +127,7 @@ public final class SimulatorEngine {
 
     public Topic addTopic(TopicSpec spec) {
         Objects.requireNonNull(spec, "spec");
+        refuseListenerThread();
         structureLock.lock();
         try {
             var current = declarableState();
@@ -138,6 +144,7 @@ public final class SimulatorEngine {
 
     public ProducerHandle addProducer(ProducerSpec spec) {
         Objects.requireNonNull(spec, "spec");
+        refuseListenerThread();
         structureLock.lock();
         try {
             var current = declarableState();
@@ -191,6 +198,7 @@ public final class SimulatorEngine {
      * snapshot before it is thrown.
      */
     public void start() {
+        refuseListenerThread();
         structureLock.lock();
         try {
             var current = state;
@@ -252,16 +260,21 @@ public final class SimulatorEngine {
     }
 
     /**
-     * Stops everything, removes every component and returns to {@link Phase#IDLE}. Idempotent.
+     * Stops everything, removes every component and returns to {@link Phase#IDLE}. Idempotent. A
+     * stop that has nothing running keeps the {@code lastError}: it is how the failure of a start
+     * survives the removal of the components it declared.
      *
      * @throws SimulationException if undo actions failed, after all of them have run
      */
     public void stop() {
+        refuseListenerThread();
         structureLock.lock();
         try {
             SimulationException failure = null;
+            var lastError = state.lastError();
             var running = resources;
             if (running != null) {
+                lastError = "";
                 state = state.withPhase(Phase.STOPPING, "");
                 publisher.flush();
                 try {
@@ -271,7 +284,7 @@ public final class SimulatorEngine {
                 }
                 resources = null;
             }
-            state = failure == null ? State.EMPTY : State.EMPTY.withPhase(Phase.IDLE, failure.getMessage());
+            state = State.EMPTY.withPhase(Phase.IDLE, failure == null ? lastError : failure.getMessage());
             nextProducerId = 0;
             // Publishes the final snapshot before its thread ends.
             publisher.stop();
@@ -300,7 +313,17 @@ public final class SimulatorEngine {
     }
 
     public SimulatorSnapshot awaitSnapshot(Predicate<SimulatorSnapshot> condition, Duration timeout) {
+        refuseListenerThread();
         return publisher.await(condition, timeout);
+    }
+
+    /** Called before the lock is taken, or a snapshot awaited. */
+    private void refuseListenerThread() {
+        if (publisher.onPublisherThread()) {
+            throw new SimulationStateException(
+                "This method blocks and must not be called from a snapshot listener; call it from another thread"
+            );
+        }
     }
 
     private static SimulatorSpec describe(State current) {

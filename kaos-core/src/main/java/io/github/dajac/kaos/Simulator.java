@@ -23,6 +23,14 @@ import java.util.function.Predicate;
  *
  * <p>Components are declared with {@code add…} before {@code start()}. Every method is
  * thread-safe, and several simulators can run in one JVM.
+ *
+ * <p>The simulator has one thread of its own, {@code kaos-publisher}, from the first declaration
+ * (or {@code start()}) until {@code stop()} or {@code close()}. So a simulator that has declared
+ * something is closed even when it never started, or failed to start.
+ *
+ * <p>{@code start}, {@code stop}, {@code close}, {@code with…}, {@code add…} and
+ * {@code awaitSnapshot} block, and throw a {@link SimulationStateException} when a
+ * {@link SnapshotListener} calls them.
  */
 public final class Simulator implements AutoCloseable {
 
@@ -150,6 +158,10 @@ public final class Simulator implements AutoCloseable {
     /**
      * Stops the producers, deletes the topics, stops the proxy and removes every component. The
      * call blocks, and is idempotent. The simulator can be used again afterwards.
+     *
+     * <p>A call that is concurrent with {@link #start()} waits for the start to finish, and then
+     * stops what it started. A call that finds nothing running, such as the one that removes the
+     * components after a failed start, keeps {@link SimulatorSnapshot#lastError()}.
      *
      * @throws SimulationException if something could not be undone, after everything else was
      */

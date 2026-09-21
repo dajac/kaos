@@ -3,12 +3,17 @@ package io.github.dajac.kaos;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.awaitility.Awaitility.await;
 
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** The harness before {@code start()}, which needs no cluster. */
 class SimulatorTest {
@@ -136,6 +141,79 @@ class SimulatorTest {
         simulator.addTopic("again", 1);
         assertThat(simulator.addProducer(p -> p.topics("again")).id()).isEqualTo("producer-0");
         simulator.close();
+    }
+
+    @Test
+    void theBlockingMethodsFailFastInAListener() {
+        var failures = new ConcurrentHashMap<String, Throwable>();
+        var readsFailure = new AtomicReference<Throwable>();
+        var called = new AtomicBoolean();
+        var done = new AtomicBoolean();
+        var holder = new AtomicReference<Simulator>();
+        SnapshotListener listener = snapshot -> {
+            var simulator = holder.get();
+            if (!called.compareAndSet(false, true)) {
+                return;
+            }
+            failures.put("close", catchThrowable(simulator::close));
+            failures.put("stop", catchThrowable(simulator::stop));
+            failures.put("start", catchThrowable(simulator::start));
+            failures.put("addTopic", catchThrowable(() -> simulator.addTopic("late", 1)));
+            failures.put("addProducer", catchThrowable(() -> simulator.addProducer(p -> p.topics("orders"))));
+            failures.put("withClientProperty", catchThrowable(() -> simulator.withClientProperty("key", "value")));
+            failures.put("withProxyPort", catchThrowable(() -> simulator.withProxyPort(19092)));
+            failures.put("withListener", catchThrowable(() -> simulator.withListener(s -> {})));
+            failures.put("awaitSnapshot", catchThrowable(() -> simulator.awaitSnapshot(s -> true, TIMEOUT)));
+            // The methods that do not block are allowed.
+            readsFailure.set(catchThrowable(() -> {
+                simulator.snapshot();
+                simulator.describe();
+                simulator.addListener(s -> {}).close();
+            }));
+            done.set(true);
+        };
+
+        try (var simulator = new Simulator("localhost:9092").withListener(listener)) {
+            holder.set(simulator);
+            simulator.addTopic("orders", 3);
+            simulator.awaitSnapshot(s -> !s.topics().isEmpty(), TIMEOUT);
+            await().atMost(TIMEOUT).untilTrue(done);
+
+            assertThat(readsFailure.get()).isNull();
+            assertThat(failures).hasSize(9).allSatisfy((method, failure) -> assertThat(failure).as(method)
+                .isInstanceOf(SimulationStateException.class)
+                .hasMessageContaining("must not be called from a snapshot listener"));
+            // The simulator is unharmed: nothing was added, and it still declares and closes.
+            assertThat(simulator.describe().topics()).containsExactly(new TopicSpec("orders", 3));
+            simulator.addTopic("payments", 1);
+        }
+    }
+
+    @Test
+    void aStopWithNothingRunningKeepsTheLastError() {
+        var received = new CopyOnWriteArrayList<SimulatorSnapshot>();
+        // The admin client refuses the property, so the start fails before it reaches a cluster.
+        try (var simulator = new Simulator("localhost:9092").withClientProperty("security.protocol", "bogus").withListener(received::add)) {
+            simulator.addTopic("orders", 3);
+
+            var failure = catchThrowable(simulator::start);
+
+            assertThat(failure).isInstanceOf(SimulationException.class).hasMessageContaining("The simulator failed to start");
+            assertThat(simulator.snapshot().lastError()).isEqualTo(failure.getMessage());
+            assertThat(simulator.snapshot().topics()).hasSize(1);
+
+            simulator.stop();
+
+            var last = received.get(received.size() - 1);
+            assertThat(last).isEqualTo(simulator.snapshot());
+            assertThat(last.phase()).isEqualTo(Phase.IDLE);
+            assertThat(last.topics()).isEmpty();
+            assertThat(last.lastError()).isEqualTo(failure.getMessage());
+            assertThat(simulatorThreads()).isEmpty();
+
+            simulator.stop();
+            assertThat(simulator.snapshot().lastError()).isEqualTo(failure.getMessage());
+        }
     }
 
     private static List<String> simulatorThreads() {

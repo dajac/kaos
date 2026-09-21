@@ -115,9 +115,17 @@ public final class ProducerRunner implements ProducerHandle {
         resources.register("producer client of " + spec.id(), () -> producer.close(CLOSE_TIMEOUT));
 
         running = true;
-        var started = threads.newThread(threadName(), () -> loop(producer));
-        started.start();
+        var started = threads.newThread(threadName(), () -> run(producer));
+        // Published before the thread starts, so that a resume() always finds the thread to
+        // unpark: once the loop runs, an unpark that comes before its park is kept, and a
+        // resume() that comes before the loop runs is seen through the flag.
         thread = started;
+        try {
+            started.start();
+        } catch (Throwable e) {
+            thread = null;
+            throw e;
+        }
         resources.register("producer thread of " + spec.id(), () -> stop(started));
         onChange.run();
     }
@@ -133,6 +141,17 @@ public final class ProducerRunner implements ProducerHandle {
             if (!started.join(STOP_TIMEOUT)) {
                 throw new SimulationException("The thread " + started.getName() + " did not stop within " + STOP_TIMEOUT);
             }
+        }
+    }
+
+    /** Runs the loop. An unexpected error ends it: it is logged and the producer shows as stopped. */
+    private void run(Producer<String, String> producer) {
+        try {
+            loop(producer);
+        } catch (RuntimeException e) {
+            LOG.error("Producer {} stopped on an unexpected error", spec.id(), e);
+            thread = null;
+            onChange.run();
         }
     }
 

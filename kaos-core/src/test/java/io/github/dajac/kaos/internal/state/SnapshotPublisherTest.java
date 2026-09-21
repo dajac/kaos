@@ -2,6 +2,7 @@ package io.github.dajac.kaos.internal.state;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.awaitility.Awaitility.await;
 
 import io.github.dajac.kaos.Phase;
@@ -18,6 +19,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.LongStream;
 
 class SnapshotPublisherTest {
 
@@ -213,6 +215,49 @@ class SnapshotPublisherTest {
         publisher.flush();
 
         assertThat(received).extracting(SimulatorSnapshot::revision).containsExactly(1L, 2L);
+    }
+
+    @Test
+    void aStopStartCycleNeverRunsTwoPublishers() {
+        publisher.addListener(this::record);
+
+        for (int cycle = 0; cycle < 200; cycle++) {
+            state.set(snapshot(cycle % 2 == 0 ? Phase.RUNNING : Phase.IDLE));
+            publisher.start();
+            publisher.poke();
+            assertThat(publisherThreads()).hasSize(1);
+            publisher.stop();
+            assertThat(publisherThreads()).isEmpty();
+        }
+
+        // One thread at a time published, so the revisions came in order and without a gap.
+        assertThat(received).extracting(SimulatorSnapshot::revision)
+            .containsExactlyElementsOf(LongStream.rangeClosed(1, 200).boxed().toList());
+    }
+
+    @Test
+    void theMethodsThatWaitForThePublisherThreadRefuseToRunOnIt() {
+        var failures = new CopyOnWriteArrayList<Throwable>();
+        publisher.addListener(snapshot -> {
+            failures.add(catchThrowable(publisher::stop));
+            failures.add(catchThrowable(publisher::flush));
+            failures.add(catchThrowable(() -> publisher.await(s -> true, TIMEOUT)));
+            assertThat(publisher.onPublisherThread()).isTrue();
+            received.add(snapshot);
+        });
+        publisher.start();
+
+        state.set(snapshot(Phase.RUNNING));
+        publisher.flush();
+
+        assertThat(publisher.onPublisherThread()).isFalse();
+        assertThat(received).hasSize(1);
+        assertThat(failures).hasSize(3).allSatisfy(failure -> assertThat(failure).isInstanceOf(IllegalStateException.class));
+        // The publisher still runs, and stops from another thread.
+        state.set(snapshot(Phase.STOPPING));
+        publisher.stop();
+        assertThat(received).hasSize(2);
+        assertThat(publisherThreads()).isEmpty();
     }
 
     @Test

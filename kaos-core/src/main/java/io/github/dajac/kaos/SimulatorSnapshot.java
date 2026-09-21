@@ -10,9 +10,11 @@ import java.util.Objects;
  * @param phase the lifecycle phase of the simulator
  * @param stale whether the coordinator-side data is older than the last poll, because that poll
  *     failed
- * @param lastError the message of the last failed {@code start()} or {@code stop()}; empty when the
- *     last one succeeded. A failed start brings the phase back to {@link Phase#IDLE}, so this is how
- *     a listener tells it from a simulator that never started.
+ * @param lastError the message of the last failed {@code start()} or {@code stop()}, and empty
+ *     otherwise. A failed start brings the phase back to {@link Phase#IDLE}, so this is how a
+ *     listener tells it from a simulator that never started. The next {@code start()} resets it,
+ *     and so does a {@code stop()} of a running simulator; a {@code stop()} that finds nothing
+ *     running keeps it.
  * @param topics the topics of the simulator
  * @param producers the load generators
  * @param groups the consumer groups
