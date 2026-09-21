@@ -42,7 +42,7 @@
         <!--
           Calls, "new" and annotations keep the parentheses where the author put them. JDT has no
           setting that allows both "foo(new Bar(" ... "));" and "@CsvSource({" ... "})" and still
-          moves a lone closing parenthesis to its own line; config/check-parentheses.py checks those.
+          moves a lone closing parenthesis to its own line; config/CheckParentheses.java checks those.
         -->
         <setting id="org.eclipse.jdt.core.formatter.parentheses_positions_in_method_invocation" value="preserve_positions"/>
         <setting id="org.eclipse.jdt.core.formatter.parentheses_positions_in_annotation" value="preserve_positions"/>

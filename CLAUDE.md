@@ -56,6 +56,17 @@ Enforced by `config/CheckParentheses.java` in `verify`, fixed by hand:
   than it opens and does not start with `)` or `}`. The formatter does
   not move these parentheses, so wrap a call that is too long by hand
   before it does it.
+- The rule applies to every parenthesis, so it also reports a wrapped
+  parenthesized expression such as `(a` / `+ b) * c`. Its limits are
+  accepted: a line that closes as many parentheses as it opens is never
+  reported, and the check runs from the root only, so a build with
+  `-pl` or from a module directory skips it; CI covers it.
+- The check runs before Spotless and also reports lines that the
+  formatter repairs, such as `int second) {`. Run
+  `./mvnw spotless:apply` first, then fix what is still reported.
+- The check tests itself in `verify` on
+  `config/check-parentheses-fixture.txt`. Add a case there when the
+  check changes.
 
 Guidance, not checked:
 

@@ -205,6 +205,12 @@
                          with the Eclipse JDT formatter. "spotless:check" runs in
                          "verify"; "./mvnw spotless:apply" fixes the sources. -->
                     <configuration>
+                        <!-- The up-to-date index does not see a change of
+                             the formatter profile, and it saves a fraction
+                             of a second. -->
+                        <upToDateChecking>
+                            <enabled>false</enabled>
+                        </upToDateChecking>
                         <java>
                             <importOrder>
                                 <order>\#,java|javax,</order>
@@ -257,13 +263,31 @@
                 </executions>
             </plugin>
             <!-- The formatter leaves the parentheses of calls where the author
-                 put them. This check, run once from the root, fails when a
-                 closing parenthesis is left behind the last argument. -->
+                 put them. This check, run once from the root on the source
+                 directories of every module, fails when a closing parenthesis
+                 is left behind the last argument. It first tests itself on
+                 its fixture. -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <inherited>false</inherited>
                 <executions>
+                    <execution>
+                        <id>check-parentheses-self-test</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <skip>false</skip>
+                            <executable>${java.home}/bin/java</executable>
+                            <arguments>
+                                <argument>${project.basedir}/config/CheckParentheses.java</argument>
+                                <argument>--self-test</argument>
+                                <argument>${project.basedir}/config/check-parentheses-fixture.txt</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>check-parentheses</id>
                         <phase>verify</phase>
@@ -275,9 +299,7 @@
                             <executable>${java.home}/bin/java</executable>
                             <arguments>
                                 <argument>${project.basedir}/config/CheckParentheses.java</argument>
-                                <argument>${project.basedir}/config</argument>
-                                <argument>${project.basedir}/kaos-core/src</argument>
-                                <argument>${project.basedir}/kaos-server/src</argument>
+                                <argument>${project.basedir}</argument>
                             </arguments>
                         </configuration>
                     </execution>

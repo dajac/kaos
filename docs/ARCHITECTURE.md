@@ -132,7 +132,11 @@ Notes:
     `config/CheckParentheses.java`, a single-file program that the root
     build runs in `verify` with the Java source launcher, fails on a
     line that closes more parentheses than it opens and does not start
-    with `)` or `}`.
+    with `)` or `}`. It checks every `src/main/java` and `src/test/java`
+    directory under the root, and it first tests itself on
+    `config/check-parentheses-fixture.txt`.
+  - Spotless's up-to-date index is off, because it does not see a change
+    of the formatter profile.
 - **Version.** Maven filters `version.properties` in `kaos-server`, and
   `/api/v1/meta` reports the version read from it.
 - **Contract enforcement.** The committed `schema.d.ts` is checked with a
@@ -143,17 +147,17 @@ Notes:
 Status: the parent POM, the Maven wrapper, `run.sh`, and `Main`,
 `Server`, `CliOptions`, `Version` and `dto/MetaResponse` of
 `kaos-server` exist, next to `LICENSE`, `.gitignore`, `CLAUDE.md`, the
-CI workflow, `config/` and this document. In `kaos-core`, the spec, options and
-validation model exists: the five spec records with `ConsumerSettings`
-and `ConsumerOverrides`, the three options classes, `ConfigMetadata`,
-`Fault`, `Protocol`, `Violation`, `SimulationException`,
-`InvalidConfigException`, the whole `internal/config` package, a
-`Simulator` that holds only the static `validate`, and the whole
-`internal/proxy` package. The snapshot model exists too: the seven
-snapshot records, the six enums next to `Protocol`,
-and `internal/state` without `SnapshotPublisher`. Everything else in
-the tree below is planned, including the `kaos-ui` module and the
-`-DskipUi` switch. The test harness of `kaos-core` also exists; see
+CI workflow, `config/` and this document. In `kaos-core`, the spec,
+options and validation model exists: the five spec records with
+`ConsumerSettings` and `ConsumerOverrides`, the three options classes,
+`ConfigMetadata`, `Fault`, `Protocol`, `Violation`,
+`SimulationException`, `InvalidConfigException`, the whole
+`internal/config` package, a `Simulator` that holds only the static
+`validate`, and the whole `internal/proxy` package. The snapshot model
+exists too: the seven snapshot records, the six enums next to
+`Protocol`, and `internal/state` without `SnapshotPublisher`. Everything
+else in the tree below is planned, including the `kaos-ui` module and
+the `-DskipUi` switch. The test harness of `kaos-core` also exists; see
 [Verification](#verification).
 
 ```
@@ -161,7 +165,7 @@ kaos/
   pom.xml                      parent: BOMs, pluginManagement, -DskipUi, -DskipITs
   README.md  LICENSE  .gitignore  run.sh  CLAUDE.md
   docs/ARCHITECTURE.md         living design doc, kept up to date in every PR
-  config/                      eclipse-formatter.xml (Spotless), CheckParentheses.java
+  config/                      Spotless profile, CheckParentheses.java and its fixture
   .github/workflows/ci.yml     CI: ./mvnw verify on every PR and on push to main
   kaos-core/                   library: kafka-clients, kroxylicious-runtime, slf4j-api
     src/main/java/io/github/dajac/kaos/            PUBLIC API
@@ -995,8 +999,9 @@ Mixed-protocol groups are supported.
 
 Status: planned, except that `./mvnw verify` already builds the modules,
 runs the unit tests, the integration-test harness below and the code
-format checks, and produces the shaded jar, that `-DskipITs` works, that `./run.sh` builds and
-starts the server, and that the CI workflow runs the build.
+format checks, and produces the shaded jar, that `-DskipITs` works, that
+`./run.sh` builds and starts the server, and that the CI workflow runs
+the build.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
