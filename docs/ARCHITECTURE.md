@@ -133,7 +133,8 @@ Notes:
     build runs in `verify` with the Java source launcher, fails on a
     line that closes more parentheses than it opens and does not start
     with `)` or `}`. It checks every `src/main/java` and `src/test/java`
-    directory under the root, and it first tests itself on
+    directory under the root, except below hidden directories, `target`
+    and `node_modules`, and it first tests itself on
     `config/check-parentheses-fixture.txt`.
   - Spotless's up-to-date index is off, because it does not see a change
     of the formatter profile.

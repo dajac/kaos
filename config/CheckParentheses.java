@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -26,7 +27,8 @@ public final class CheckParentheses {
     /** Marks, in the fixture, the lines that the check must report. No other line may be reported. */
     private static final String EXPECTED_MARKER = "// VIOLATION";
 
-    private static final Set<String> SKIPPED_DIRECTORIES = Set.of("target", "node_modules", ".git");
+    /** Skipped next to the hidden directories, such as {@code .git} or the worktrees of a tool. */
+    private static final Set<String> SKIPPED_DIRECTORIES = Set.of("target", "node_modules");
 
     private enum State { CODE, LINE_COMMENT, BLOCK_COMMENT, STRING, CHARACTER, TEXT_BLOCK }
 
@@ -42,7 +44,10 @@ public final class CheckParentheses {
         }
     }
 
-    /** Checks every {@code src/main/java} and {@code src/test/java} directory under the project. */
+    /**
+     * Checks every {@code src/main/java} and {@code src/test/java} directory under the project, except
+     * below a hidden directory, {@code target} or {@code node_modules}. Symbolic links are not followed.
+     */
     private static void checkProject(Path project) throws IOException {
         var roots = sourceRoots(project);
         if (roots.isEmpty()) {
@@ -71,7 +76,9 @@ public final class CheckParentheses {
         Files.walkFileTree(project, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
-                if (SKIPPED_DIRECTORIES.contains(directory.getFileName().toString())) {
+                var name = directory.getFileName().toString();
+                var hidden = name.startsWith(".") && !directory.equals(project);
+                if (hidden || SKIPPED_DIRECTORIES.contains(name)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
                 if (directory.endsWith("src/main/java") || directory.endsWith("src/test/java")) {
@@ -97,6 +104,31 @@ public final class CheckParentheses {
         var actual = check(source);
         if (expected.isEmpty() || !expected.equals(actual)) {
             fail("Self-test failed on " + fixture + ": expected the lines " + expected + ", got " + actual);
+        }
+        selfTestSourceRoots();
+    }
+
+    /** Checks the discovery of the source directories on a temporary project whose name is hidden. */
+    private static void selfTestSourceRoots() throws IOException {
+        var project = Files.createTempDirectory(".check-parentheses");
+        try {
+            var main = Files.createDirectories(project.resolve("module/src/main/java"));
+            var test = Files.createDirectories(project.resolve("module/nested/src/test/java"));
+            Files.createDirectories(project.resolve(".hidden/worktree/module/src/main/java"));
+            Files.createDirectories(project.resolve("module/target/src/main/java"));
+            Files.createDirectories(project.resolve("node_modules/package/src/test/java"));
+            Files.createSymbolicLink(project.resolve("link"), project.resolve("module"));
+            var expected = List.of(test, main);
+            var actual = sourceRoots(project).stream().sorted().toList();
+            if (!expected.equals(actual)) {
+                fail("Self-test failed: expected the source directories " + expected + ", got " + actual);
+            }
+        } finally {
+            try (var paths = Files.walk(project)) {
+                for (var path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                    Files.delete(path);
+                }
+            }
         }
     }
 
