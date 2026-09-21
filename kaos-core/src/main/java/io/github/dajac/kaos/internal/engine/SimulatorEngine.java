@@ -250,6 +250,7 @@ public final class SimulatorEngine {
             var component = starting.child("topic " + topic.name());
             topicManager.create(topic.spec());
             component.register("topic " + topic.name(), () -> topicManager.delete(topic.name()));
+            topicManager.awaitCreated(topic.name());
         }
 
         for (var producer : current.producers()) {

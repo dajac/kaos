@@ -24,7 +24,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
  */
 public final class TopicManager {
 
-    private static final Duration DELETION_POLL_INTERVAL = Duration.ofMillis(100);
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(100);
 
     private final Admin admin;
     private final Duration timeout;
@@ -39,7 +39,9 @@ public final class TopicManager {
     }
 
     /**
-     * Creates a topic with the default replication factor of the cluster.
+     * Creates a topic with the default replication factor of the cluster. The topic exists when
+     * the call returns, so its deletion is the undo of this step; {@link #awaitCreated} is the
+     * step that follows.
      *
      * @throws SimulationException if the topic cannot be created. A topic that already exists is
      *     refused: the simulator deletes the topics it owns, so it never adopts one.
@@ -64,6 +66,23 @@ public final class TopicManager {
     }
 
     /**
+     * Waits until the cluster reports a topic that was created. The controller acknowledges the
+     * creation before the brokers that serve the metadata requests know the topic.
+     *
+     * @throws SimulationException if the topic is still not reported at the timeout
+     */
+    public void awaitCreated(String name) {
+        try {
+            awaitExistence(name, true, System.nanoTime() + timeout.toNanos());
+        } catch (TimeoutException e) {
+            throw new SimulationException("The topic '" + name + "' is still not reported after " + timeout, e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new SimulationException("Interrupted while waiting for the topic '" + name + "'", e);
+        }
+    }
+
+    /**
      * Deletes a topic and waits until the cluster no longer reports it, so that a topic of the
      * same name can be created right after. A topic that does not exist is not an error.
      *
@@ -79,17 +98,22 @@ public final class TopicManager {
                     throw new SimulationException("Could not delete the topic '" + name + "': " + e.getCause(), e.getCause());
                 }
             }
-            while (exists(name, deadline)) {
-                LockSupport.parkNanos(this, DELETION_POLL_INTERVAL.toNanos());
-                if (Thread.interrupted()) {
-                    throw new InterruptedException();
-                }
-            }
+            awaitExistence(name, false, deadline);
         } catch (TimeoutException e) {
             throw new SimulationException("Timed out deleting the topic '" + name + "' after " + timeout, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new SimulationException("Interrupted while deleting the topic '" + name + "'", e);
+        }
+    }
+
+    /** Polls the cluster until it reports the topic, or no longer does. */
+    private void awaitExistence(String name, boolean expected, long deadline) throws InterruptedException, TimeoutException {
+        while (exists(name, deadline) != expected) {
+            LockSupport.parkNanos(this, POLL_INTERVAL.toNanos());
+            if (Thread.interrupted()) {
+                throw new InterruptedException();
+            }
         }
     }
 
@@ -105,7 +129,7 @@ public final class TopicManager {
             if (e.getCause() instanceof UnknownTopicOrPartitionException) {
                 return false;
             }
-            throw new SimulationException("Could not check the deletion of the topic '" + name + "': " + e.getCause(), e.getCause());
+            throw new SimulationException("Could not describe the topic '" + name + "': " + e.getCause(), e.getCause());
         }
     }
 

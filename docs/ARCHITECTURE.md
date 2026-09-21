@@ -660,6 +660,9 @@ groups, the poller and the autopilot is planned.
   exists fails the start: adopting it would mean deleting, at `stop()`,
   a topic the simulator did not create. (The prototype adopts and
   deletes it.) Topics get the default replication factor of the cluster.
+  Creating a topic waits until the cluster reports it, as deleting one
+  waits until it no longer does: the controller acknowledges both before
+  the brokers that serve the metadata know.
 - Stopping a producer unparks its loop and joins it for 5 s, then
   interrupts it, since the blocking calls of the Kafka producer are
   interruptible, and joins again; its client is then closed with a 5 s
