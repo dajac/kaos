@@ -14,7 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
-| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)) and the snapshot model with its pure logic (the snapshot records and enums, `internal/state` except `SnapshotPublisher`); the rest is planned |
+| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics and producers declared before `start()` (`Simulator`, `Topic`, `ProducerHandle`, listeners, `internal/engine` and `internal/kafka` without the group classes); consumer groups and adding or removing components while running are planned |
 | `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
 | `kaos-ui` | planned |
 
@@ -137,17 +137,22 @@ Notes:
 Status: the parent POM, the Maven wrapper, `run.sh`, and `Main`,
 `Server`, `CliOptions`, `Version` and `dto/MetaResponse` of
 `kaos-server` exist, next to `LICENSE`, `.gitignore`, `CLAUDE.md`, the
-CI workflow, `config/` and this document. In `kaos-core`, the spec,
-options and validation model exists: the five spec records with
-`ConsumerSettings` and `ConsumerOverrides`, the three options classes,
-`ConfigMetadata`, `Fault`, `Protocol`, `Violation`,
-`SimulationException`, `InvalidConfigException`, the whole
-`internal/config` package, a `Simulator` that holds only the static
-`validate`, and the whole `internal/proxy` package. The snapshot model
-exists too: the seven snapshot records, the six enums next to
-`Protocol`, and `internal/state` without `SnapshotPublisher`. Everything
-else in the tree below is planned, including the `kaos-ui` module and
-the `-DskipUi` switch. The test harness of `kaos-core` also exists; see
+CI workflow, `config/` and this document. In `kaos-core`, the spec, options and
+validation model exists: the five spec records with `ConsumerSettings`
+and `ConsumerOverrides`, the three options classes, `ConfigMetadata`,
+`Fault`, `Protocol`, `Violation`, `SimulationException`,
+`InvalidConfigException`, the whole `internal/config` package and the
+whole `internal/proxy` package. The snapshot model exists too: the seven
+snapshot records, the six enums next to `Protocol`, and the whole
+`internal/state` package. So does the harness for topics and producers:
+`Simulator`, `Topic`, `ProducerHandle`, `SnapshotListener`,
+`Registration`, `SimulationStateException`, and, in `internal`,
+`engine/` (`SimulatorEngine`, `TopicComponent`, `ProducerRunner`,
+`Pacer`, `Resources`, `Threads`) and `kafka/` (`TopicManager`,
+`ClientFactory`). Everything else in the tree below is planned,
+including `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, the group
+classes of `engine/` and `kafka/`, the `kaos-ui` module and the
+`-DskipUi` switch. The test harness of `kaos-core` also exists; see
 [Verification](#verification).
 
 ```
@@ -169,8 +174,8 @@ kaos/
       SimulationException, InvalidConfigException (List<Violation>), SimulationStateException
     src/main/java/io/github/dajac/kaos/internal/   NOT API
       config/   ConfigValidator, EffectiveConfigResolver, Assignors
-      engine/   SimulatorEngine, GroupRuntime, ConsumerRunner, ProducerRunner, AutopilotImpl,
-                Resources, Threads
+      engine/   SimulatorEngine, TopicComponent, GroupRuntime, ConsumerRunner, ProducerRunner,
+                Pacer, AutopilotImpl, Resources, Threads
       kafka/    TopicManager, GroupConfigManager, GroupPoller (-> AdminView), ClientFactory
       proxy/    NetworkProxy, ProxyLauncher, NetworkFaults, NetworkFaultFilterFactory,
                 BoundPluginRegistry (+ META-INF/services FilterFactory entry)
@@ -205,10 +210,13 @@ Status: the spec, options and validation model is built. This covers
 the paragraphs "Options lambdas", "Records as the data view" and
 "Validation" below, the `Fault` type and the `Protocol` enum. The
 snapshot records and the enums of "Own small types" are built as well;
-see [Snapshot pipeline](#snapshot-pipeline). The harness is planned:
-`Simulator` has only the static `validate`, the components (`Topic`,
-`ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`) do not exist, and
-neither do `describe()`, `snapshot()` and the `add…` overloads.
+see [Snapshot pipeline](#snapshot-pipeline). The harness is built for
+topics and producers that are declared before `start()`: the `with…`
+methods, `addTopic`, `addProducer`, `start`, `stop`, `close`,
+`describe`, `snapshot`, the listeners and `awaitSnapshot`. Planned:
+`ConsumerGroup`, `ConsumerHandle` and `addGroup`; `add…` while the
+simulator runs, which throws `SimulationStateException` for now; and
+`remove()`.
 
 The model is a harness, `Simulator`, with independent components under
 it. The style is Testcontainers-like: construct, configure, `start()`,
@@ -273,8 +281,37 @@ try (Simulator simulator = new Simulator("localhost:9092")
   - the thread factory;
   - the poller and the snapshot publisher;
   - the teardown stack.
-- `with…` methods configure the harness. They throw
-  `IllegalStateException` after `start()`.
+- `with…` methods configure the harness: `withClientProperty` (a
+  property of every Kafka client), `withProxyPort` and `withListener`.
+  They throw `IllegalStateException` after `start()`, that is whenever
+  the phase is not `IDLE`.
+- `start()` runs proxy -> topics -> producers (-> groups, planned) and
+  blocks until everything runs. It validates the declared components
+  first, and throws `SimulationStateException` when the simulator is
+  already started.
+- `stop()` undoes everything and also removes every component, so the
+  simulator is `IDLE` and empty afterwards. `close()` is `stop()`. Both
+  are idempotent, and the simulator can be configured, declared and
+  started again; the assigned ids start again too.
+- **Start failure.** There is no `FAILED` phase. A failed `start()`
+  undoes the steps that succeeded (see
+  [Threading and failure model](#threading-and-failure-model)), throws
+  a `SimulationException`, and brings the phase back to `IDLE` with the
+  components still declared, so the start can be tried again. The
+  failure is observable on the snapshot: `lastError` holds the message
+  of the last failed `start()` or `stop()` and is empty otherwise; the
+  next `start()` or `stop()` resets it. A listener attached before
+  `start()` therefore receives `STARTING`, then `IDLE` with a non-empty
+  `lastError`. The HTTP API serves the same value as `lastError`.
+- **Listeners.** `withListener(listener)` attaches a listener for the
+  life of the simulator. `addListener(listener)` works at any time and
+  returns a `Registration`, whose `close()` removes the listener. A
+  listener receives the snapshots published after it was added;
+  `snapshot()` gives the current one. `awaitSnapshot(condition,
+  timeout)` tests the current snapshot and then every new one, returns
+  the first match, and throws `SimulationException` at the timeout.
+- `Topic` and `ProducerHandle` are interfaces, implemented in
+  `internal/engine`. `topics()` and `producers()` list them.
 
 **Components**
 - The components are `Topic`, `ProducerHandle`, `ConsumerGroup` and
@@ -295,9 +332,18 @@ try (Simulator simulator = new Simulator("localhost:9092")
 **Decoupled producers**
 - A `ProducerHandle` targets topics, not groups.
 - It has `pause()`/`resume()`, and a configurable
-  `ratePerPartition(double recordsPerSecond)`.
+  `ratePerPartition(double recordsPerSecond)`, which is set in the
+  options and fixed afterwards.
 - The default rate is the prototype's: 1 record per partition every
   500 ms.
+- A producer writes in rounds: at each tick of its rate, one record to
+  every partition of its topics. A round that fails is logged and not
+  retried; the next tick starts a new round. A loop that falls behind
+  does not catch up with a burst (`Pacer`).
+- `pause()` lets the round in flight finish. A producer paused before
+  `start()` starts paused.
+- Assigned producer ids are `producer-N`. They are never reused until
+  `stop()`, and skip the ids that were supplied.
 
 **Multiple groups**
 - Settings, consumers, autopilot, snapshot and lag are per group.
@@ -317,16 +363,16 @@ try (Simulator simulator = new Simulator("localhost:9092")
   (`sessionTimeoutMs`), under the same names as `ConfigMetadata` and the
   violations.
 - The options reference topics by name (`subscribe("orders")`,
-  `topics("orders")`). The overloads taking a `Topic`, used in the
-  example above, are planned with the harness.
+  `topics("orders")`) or by `Topic` (`subscribe(orders)`,
+  `topics(orders)`), which only reads the name.
 - Consumer values that are not set inherit from the group's
   `consumerDefaults`. Values that `consumerDefaults` does not set keep
   the defaults of `ConfigMetadata`. The order of the calls in a group
   lambda does not matter.
 
 **Records as the data view**
-- `simulator.describe()` (planned) returns an immutable `SimulatorSpec`
-  with `topics[]`, `producers[]` and `groups[]`.
+- `simulator.describe()` returns an immutable `SimulatorSpec` with
+  `topics[]`, `producers[]` and `groups[]`, with the assigned ids.
 - The records:
   - `TopicSpec(name, partitions)`;
   - `ProducerSpec(id, topics, ratePerPartition)`;
@@ -363,8 +409,10 @@ try (Simulator simulator = new Simulator("localhost:9092")
   topic name, a group id, a subscription) is then reported as a
   `Violation`.
 - Matching `TopicSpec`, `ProducerSpec`, `GroupSpec` and `ConsumerSpec`
-  records are accepted by overloads (planned): `addGroup(GroupSpec)` and
-  so on. The server uses these overloads for request bodies.
+  records are accepted by overloads: `addTopic(TopicSpec)`,
+  `addProducer(ProducerSpec)`, and, planned, `addGroup(GroupSpec)` and
+  `addConsumer(ConsumerSpec)`. The server uses these overloads for
+  request bodies.
 
 **Configuration metadata**
 - `ConfigMetadata.get()` is the immutable table of everything
@@ -408,9 +456,13 @@ try (Simulator simulator = new Simulator("localhost:9092")
   classes.
 
 **Validation**
-- `add…` and `start()` (planned) throw `InvalidConfigException` with a
-  list of `Violation(field, message)`. `field` is a path such as
+- `add…` and `start()` throw `InvalidConfigException` with a list of
+  `Violation(field, message)`. `field` is a path such as
   `groups[0].consumers[1].overrides.pollDelayMs`.
+- An `add…` before `start()` validates the whole spec with the new
+  component appended, so it also catches duplicates and the topic limit,
+  and its paths are those of the whole spec (`topics[1].name`). A
+  refused component changes nothing.
 - `Simulator.validate(SimulatorSpec)` runs the same check without side
   effects. The server uses it to return 400 before going async.
 - `ConfigValidator` is a set of pure functions that return every
@@ -501,7 +553,10 @@ try (Simulator simulator = new Simulator("localhost:9092")
 
 ### Threading and failure model
 
-Status: planned.
+Status: built for the harness, the topics and the producers: `Threads`,
+`Resources`, the `structureLock`, the publisher and producer threads,
+and the start, stop and failed-start paths. Everything about consumers,
+groups, the poller and the autopilot is planned.
 
 **Threads**
 - `kaos-<groupId>-consumer-N` is the sole owner of its `KafkaConsumer`.
@@ -509,7 +564,10 @@ Status: planned.
 - `kaos-poller` runs one thread for the whole simulator. It covers all
   groups, because `describeConsumerGroups` takes a list.
 - `kaos-publisher` runs one thread. It assembles, diffs and stores the
-  snapshot, and calls the listeners.
+  snapshot, and calls the listeners. It runs from the first declaration
+  (or `start()`) until `stop()`, so that declarations show up in the
+  snapshot, and it is the only thread of an idle simulator. A simulator
+  with nothing declared has no thread at all.
 - There is one `kaos-<groupId>-autopilot` thread while that group's
   autopilot is on.
 - `inject`, `clear`, `join`, `leave`, `pause` and `resume` only flip
@@ -521,8 +579,13 @@ Status: planned.
   pin their carrier inside the Kafka client (`synchronized` blocks and
   selector I/O).
 - All threads are created through one internal `ThreadFactory` in
-  `engine/`. Switching to virtual threads later is then a one-line
-  change.
+  `engine/`, `Threads`, one instance per simulator. Switching to
+  virtual threads later is then a one-line change. The threads are
+  daemons, so a simulator that is never closed does not keep the JVM
+  alive.
+- The Kafka clients of a simulator have client ids that start with
+  `kaos-` (`kaos-admin`, `kaos-producer-<id>`), so their threads can be
+  told apart as well.
 - Javalin serves HTTP requests on virtual threads (a config flag).
   Handlers only flip flags, read the snapshot reference or submit work
   to the lifecycle executor.
@@ -535,24 +598,52 @@ Status: planned.
   - the `AtomicReference` holding the latest snapshot.
 - Component collections are immutable lists. They are swapped atomically
   under the structure lock (copy-on-write). Readers such as the poller,
-  the publisher and the autopilot never see a list being mutated.
+  the publisher and the autopilot never see a list being mutated. The
+  engine keeps the phase, `lastError` and the lists in one immutable
+  state record behind a single volatile reference, so a reader sees them
+  change together.
 
 **Locks**
-- A single `structureLock` per `Simulator` serializes `start`, `stop`
-  and every `add…`/`remove()`.
+- A single `structureLock` per `Simulator` serializes `start`, `stop`,
+  the `with…` methods and every `add…`/`remove()`.
 - A per-runner `switchLock` is held during `switchProtocol` and during
   consumer removal. `stop` takes each `switchLock` in turn.
 - Flag flips take no lock.
 - The publisher takes no locks.
+- A phase change is published synchronously: the lifecycle thread waits
+  until the publisher thread has published it and the listeners have
+  returned (`SnapshotPublisher.flush()`), so `STARTING`, `STOPPING` and
+  a start failure are never coalesced away, and `start()` only returns
+  or throws once the listeners have seen its outcome. A listener
+  therefore returns quickly and never calls a blocking method of the
+  simulator, which would wait for the thread it runs on.
 
 **Teardown**
 - `Resources` is a stack of undo actions. Each component has its own
-  sub-stack, and the simulator has the top-level stack.
+  sub-stack (`child`), and the simulator has the top-level stack. A
+  sub-stack is undone at its position in its parent, or on its own, in
+  which case the parent forgets it.
 - Undo actions are registered only after their step succeeded.
+- The order of `start()` is: admin client, proxy, topics, producers.
+  The undo order is the reverse.
 - A failed `start`, a failed `add…`, `remove()` and `close()` all unwind
   through the same code.
 - Each undo runs in its own try/catch. Failures are attached as
-  suppressed exceptions on a single `SimulationException`.
+  suppressed exceptions on a single `SimulationException`, flat across
+  the sub-stacks: the failure of the start when a start is undone, a new
+  exception otherwise. A pending interrupt does not skip the undo
+  actions; it is restored once they have all run.
+- A failed start leaves no thread, no port and no topic behind. The
+  proxy launcher's `IllegalStateException` is wrapped in a
+  `SimulationException`.
+- The simulator only creates the topics it owns. A topic that already
+  exists fails the start: adopting it would mean deleting, at `stop()`,
+  a topic the simulator did not create. (The prototype adopts and
+  deletes it.) Topics get the default replication factor of the cluster.
+- Stopping a producer unparks its loop and joins it for 5 s, then
+  interrupts it, since the blocking calls of the Kafka producer are
+  interruptible, and joins again; its client is then closed with a 5 s
+  bound.
 - `consumer.close(Duration)` is bounded.
 - `close` is idempotent.
 - Waits are interruptible (`parkNanos` or a `Condition`, plus
@@ -571,9 +662,10 @@ Status: planned.
 ### Snapshot pipeline
 
 Status: the snapshot records, `SnapshotAssembler`,
-`PartitionClassifier`, `StatusDeriver` and their input records are
-built. `GroupPoller`, `SnapshotPublisher`, and therefore steps 1 and 3
-to 5 below, are planned.
+`PartitionClassifier`, `StatusDeriver`, their input records and
+`SnapshotPublisher` are built, and the published snapshot has the phase,
+`lastError`, the topics and the producers. `GroupPoller`, and therefore
+step 1 and the groups of the snapshot, are planned.
 
 1. `GroupPoller` polls every 200 ms, with one `describeConsumerGroups`
    call for all groups plus the offsets. It produces an `AdminView` per
@@ -588,7 +680,16 @@ to 5 below, are planned.
 4. If the snapshot changed, the publisher bumps `revision`, stores it in
    an `AtomicReference` and notifies the listeners.
 5. Local flag flips and structural changes poke the publisher directly,
-   so they show up immediately.
+   so they show up immediately. Several pokes may end up in one
+   snapshot; phase changes are flushed instead (see
+   [Threading and failure model](#threading-and-failure-model)).
+
+The initial snapshot has the revision 0, the phase `IDLE` and nothing
+else. A failure to assemble and a listener exception are logged; the
+publisher keeps the last snapshot and goes on. While the publisher
+thread does not run (nothing declared, or after `stop()`), a poke has no
+effect; `stop()` publishes the final empty `IDLE` snapshot before the
+thread ends.
 
 `simulator.snapshot()`, `group.snapshot()` (one slice of it),
 `GET /snapshot` and SSE all read the same reference.
@@ -678,8 +779,9 @@ for free):
 
 ### Proxy without static state
 
-Status: built, in `io.github.dajac.kaos.internal.proxy`. The `Simulator`
-that owns a proxy is planned.
+Status: built, in `io.github.dajac.kaos.internal.proxy`. `Simulator`
+launches its proxy in `start()`; nothing connects through it until the
+consumers exist.
 
 - There is one proxy and one `NetworkFaults` instance per `Simulator`.
   All groups share them.
@@ -844,7 +946,8 @@ number (epoch, generation, lag) is `-1`, and a string (member id,
 instance id) is empty. `failure` is empty when the consumer has not
 failed.
 
-- `revision`, `phase`, `stale`.
+- `revision`, `phase`, `stale`, `lastError` (the message of the last
+  failed start or stop, empty otherwise).
 - `topics[{name,partitions}]` (`TopicSpec`).
 - `producers[{id,topics,state,ratePerPartition}]`.
 - `groups[]`, each with:
@@ -1045,6 +1148,14 @@ the build.
   two proxies in one JVM, the port fallback, a port taken between the
   probe and the bind, failed launches that leak no port and no thread,
   and a bounded `close()` that frees its ports and threads.
+- `SimulatorLifecycleTest` drives the public `Simulator` against the
+  broker: start and close with topics and a producer (topics created and
+  deleted, proxy port taken and released, threads gone); pausing a
+  producer stops the offsets from advancing; a start that fails on a
+  topic that already exists, and one against an unreachable cluster,
+  leak no thread, no port and no topic, are seen by a listener as
+  `STARTING` then `IDLE` with `lastError`, and can be retried; `with…`
+  and `add…` after the start throw; two simulators run in one JVM.
 - When `kaos-server` needs the harness, `kaos-core` will publish its
   test sources as a `test-jar` that the server consumes in test scope.
   This is planned.

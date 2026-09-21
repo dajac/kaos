@@ -46,6 +46,14 @@ public final class GroupOptions {
         return this;
     }
 
+    /** Adds topics the consumers subscribe to. */
+    public GroupOptions subscribe(Topic... topics) {
+        for (var topic : topics) {
+            subscribedTopics.add(Objects.requireNonNull(topic, "topic").name());
+        }
+        return this;
+    }
+
     /** The session timeout of the group. */
     public GroupOptions sessionTimeout(Duration sessionTimeout) {
         this.sessionTimeoutMs = Durations.toMillis(sessionTimeout);
