@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import io.github.dajac.kaos.test.IntegrationTest;
 import io.github.dajac.kaos.test.KafkaCluster;
+import io.github.dajac.kaos.test.TestThreads;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -131,6 +132,7 @@ class SimulatorLifecycleTest {
         var created = cluster.uniqueName("created");
         var conflicting = cluster.uniqueName("conflicting");
         admin.createTopics(List.of(new NewTopic(conflicting, 1, (short) 1))).all().get(30, TimeUnit.SECONDS);
+        cluster.awaitTopic(admin, conflicting);
         var proxyPort = freePortBlock();
         var snapshots = new CopyOnWriteArrayList<SimulatorSnapshot>();
 
@@ -365,16 +367,11 @@ class SimulatorLifecycleTest {
     /**
      * The threads started since the beginning of the test that belong to a simulator: its own
      * threads, its Kafka clients, whose client ids start with {@code kaos-}, and its proxy. The
-     * threads of the test are left out: its admin client and Awaitility.
+     * threads of the test are left out: its admin client, and the ones {@link TestThreads} ignores.
      */
     private List<String> simulatorThreads() {
-        return Thread.getAllStackTraces().keySet().stream()
-            .filter(Thread::isAlive)
-            .filter(thread -> !threadsBefore.contains(thread))
-            .map(Thread::getName)
-            .filter(name -> !name.startsWith("awaitility"))
+        return TestThreads.startedSince(threadsBefore).stream()
             .filter(name -> !name.startsWith("kafka-") || name.contains("kaos-"))
-            .sorted()
             .toList();
     }
 

@@ -112,7 +112,7 @@ public final class KafkaCluster implements AutoCloseable {
      *     caller
      */
     public void awaitTopic(Admin admin, String topic) {
-        await().atMost(TOPIC_TIMEOUT).until(() -> topicExists(admin, topic));
+        await("topic " + topic + " to be reported").atMost(TOPIC_TIMEOUT).until(() -> topicExists(admin, topic));
     }
 
     private static boolean topicExists(Admin admin, String topic) throws Exception {

@@ -19,6 +19,7 @@ import java.util.function.IntConsumer;
 import io.github.dajac.kaos.internal.proxy.NetworkFaults.Mode;
 import io.github.dajac.kaos.test.IntegrationTest;
 import io.github.dajac.kaos.test.KafkaCluster;
+import io.github.dajac.kaos.test.TestThreads;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -311,23 +312,10 @@ class NetworkFaultInjectionTest {
         await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(proxyThreads(threadsBefore)).isEmpty());
     }
 
-    /**
-     * Name prefixes of the threads that are not the proxy's: the test's own Kafka clients,
-     * Awaitility, and the workers of the common pool of the JVM, which the JVM starts on first use
-     * and keeps idle for a minute.
-     */
-    private static final List<String> OTHER_THREADS = List.of(
-        "test-", "kafka-", "awaitility", "ForkJoinPool.commonPool-worker-"
-    );
-
-    /** The threads started since {@code before}, except the ones of {@link #OTHER_THREADS}. */
+    /** The threads started since {@code before}, except the test's own Kafka clients. */
     private static List<String> proxyThreads(Set<Thread> before) {
-        return Thread.getAllStackTraces().keySet().stream()
-            .filter(Thread::isAlive)
-            .filter(thread -> !before.contains(thread))
-            .map(Thread::getName)
-            .filter(name -> OTHER_THREADS.stream().noneMatch(name::startsWith))
-            .sorted()
+        return TestThreads.startedSince(before).stream()
+            .filter(name -> !name.startsWith("test-") && !name.startsWith("kafka-"))
             .toList();
     }
 

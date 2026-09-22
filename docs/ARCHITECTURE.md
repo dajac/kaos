@@ -1165,6 +1165,10 @@ the build.
   apart from each other and never take each other's ports. Tests never
   request the default proxy port and never assert on absolute ports:
   they assert relative to the ports the launcher probed or chose.
+- `TestThreads.startedSince(before)` lists the threads a test started,
+  for the checks that nothing leaks a thread. It leaves out Awaitility
+  and the workers of the JVM's common pool, which the JVM starts on
+  first use and keeps idle for a minute.
 - The broker is a Testcontainers `apache/kafka` container whose tag is
   the version of the kafka-clients on the classpath, so the broker and
   the clients match by default. The system property `kaos.test.kafka.image`
