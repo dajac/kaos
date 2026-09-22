@@ -1263,7 +1263,10 @@ failed.
   refuses an unknown property in a request, and writes none that the
   document does not list. The request schemas carry the ranges and
   defaults of `ConfigMetadata` and the name rule; the response schemas
-  do not repeat them.
+  do not repeat them. The `effective` settings of a consumer in a
+  request are complete when sent, since they bind to `ConsumerSettings`.
+  An action is a `oneOf` discriminated by `type`, so that the generated
+  types give `switch-protocol` a required `protocol`.
 - OpenAPI 3.1 does not model the events of an SSE stream. The events
   route describes them, and its `x-sse-events` extension maps each event
   name to the schema of its data (`status` to `Status`, `snapshot` to

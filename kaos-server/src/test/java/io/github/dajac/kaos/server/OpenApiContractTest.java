@@ -1,6 +1,7 @@
 package io.github.dajac.kaos.server;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -25,6 +26,7 @@ import java.util.stream.StreamSupport;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.networknt.schema.Error;
@@ -43,6 +45,7 @@ import io.github.dajac.kaos.GroupSnapshot;
 import io.github.dajac.kaos.GroupSpec;
 import io.github.dajac.kaos.GroupState;
 import io.github.dajac.kaos.GroupType;
+import io.github.dajac.kaos.InvalidConfigException;
 import io.github.dajac.kaos.PartitionRef;
 import io.github.dajac.kaos.PartitionState;
 import io.github.dajac.kaos.PartitionView;
@@ -200,18 +203,55 @@ class OpenApiContractTest {
     }
 
     @Test
-    void theSpecOfTheSimulatorMatchesTheStartRequest() {
-        assertValid("SimulatorRequest", tree(spec()));
+    void theSpecOfTheSimulatorMatchesTheStartRequestAndBindsBack() throws Exception {
+        var json = tree(spec());
+
+        assertValid("SimulatorRequest", json);
+        assertThat(mapper.treeToValue(json, SimulatorRequest.class).toSpec()).isEqualTo(spec());
     }
 
     @Test
     void theRequestSchemasRefuseWhatTheServerRefuses() throws Exception {
         assertThat(errors("TopicRequest", mapper.readTree("{\"name\": \"orders\", \"bogus\": 1}"))).isNotEmpty();
         assertThat(errors("TopicRequest", mapper.readTree("{\"name\": \"orders\", \"partitions\": 0}"))).isNotEmpty();
-        assertThat(errors("TopicRequest", mapper.readTree("{\"name\": \"..bad name\"}"))).isNotEmpty();
+        assertThat(errors("TopicRequest", mapper.readTree("{\"name\": \"bad name\"}"))).isNotEmpty();
+        assertThat(errors("ProducerStateRequest", mapper.readTree("{}"))).isNotEmpty();
+    }
+
+    @Test
+    void aPartialEffectiveIsRefusedByTheSchemaAndByTheServer() throws Exception {
+        for (var body : List.of("{\"effective\": {\"protocol\": \"classic\"}}", "{\"effective\": {}}")) {
+            assertThat(errors("ConsumerRequest", mapper.readTree(body))).as(body).isNotEmpty();
+            assertThatThrownBy(() -> mapper.readValue(body, ConsumerSpec.class)).as(body)
+                .isInstanceOf(MismatchedInputException.class);
+        }
+    }
+
+    @Test
+    void dotAndDotDotAreRefusedAsNamesByTheSchemaAndByTheServer() throws Exception {
+        for (var name : List.of(".", "..")) {
+            assertThat(errors("TopicRequest", mapper.readTree("{\"name\": \"" + name + "\"}"))).as(name).isNotEmpty();
+            assertThat(errors("ProducerRequest", mapper.readTree("{\"id\": \"" + name + "\", \"topics\": [\"t\"]}")))
+                .as(name).isNotEmpty();
+            var spec = new SimulatorSpec(List.of(new TopicSpec(name, 1)), List.of(), List.of());
+            assertThatThrownBy(() -> Simulator.validate(spec)).as(name).isInstanceOf(InvalidConfigException.class);
+        }
+        assertThat(errors("TopicRequest", mapper.readTree("{\"name\": \"...\"}"))).isEmpty();
+    }
+
+    @Test
+    void anActionIsADiscriminatedUnion() throws Exception {
         assertThat(errors("ActionRequest", mapper.readTree("{\"type\": \"switch-protocol\"}"))).isNotEmpty();
         assertThat(errors("ActionRequest", mapper.readTree("{\"type\": \"jump\"}"))).isNotEmpty();
-        assertThat(errors("ProducerStateRequest", mapper.readTree("{}"))).isNotEmpty();
+        assertThat(errors("ActionRequest", mapper.readTree("{}"))).isNotEmpty();
+        assertThat(errors("ActionRequest", mapper.readTree("{\"type\": \"join\", \"bogus\": 1}"))).isNotEmpty();
+        var mapping = schema("ActionRequest").at("/discriminator/mapping");
+        var types = new TreeSet<String>();
+        mapping.fieldNames().forEachRemaining(types::add);
+        assertThat(types).containsExactly("join", "leave", "switch-protocol");
+        mapping.fields().forEachRemaining(entry -> assertThat(
+            document.at(entry.getValue().asText().substring(1) + "/properties/type/const").asText()
+        ).isEqualTo(entry.getKey()));
     }
 
     // Live responses

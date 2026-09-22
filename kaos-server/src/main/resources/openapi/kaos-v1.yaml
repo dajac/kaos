@@ -553,11 +553,15 @@ components:
       minLength: 1
       maxLength: 249
       pattern: "^[a-zA-Z0-9._-]+$"
+      not:
+        enum: [".", ".."]
     OptionalName:
       description: A `Name`, or the empty string to have an id assigned.
       type: string
       maxLength: 249
       pattern: "^[a-zA-Z0-9._-]*$"
+      not:
+        enum: [".", ".."]
 
     # Status
 
@@ -869,6 +873,7 @@ components:
       description: |
         A consumer. `effective` is accepted and ignored, since the group
         resolves it again, so a `ConsumerSpec` can be sent back as it is.
+        When it is sent, it is complete: every setting is required.
       type: object
       additionalProperties: false
       properties:
@@ -877,7 +882,7 @@ components:
         overrides:
           $ref: "#/components/schemas/ConsumerOverrides"
         effective:
-          $ref: "#/components/schemas/ConsumerSettingsRequest"
+          $ref: "#/components/schemas/ConsumerSettings"
     ProducerStateRequest:
       type: object
       additionalProperties: false
@@ -904,22 +909,46 @@ components:
           minimum: 1
           description: The longest pause between two flips, at least `minIntervalMs`; the current one when left out.
     ActionRequest:
+      description: What a consumer does, chosen by `type`.
+      oneOf:
+        - $ref: "#/components/schemas/JoinAction"
+        - $ref: "#/components/schemas/LeaveAction"
+        - $ref: "#/components/schemas/SwitchProtocolAction"
+      discriminator:
+        propertyName: type
+        mapping:
+          join: "#/components/schemas/JoinAction"
+          leave: "#/components/schemas/LeaveAction"
+          switch-protocol: "#/components/schemas/SwitchProtocolAction"
+    JoinAction:
+      description: The consumer joins its group. Answers 204.
       type: object
       additionalProperties: false
       required: [type]
       properties:
         type:
           type: string
-          enum: [join, leave, switch-protocol]
+          const: join
+    LeaveAction:
+      description: The consumer leaves its group. Answers 204.
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: leave
+    SwitchProtocolAction:
+      description: The consumer switches to another protocol, on the lifecycle thread. Answers 202.
+      type: object
+      additionalProperties: false
+      required: [type, protocol]
+      properties:
+        type:
+          type: string
+          const: switch-protocol
         protocol:
           $ref: "#/components/schemas/Protocol"
-          description: The protocol to switch to; required by `switch-protocol` only.
-      if:
-        properties:
-          type:
-            const: switch-protocol
-      then:
-        required: [protocol]
 
     # Snapshot
 
