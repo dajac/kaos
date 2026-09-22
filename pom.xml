@@ -56,6 +56,26 @@
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
         <exec-maven-plugin.version>3.6.4</exec-maven-plugin.version>
         <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
+
+        <!-- The Apache License 2.0 header of every Java source file, applied
+             by Spotless. The year is fixed: the header does not change when
+             the calendar year does. -->
+        <license.header>/*
+ * Copyright 2026 The Kaos Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+</license.header>
     </properties>
 
     <dependencyManagement>
@@ -217,8 +237,10 @@
                     <artifactId>spotless-maven-plugin</artifactId>
                     <version>${spotless-maven-plugin.version}</version>
                     <!-- Formats the main and test Java sources of every module
-                         with the Eclipse JDT formatter. "spotless:check" runs in
-                         "verify"; "./mvnw spotless:apply" fixes the sources. -->
+                         with the Eclipse JDT formatter and puts the Apache
+                         License 2.0 header on top of them. "spotless:check"
+                         runs in "verify"; "./mvnw spotless:apply" fixes the
+                         sources. -->
                     <configuration>
                         <!-- The up-to-date index does not see a change of
                              the formatter profile, and it saves a fraction
@@ -236,7 +258,31 @@
                             </eclipse>
                             <trimTrailingWhitespace/>
                             <endWithNewline/>
+                            <!-- The header text is the license.header property. -->
+                            <licenseHeader>
+                                <content>${license.header}</content>
+                            </licenseHeader>
                         </java>
+                        <!-- The licenseHeader step always skips
+                             package-info.java. This step does its job there:
+                             it replaces the leading block comment, or nothing,
+                             before the package Javadoc or the package
+                             declaration with the header. The header text lives
+                             in a property, not in a file, because this step
+                             only takes inline text. -->
+                        <formats>
+                            <format>
+                                <includes>
+                                    <include>src/main/java/**/package-info.java</include>
+                                    <include>src/test/java/**/package-info.java</include>
+                                </includes>
+                                <replaceRegex>
+                                    <name>License header</name>
+                                    <searchRegex>(?s)\A(?:/\*(?!\*).*?\*/\n)?(/\*\*\n|package )</searchRegex>
+                                    <replacement>${license.header}&#10;$1</replacement>
+                                </replaceRegex>
+                            </format>
+                        </formats>
                     </configuration>
                 </plugin>
             </plugins>

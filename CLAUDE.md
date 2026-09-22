@@ -43,6 +43,11 @@ The build orders the imports too: static imports first, then `java` and
 blank line, unused imports removed. `spotless:check` enforces this
 order and `spotless:apply` fixes it.
 
+Every Java source file, `package-info.java` and tests included, starts
+with the Apache License 2.0 header (the `license.header` property of
+the parent `pom.xml`): `spotless:check` fails on a missing or different
+header and `spotless:apply` adds it.
+
 One coding preference, separate from the formatter: prefer `var` for
 local variables when the type is evident from the right-hand side,
 enhanced-`for` variables included. With a diamond, move the type
