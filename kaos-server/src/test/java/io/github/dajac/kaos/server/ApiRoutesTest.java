@@ -199,7 +199,7 @@ class ApiRoutesTest {
 
         assertThat(response.statusCode()).isEqualTo(202);
         var accepted = ApiClient.json(response);
-        assertThat(accepted.get("phase").asText()).isIn("STARTING", "IDLE");
+        assertThat(accepted.get("phase").asText()).isEqualTo("STARTING");
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var simulator = api.getJson("/api/v1/simulator");

@@ -149,6 +149,8 @@ final class SimulationService implements AutoCloseable {
         } finally {
             lock.unlock();
         }
+        // Taken before the start is submitted, so the answer shows STARTING however fast it ends.
+        var accepted = status();
         submit(token, "Start", () -> {
             try {
                 spec.topics().forEach(simulator::addTopic);
@@ -166,7 +168,7 @@ final class SimulationService implements AutoCloseable {
                 throw e;
             }
         });
-        return status();
+        return accepted;
     }
 
     /**
