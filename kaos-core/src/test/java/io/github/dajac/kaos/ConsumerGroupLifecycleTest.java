@@ -248,14 +248,14 @@ class ConsumerGroupLifecycleTest {
             simulator.start();
 
             assertThat(group.warnings()).isEmpty();
-            assertThat(dynamicGroupConfigs(groupId)).containsOnly(
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId)).containsOnly(
                 Map.entry("consumer.session.timeout.ms", "10000"),
                 Map.entry("consumer.assignment.interval.ms", "500")
-            );
+            ));
             group.awaitSnapshot(allAssigned(2, "consumer-0"), TIMEOUT);
         }
 
-        assertThat(dynamicGroupConfigs(groupId)).isEmpty();
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId)).isEmpty());
     }
 
     @Test
@@ -277,11 +277,12 @@ class ConsumerGroupLifecycleTest {
             simulator.start();
 
             assertThat(group.warnings()).singleElement().asString().contains("consumer.session.timeout.ms=120000");
-            assertThat(dynamicGroupConfigs(groupId)).containsOnly(Map.entry("consumer.heartbeat.interval.ms", "2000"));
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId))
+                .containsOnly(Map.entry("consumer.heartbeat.interval.ms", "2000")));
             group.awaitSnapshot(allAssigned(2, "consumer-0"), TIMEOUT);
         }
 
-        assertThat(dynamicGroupConfigs(groupId)).isEmpty();
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId)).isEmpty());
     }
 
     @ParameterizedTest
@@ -414,8 +415,12 @@ class ConsumerGroupLifecycleTest {
                 return false;
             }
             var assigned = 0;
+            var holders = 0;
             for (var consumer : snapshot.consumers()) {
                 var owns = expected.contains(consumer.id());
+                if (owns) {
+                    holders++;
+                }
                 if (owns != !consumer.partitions().isEmpty()) {
                     return false;
                 }
@@ -427,7 +432,8 @@ class ConsumerGroupLifecycleTest {
                 }
                 assigned += consumer.partitions().size();
             }
-            return assigned == partitions;
+            // A snapshot published before a consumer was added does not list it yet.
+            return holders == expected.size() && assigned == partitions;
         };
     }
 
@@ -439,6 +445,10 @@ class ConsumerGroupLifecycleTest {
         return admin.listGroups().all().get().stream().map(GroupListing::groupId).collect(Collectors.toSet());
     }
 
+    /**
+     * The dynamic configs of the group as the broker reports them. The broker applies a config change
+     * to its metadata cache after the alter call returns, so a check on them is awaited.
+     */
     private Map<String, String> dynamicGroupConfigs(String groupId) throws Exception {
         var resource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
         var configs = new HashMap<String, String>();

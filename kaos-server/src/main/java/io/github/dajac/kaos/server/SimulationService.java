@@ -58,8 +58,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p>The requests are checked before they are accepted: a spec with a violation is a 400, an unknown
  * component a 404, and the wrong phase or a topic in use a 409. The dynamic operations need a
- * running simulator. The phase of the status is {@code STARTING} as soon as a start is accepted and
- * {@code STOPPING} as soon as a stop is, so that a client sees the accepted operation at once.
+ * running simulator. The phase of the status is {@code STARTING} from the acceptance of a start until
+ * it ends and {@code STOPPING} likewise for a stop, so that a client sees the accepted operation at
+ * once.
  */
 final class SimulationService implements AutoCloseable {
 
@@ -110,16 +111,17 @@ final class SimulationService implements AutoCloseable {
         return new SimulatorResponse(phase(), simulator.describe(), lastError, warnings());
     }
 
+    /**
+     * The phase of the simulator, except that a start or a stop shows as {@code STARTING} or
+     * {@code STOPPING} from its acceptance until it ends, which is also the span during which
+     * {@link #requireRunning()} refuses the dynamic operations.
+     */
     private Phase phase() {
         var current = pending;
-        var phase = simulator.snapshot().phase();
-        if (current != null && current.lifecycle() == Lifecycle.START && phase == Phase.IDLE) {
-            return Phase.STARTING;
+        if (current != null) {
+            return current.lifecycle() == Lifecycle.START ? Phase.STARTING : Phase.STOPPING;
         }
-        if (current != null && current.lifecycle() == Lifecycle.STOP && phase != Phase.IDLE) {
-            return Phase.STOPPING;
-        }
-        return phase;
+        return simulator.snapshot().phase();
     }
 
     private List<String> warnings() {

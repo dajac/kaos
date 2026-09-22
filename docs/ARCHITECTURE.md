@@ -1161,8 +1161,10 @@ GET    /api/v1/openapi.yaml             this API as an OpenAPI 3.1 document (app
   `GET /simulator` returns it with the `spec` (`SimulatorSpec`, with the
   overrides and the effective settings of each consumer).
 - `phase` is the phase of the simulator, except that it is `STARTING`
-  as soon as a start is accepted and `STOPPING` as soon as a stop is, so
-  that a client sees its accepted request at once.
+  from the acceptance of a start until the start ends, and `STOPPING`
+  likewise for a stop, so that a client sees its accepted request at
+  once, and never sees `RUNNING` while a dynamic request would still be
+  refused because a start is pending.
 - `lastError` is the message of the last failed operation of the
   executor: an operation clears it when it begins and sets it if it
   fails. It thus also reports a failed add, remove or protocol switch,
