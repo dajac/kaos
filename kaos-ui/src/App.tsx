@@ -16,36 +16,10 @@
 
 import type { CSSProperties } from 'react';
 
-// The empty shell: the sidebar and the main area of the prototype, drawn with
-// the design tokens only. The screens replace it in later tasks.
-const shell: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'var(--sidebar-w) 1fr',
-  height: '100vh',
-};
+import { ConfigPanel } from './components/config/ConfigPanel';
 
-const sidebar: CSSProperties = {
-  background: 'var(--surface)',
-  borderRight: '1px solid var(--border)',
-  padding: '16px 16px 12px',
-};
-
-const brand: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: '15px',
-  fontWeight: 700,
-  letterSpacing: '2px',
-  textTransform: 'uppercase',
-  color: 'var(--accent)',
-};
-
-const subtitle: CSSProperties = {
-  fontSize: '11px',
-  color: 'var(--text-dim)',
-  marginTop: '2px',
-  letterSpacing: '0.3px',
-};
-
+// The layout of the prototype: the sidebar with the config panel, and the
+// main area, which the Rows view fills in a later task.
 const main: CSSProperties = {
   display: 'grid',
   placeItems: 'center',
@@ -56,10 +30,13 @@ const main: CSSProperties = {
 
 export function App() {
   return (
-    <div style={shell}>
-      <aside style={sidebar}>
-        <div style={brand}>Kaos</div>
-        <div style={subtitle}>Kafka Consumer Group Simulator</div>
+    <div className="app">
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="sidebar-brand">Kaos</div>
+          <div className="sidebar-subtitle">Kafka Consumer Group Simulator</div>
+        </div>
+        <ConfigPanel />
       </aside>
       <main style={main}>Nothing to show yet</main>
     </div>

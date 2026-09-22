@@ -16,7 +16,7 @@ section that describes it.
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
 | `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
 | `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`, and so is `StaticUi`, which serves the UI at `/` |
-| `kaos-ui` | the scaffold is built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, an empty shell, the generated `api/schema.d.ts` with its check, and Vitest; so is the pure UI model (`model/`: the config form, the assignors, the lag gauge, the axis and the tooltip placement); the state and the screens are planned |
+| `kaos-ui` | the scaffold is built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, an empty shell, the generated `api/schema.d.ts` with its check, and Vitest; so is the pure UI model (`model/`: the config form, the assignors, the lag gauge, the axis and the tooltip placement); so is the config panel (`api/client.ts`, `state/configStore.ts`, `components/config/`, `styles/config.css` and `styles/controls.css`); the Rows view is planned |
 
 ## Context
 
@@ -79,8 +79,8 @@ Javalin, Jackson, the command line, logging, packaging, the code format,
 and JUnit 6 with AssertJ, Awaitility, Testcontainers and failsafe).
 The API contract is in place on the Java side: the hand-written OpenAPI
 document and its contract test, and so is the frontend build with the
-generated TypeScript types. Mockito, Zustand and React Testing Library
-are planned.
+generated TypeScript types, and Zustand. Mockito and React Testing
+Library are planned.
 
 The versions below were checked on 2026-09-19. When a tool rejects a
 brand-new major (JUnit 6, TypeScript 7, frontend-maven-plugin 2.x), the
@@ -190,7 +190,9 @@ in the tree below is planned. `StaticUi` exists, and so does the
 `kaos-ui` scaffold with the `-DskipUi` switch: `package.json`,
 `vite.config.ts`, `tsconfig.json`, `index.html`, `.nvmrc`, `pom.xml`,
 `main.tsx`, `App.tsx`, `api/schema.d.ts`, `styles/tokens.css` and
-`styles/base.css`. The test harness of `kaos-core` also exists; see
+`styles/base.css`; so do `model/`, `api/client.ts`,
+`state/configStore.ts`, `components/config/`, `styles/config.css` and
+`styles/controls.css`. The test harness of `kaos-core` also exists; see
 [Verification](#verification).
 
 ```
@@ -231,7 +233,7 @@ kaos/
     src/ main.tsx App.tsx
       api/        schema.d.ts (generated), client.ts, events.ts (EventSource + backoff)
       state/      simulationStore.ts, configStore.ts, uiSettings.ts ('kaos.uiSettings')
-      model/      configModel.ts, assignors.ts, lag.ts, axis.ts, tooltip.ts   (pure, tested)
+      model/      configModel.ts, assignors.ts, violations.ts, lag.ts, axis.ts, tooltip.ts   (pure, tested)
       components/ layout/ config/ sim/ settings/
       styles/     tokens.css base.css config.css rows.css controls.css
 ```
@@ -1336,8 +1338,10 @@ failed.
 ### Frontend (`kaos-ui`)
 
 Status: the scaffold is built: the build, the fonts, the tokens and base
-styles, and an empty shell drawn with the tokens. So is the pure model
-under `model/`. The state, the heatmap and the other styles are planned.
+styles, and the layout of the prototype. So are the pure model under
+`model/`, the API client and the config panel with its store and its
+styles. The simulation store, the heatmap and the other styles are
+planned.
 
 **Model (`model/`)**
 - Framework-free TypeScript: no React and no DOM. Every function is
@@ -1375,6 +1379,15 @@ under `model/`. The state, the heatmap and the other styles are planned.
   empty one included, is a custom name; a custom name left empty sends
   the empty name, the default of the protocol. A spec's empty name on
   the classic protocol shows as the first preset.
+- `violations.ts`: the key of each field of the panel that can show an
+  error, and the mapping of the violations of a refused start (`field`
+  is a path of the start request, such as
+  `groups[0].consumers[1].overrides.pollDelayMs`) to these fields. A
+  consumer is found by its position in the request and keyed by its
+  stable form key; a topic path goes to the group that names the topic
+  (`name` to its id, `partitions` to its partitions); an optional
+  setting maps only when it was added. A violation that names no field
+  of the panel goes to the banner.
 - `lag.ts`: the gauge rounds a lag up to a multiple of 5 and scales it
   to 100; `-1`, an unknown lag, fills nothing.
 - `axis.ts`: the tick stride, 20 from 100 partitions, 10 from 40, 5
@@ -1382,8 +1395,33 @@ under `model/`. The state, the heatmap and the other styles are planned.
 - `tooltip.ts`: the tooltip is 8 px below the cell, centred on it and
   clamped 4 px inside the viewport, and its text.
 
+**API client (`api/client.ts`)**
+- A thin `fetch` wrapper typed from `schema.d.ts`: `getMeta`,
+  `getSimulator`, `startSimulator` and `stopSimulator` (which returns
+  `null` for a 204). An error status throws an `ApiError` with the
+  problem detail when the body is one, and its `violations`.
+
 **State (Zustand)**
 - Components use selector subscriptions.
+- `configStore` (a vanilla Zustand store, `useConfigStore(selector)` in
+  components; `createConfigStore({client, pollIntervalMs})` for tests)
+  holds `/meta`, the form (`groups[]`), the phase, the inline errors by
+  field and the banner. `main.tsx` loads it before the first render:
+  `/meta` and `GET /simulator` together, with `configFromSimulator` for
+  the form.
+- Edits go through `editGroup(index, update, field)`, where `update` is
+  a function of `model/configModel.ts`; they are ignored while the panel
+  is locked (any phase but `IDLE`), and clear the error of `field`.
+  Expanding a consumer works while locked, as in the prototype.
+- Start runs `startProblems` first, then posts `buildStartRequest`. A
+  400 with violations shows them on their fields (see `violations.ts`)
+  and the rest in the banner; any other failure goes to the banner.
+- Start and Stop answer 202 and run on the server. Until the event
+  stream lands, the store follows them by polling `GET /simulator`
+  every 500 ms while the phase is `STARTING` or `STOPPING`, and stops
+  polling once it settles. A start or a stop that ends `IDLE` with a
+  `lastError` shows it in the banner. A reload during a start polls
+  too, and shows the running spec once the phase is `RUNNING`.
 - On SSE ingest, unchanged consumer objects are reused (structural
   sharing), so `React.memo` holds.
 - The config store keeps `groups[]` and the Rows view reads its group
@@ -1399,7 +1437,13 @@ under `model/`. The state, the heatmap and the other styles are planned.
 - The styles are the prototype's `<style>` block (`simulator.html` on
   `initial-setup`), lifted **verbatim** and split by region into
   `styles/*.css`. The class names are kept. `tokens.css` (the `:root`
-  block) and `base.css` (the `*`, `html, body` and `body` rules) exist.
+  block) and `base.css` (the `*`, `html, body` and `body` rules) exist,
+  and so do `controls.css` (the buttons and the `.dd` dropdown) and
+  `config.css` (the layout shell, the sidebar and the config panel,
+  including the `#config-mode.locked` rules).
+- `config.css` ends with the only rules that are not the prototype's:
+  the inline field errors (`.field-error`, `.consumers-error`) and the
+  error banner (`.config-banner`), which replace `alert()`.
 - The fonts are bundled from fontsource instead of Google Fonts.
   `--font-mono` and `--font-body` name the variable families,
   `'JetBrains Mono Variable'` and `'DM Sans Variable'`, first, then the
@@ -1438,6 +1482,11 @@ removing components at runtime.
 - A collapsed consumer shows chips and a protocol tag. A consumer with no
   overrides shows the "inherits all settings" note.
 - The panel is locked while a simulation runs.
+- Status: built (`components/config/`: `ConfigPanel`, `GroupSection`,
+  `ConsumerSection`, `Dropdown`, `AssignorField`, `NumberInput`,
+  `FieldError`), with Start and Stop, inline validation errors and the
+  error banner. The Auto-Pilot button of the footer is there but stays
+  disabled until the Rows view.
 
 **Lifecycle**
 - Start: create the topics, apply the group configs, start the proxy,
