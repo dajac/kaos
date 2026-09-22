@@ -30,6 +30,12 @@ public final class Resources {
         void run() throws Exception;
     }
 
+    /** A step that registers its undo actions on the stack it is given. */
+    @FunctionalInterface
+    public interface Step {
+        void run(Resources resources);
+    }
+
     private record Entry(String description, Undo undo, Resources child) {}
 
     private static final Logger LOG = LoggerFactory.getLogger(Resources.class);
@@ -69,6 +75,24 @@ public final class Resources {
     public Resources child(String name) {
         var child = new Resources(name, this);
         push(new Entry(name, null, child));
+        return child;
+    }
+
+    /**
+     * Runs a step on a new nested stack and returns that stack. When the step fails, the stack is
+     * closed at once, which undoes what the step did before it failed, and the failure is thrown
+     * with the failures of the undo actions attached; the parent is then unchanged.
+     *
+     * @throws IllegalStateException if the stack is closed
+     */
+    public Resources start(String name, Step step) {
+        var child = child(name);
+        try {
+            step.run(child);
+        } catch (Throwable e) {
+            child.close(e);
+            throw e;
+        }
         return child;
     }
 

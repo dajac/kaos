@@ -28,4 +28,12 @@ public interface ProducerHandle {
 
     /** Writes again after a {@link #pause()}. The call returns immediately. */
     void resume();
+
+    /**
+     * Removes the producer from the simulator. While the simulator runs, the call blocks until the
+     * producer is stopped.
+     *
+     * @throws SimulationStateException if the producer is already removed
+     */
+    void remove();
 }

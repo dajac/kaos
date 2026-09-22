@@ -36,7 +36,8 @@ class ProducerRunnerTest {
     private final ProducerRunner runner = new ProducerRunner(
         new ProducerSpec("load", List.of("a", "b"), 200),
         List.of(new TopicSpec("a", 2), new TopicSpec("b", 1)),
-        changes::incrementAndGet
+        changes::incrementAndGet,
+        removed -> {}
     );
 
     @AfterEach

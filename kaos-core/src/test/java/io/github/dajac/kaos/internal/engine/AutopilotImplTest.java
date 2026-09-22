@@ -77,6 +77,9 @@ class AutopilotImplTest {
 
         @Override
         public void switchProtocol(Protocol protocol) {}
+
+        @Override
+        public void remove() {}
     }
 
     private final List<Flag> consumers = new CopyOnWriteArrayList<>();

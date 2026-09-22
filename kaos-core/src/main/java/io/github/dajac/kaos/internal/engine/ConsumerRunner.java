@@ -25,6 +25,7 @@ import io.github.dajac.kaos.Fault;
 import io.github.dajac.kaos.PartitionRef;
 import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.SimulationException;
+import io.github.dajac.kaos.SimulationStateException;
 import io.github.dajac.kaos.internal.config.Assignors;
 import io.github.dajac.kaos.internal.proxy.NetworkFaults;
 import io.github.dajac.kaos.internal.state.ConsumerLocalState;
@@ -58,13 +59,26 @@ import org.slf4j.LoggerFactory;
  * thread and call {@code wakeup()} on its consumer. The loop waits with {@code park}, so a flag and
  * a stop take effect at once. {@link #switchProtocol} is the exception: it stops the loop and
  * starts a new one, with a new Kafka consumer, under the {@code switchLock}, which the start and
- * the stop of the runner take as well.
+ * the stop of the runner take as well. {@link #remove()} goes through the group, which stops the
+ * runner under the structure lock of the simulator.
  *
  * <p>A poll that fails is logged to {@code kaos.events} and the loop goes on. An error that the
  * Kafka consumer does not recover from ends the loop and becomes the {@code failure} of the
  * consumer.
  */
 public final class ConsumerRunner implements ConsumerHandle {
+
+    /** What a consumer needs from its group at any time. */
+    public interface Owner {
+        /** Something the snapshot shows has changed. */
+        void changed();
+
+        /** Throws on a thread that must not block, such as the one that runs the listeners. */
+        void refuseBlocking();
+
+        /** Removes the consumer from the group. */
+        void remove(ConsumerRunner consumer);
+    }
 
     /**
      * What a running consumer needs from its simulator.
@@ -107,8 +121,7 @@ public final class ConsumerRunner implements ConsumerHandle {
     private final String groupId;
     private final ConsumerSpec spec;
     private final List<String> topics;
-    private final Runnable onChange;
-    private final Runnable blockingGuard;
+    private final Owner owner;
     private final String clientId;
 
     private final ReentrantLock switchLock = new ReentrantLock();
@@ -120,6 +133,7 @@ public final class ConsumerRunner implements ConsumerHandle {
 
     private volatile Protocol protocol;
     private volatile String failure = "";
+    private volatile boolean removed;
     private volatile Loop current;
     /** Set while the runner is started; it is how a fault reaches the proxy. */
     private volatile NetworkFaults network;
@@ -131,22 +145,14 @@ public final class ConsumerRunner implements ConsumerHandle {
      * @param groupId the group of the consumer
      * @param spec the description of the consumer, with its id assigned and its effective settings
      * @param topics the names of the topics the consumer subscribes to
-     * @param onChange called, from any thread, when what the snapshot shows of the consumer changed
-     * @param blockingGuard called first by the methods that block; it throws on a thread that must
-     *     not block
+     * @param owner the group; it is told, from any thread, when what the snapshot shows of the
+     *     consumer changed
      */
-    public ConsumerRunner(
-        String groupId,
-        ConsumerSpec spec,
-        List<String> topics,
-        Runnable onChange,
-        Runnable blockingGuard
-    ) {
+    public ConsumerRunner(String groupId, ConsumerSpec spec, List<String> topics, Owner owner) {
         this.groupId = Objects.requireNonNull(groupId, "groupId");
         this.spec = Objects.requireNonNull(spec, "spec");
         this.topics = List.copyOf(topics);
-        this.onChange = Objects.requireNonNull(onChange, "onChange");
-        this.blockingGuard = Objects.requireNonNull(blockingGuard, "blockingGuard");
+        this.owner = Objects.requireNonNull(owner, "owner");
         this.clientId = clientId(groupId, spec.id());
         this.protocol = spec.effective().protocol();
     }
@@ -188,6 +194,7 @@ public final class ConsumerRunner implements ConsumerHandle {
     @Override
     public void inject(Fault fault) {
         Objects.requireNonNull(fault, "fault");
+        checkNotRemoved();
         if (faults.add(fault)) {
             faultsChanged();
         }
@@ -196,6 +203,7 @@ public final class ConsumerRunner implements ConsumerHandle {
     @Override
     public void clear(Fault fault) {
         Objects.requireNonNull(fault, "fault");
+        checkNotRemoved();
         if (faults.remove(fault)) {
             faultsChanged();
         }
@@ -203,6 +211,7 @@ public final class ConsumerRunner implements ConsumerHandle {
 
     @Override
     public void clearFaults() {
+        checkNotRemoved();
         var changed = false;
         for (var fault : Fault.all()) {
             changed |= faults.remove(fault);
@@ -225,24 +234,26 @@ public final class ConsumerRunner implements ConsumerHandle {
 
     @Override
     public void join() {
+        checkNotRemoved();
         if (subscribed.compareAndSet(false, true)) {
             signal();
-            onChange.run();
+            owner.changed();
         }
     }
 
     @Override
     public void leave() {
+        checkNotRemoved();
         if (subscribed.compareAndSet(true, false)) {
             signal();
-            onChange.run();
+            owner.changed();
         }
     }
 
     private void faultsChanged() {
         applyNetworkFaults();
         signal();
-        onChange.run();
+        owner.changed();
     }
 
     /**
@@ -328,7 +339,7 @@ public final class ConsumerRunner implements ConsumerHandle {
             } finally {
                 forgetNetworkFaults(services.network());
                 services = null;
-                onChange.run();
+                owner.changed();
             }
         } finally {
             switchLock.unlock();
@@ -338,15 +349,16 @@ public final class ConsumerRunner implements ConsumerHandle {
     @Override
     public void switchProtocol(Protocol newProtocol) {
         Objects.requireNonNull(newProtocol, "newProtocol");
-        blockingGuard.run();
+        owner.refuseBlocking();
         switchLock.lock();
         try {
+            checkNotRemoved();
             if (newProtocol == protocol) {
                 return;
             }
             if (services == null) {
                 protocol = newProtocol;
-                onChange.run();
+                owner.changed();
                 return;
             }
             try {
@@ -360,7 +372,7 @@ public final class ConsumerRunner implements ConsumerHandle {
                 startLoop();
             } catch (RuntimeException e) {
                 failure = describe(e);
-                onChange.run();
+                owner.changed();
                 throw new SimulationException(
                     "Consumer " + clientId + " could not switch to the " + newProtocol.id() + " protocol: " + e,
                     e
@@ -368,6 +380,23 @@ public final class ConsumerRunner implements ConsumerHandle {
             }
         } finally {
             switchLock.unlock();
+        }
+    }
+
+    @Override
+    public void remove() {
+        owner.remove(this);
+    }
+
+    /** Called by the group once the consumer is removed. */
+    public void markRemoved() {
+        removed = true;
+    }
+
+    /** @throws SimulationStateException if the consumer is removed */
+    public void checkNotRemoved() {
+        if (removed) {
+            throw new SimulationStateException("The consumer " + clientId + " is removed");
         }
     }
 
@@ -387,7 +416,7 @@ public final class ConsumerRunner implements ConsumerHandle {
             closeQuietly(consumer);
             throw e;
         }
-        onChange.run();
+        owner.changed();
     }
 
     /** The caller holds the switchLock. */
@@ -486,7 +515,7 @@ public final class ConsumerRunner implements ConsumerHandle {
             closeQuietly(loop.consumer);
             localAssignment.clear();
             generation.set(-1);
-            onChange.run();
+            owner.changed();
         }
     }
 
@@ -557,14 +586,14 @@ public final class ConsumerRunner implements ConsumerHandle {
         }
         localAssignment.clear();
         generation.set(-1);
-        onChange.run();
+        owner.changed();
         return true;
     }
 
     private void reportGeneration(Consumer<String, String> consumer) {
         var reported = consumer.groupMetadata().generationId();
         if (generation.getAndSet(reported) != reported) {
-            onChange.run();
+            owner.changed();
         }
     }
 
@@ -616,13 +645,13 @@ public final class ConsumerRunner implements ConsumerHandle {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             partitions.forEach(partition -> localAssignment.add(ref(partition)));
-            onChange.run();
+            owner.changed();
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
             partitions.forEach(partition -> localAssignment.remove(ref(partition)));
-            onChange.run();
+            owner.changed();
         }
 
         @Override

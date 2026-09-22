@@ -8,6 +8,10 @@ import java.util.Set;
  * <p>{@link #inject}, {@link #clear}, {@link #clearFaults}, {@link #join} and {@link #leave}
  * return immediately: the consumer reacts on its own thread, and the snapshot shows the outcome.
  * They can be called before the simulator starts; the consumer then starts in that state.
+ *
+ * <p>Once the consumer is removed, with {@link #remove()}, with its group or by the stop of the
+ * simulator, the methods that act on it throw a {@link SimulationStateException}; the accessors
+ * keep answering.
  */
 public interface ConsumerHandle {
     /** The consumer id, unique within the group. */
@@ -53,4 +57,14 @@ public interface ConsumerHandle {
      *     {@link ConsumerStatus#FAILED}
      */
     void switchProtocol(Protocol protocol);
+
+    /**
+     * Removes the consumer from its group. While the simulator runs, the call blocks until the
+     * consumer is stopped, which makes it leave the group; a static member that could not leave is
+     * removed from the group. Its id is never assigned again.
+     *
+     * @throws SimulationStateException if the consumer is already removed
+     * @throws SimulationException if the consumer could not be stopped
+     */
+    void remove();
 }
