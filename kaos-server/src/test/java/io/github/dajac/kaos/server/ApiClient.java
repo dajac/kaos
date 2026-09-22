@@ -21,6 +21,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
@@ -29,10 +30,15 @@ import java.util.stream.Stream;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/** A small HTTP client for the API of a running {@link Server}. */
+/**
+ * A small HTTP client for the API of a running {@link Server}. Every request, the opening of the
+ * event stream included, fails after {@link #REQUEST_TIMEOUT} without a response, so a server that
+ * accepts a connection but never answers cannot hang a test.
+ */
 final class ApiClient {
 
     static final ObjectMapper MAPPER = new ObjectMapper();
+    static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
     private final HttpClient client = HttpClient.newHttpClient();
     private final String base;
@@ -137,7 +143,9 @@ final class ApiClient {
     }
 
     private HttpRequest.Builder request(String path) {
-        return HttpRequest.newBuilder(URI.create(base + path)).header("Content-Type", "application/json");
+        return HttpRequest.newBuilder(URI.create(base + path))
+            .timeout(REQUEST_TIMEOUT)
+            .header("Content-Type", "application/json");
     }
 
     private HttpResponse<String> send(HttpRequest request) {

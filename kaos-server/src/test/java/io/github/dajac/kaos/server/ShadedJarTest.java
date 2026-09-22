@@ -29,6 +29,7 @@ import java.util.regex.Pattern;
 import io.github.dajac.kaos.test.IntegrationTest;
 import io.github.dajac.kaos.test.KafkaCluster;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -36,8 +37,8 @@ import org.junit.jupiter.api.Test;
  * missing from the runtime classpath of the jar fails the build. Failsafe passes the path of the
  * jar in the system property {@code kaos.test.jar}.
  *
- * <p>The command line has no option for the proxy port, so the proxy of the jar requests the
- * default port and moves up from there when it is busy.
+ * <p>The process is destroyed when the test ends, and by a JVM shutdown hook if the test JVM is
+ * stopped while the test runs.
  */
 @IntegrationTest
 class ShadedJarTest {
@@ -53,8 +54,13 @@ class ShadedJarTest {
         var log = Files.createTempFile("kaos-shaded-jar", ".log");
         var java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         var process = new ProcessBuilder(
-            java, "-jar", jar.toString(), "--bootstrap-server", cluster.bootstrapServers(), "--port", "0"
+            java, "-jar", jar.toString(),
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--port", "0",
+            "--proxy-port", String.valueOf(cluster.proxyPort())
         ).redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        var killer = new Thread(process::destroyForcibly, "shaded-jar-killer");
+        Runtime.getRuntime().addShutdownHook(killer);
 
         try (Admin admin = cluster.createAdmin()) {
             var base = await("the server to listen").atMost(TIMEOUT).until(() -> {
@@ -93,6 +99,7 @@ class ShadedJarTest {
                 assertThat(described.get("lastError").asText()).isEmpty();
             });
             assertThat(admin.listTopics().names().get()).doesNotContain(topic);
+            assertThat(admin.listGroups().all().get()).extracting(GroupListing::groupId).doesNotContain(groupId);
         } catch (AssertionError | RuntimeException e) {
             throw new AssertionError(e.getMessage() + "\nOutput of the jar:\n" + read(log), e);
         } finally {
@@ -100,6 +107,7 @@ class ShadedJarTest {
             if (!process.waitFor(30, TimeUnit.SECONDS)) {
                 process.destroyForcibly().waitFor();
             }
+            Runtime.getRuntime().removeShutdownHook(killer);
             Files.deleteIfExists(log);
         }
     }

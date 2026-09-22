@@ -1088,7 +1088,9 @@ consumers exist.
 
 Status: built. The command line is
 `--bootstrap-server <host:port>` (default `localhost:9092`),
-`--port <port>` (default 8081), `--help` and `--version`. picocli parses
+`--port <port>` (default 8081), `--proxy-port <port>` (default 19092,
+1-65535, the port the proxy requests first), `--help` and `--version`.
+picocli parses
 it: `CliOptions` holds the annotated options, `Main` is the command that
 mixes them in, and `Version` provides `--version`. The application owns
 every option: `run.sh` builds the jar and passes all its arguments
@@ -1099,7 +1101,8 @@ print the error and the usage, and exit with status 2. A failed startup,
 such as a port already in use, releases the server, prints the reason
 and exits with status 1.
 
-`Main` creates the `Simulator` for `--bootstrap-server` and hands it to
+`Main` creates the `Simulator` for `--bootstrap-server`, with
+`withProxyPort` set to `--proxy-port`, and hands it to
 the `Server`, which owns it. A JVM shutdown hook closes the server: it
 ends the event streams, stops Javalin, drops the operations that have not
 begun and closes the simulator, which waits for a start in progress and
@@ -1632,16 +1635,19 @@ the build, and the server tests and the scripted curl session below.
   removed, a failed add as `lastError`, and the stop, which deletes the
   topics and leaves no `kaos-` thread.
 - `ShadedJarTest` (`@IntegrationTest`) runs the shaded jar with
-  `java -jar` as a separate process, on a free HTTP port and against the
-  broker, starts a simulator with a topic, a producer and a group over
-  HTTP, waits for it to run with its consumer stable, stops it and kills
-  the process. A class missing from the runtime classpath of the jar,
-  which the other tests do not see because they run on the test
-  classpath, thus fails `./mvnw verify`. Failsafe runs after `package`,
-  so the jar exists, and passes its path in the system property
-  `kaos.test.jar`. The command line has no proxy port option, so this
-  test's proxy requests the default proxy port and moves up from there
-  when it is busy.
+  `java -jar` as a separate process, on a free HTTP port, against the
+  broker and with `--proxy-port` set to `proxyPort()`, starts a
+  simulator with a topic, a producer and a group over HTTP, waits for it
+  to run with its consumer stable, stops it, checks that the topic and
+  the group are deleted and kills the process. A class missing from the
+  runtime classpath of the jar, which the other tests do not see because
+  they run on the test classpath, thus fails `./mvnw verify`. Failsafe
+  runs after `package`, so the jar exists, and passes its path in the
+  system property `kaos.test.jar`. A JVM shutdown hook kills the process
+  if the test JVM stops during the test.
+- `ApiClient`, the HTTP client of the server tests, gives every request
+  a 10 s timeout, so a server that never answers fails the test instead
+  of hanging it.
 - `kaos-server/src/test/scripts/curl-session.sh [base-url]` is the
   scripted curl session: against a running server, it creates and
   starts a simulator, watches the SSE stream, injects and clears a

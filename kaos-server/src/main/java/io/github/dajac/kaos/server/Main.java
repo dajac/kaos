@@ -28,8 +28,8 @@ import picocli.CommandLine.Spec;
 
 /**
  * The command line entry point. picocli parses the options, and the command starts the
- * {@link Server} with a {@link Simulator} for the given cluster. A JVM shutdown hook closes the
- * server, and with it the simulator.
+ * {@link Server} with a {@link Simulator} for the given cluster and proxy port. A JVM shutdown
+ * hook closes the server, and with it the simulator.
  *
  * <p>Exit codes: 0 for {@code --help} and {@code --version}, 1 when the server cannot start, and 2
  * for an invalid command line. After a successful start the process keeps running until it is
@@ -82,7 +82,9 @@ public final class Main implements Callable<Integer> {
      */
     @Override
     public Integer call() {
-        Server candidate = new Server(new Simulator(options.bootstrapServer()));
+        Server candidate = new Server(
+            new Simulator(options.bootstrapServer()).withProxyPort(options.proxyPort())
+        );
         try {
             candidate.start(options.port());
         } catch (IllegalStateException e) {
@@ -93,8 +95,8 @@ public final class Main implements Callable<Integer> {
         server = candidate;
 
         LOG.info(
-            "Kaos {} listening on http://localhost:{} (bootstrap: {})",
-            Version.read(), candidate.port(), options.bootstrapServer()
+            "Kaos {} listening on http://localhost:{} (bootstrap: {}, proxy port: {})",
+            Version.read(), candidate.port(), options.bootstrapServer(), options.proxyPort()
         );
         return EXIT_OK;
     }

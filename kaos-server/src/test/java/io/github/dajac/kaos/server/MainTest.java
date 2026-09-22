@@ -53,6 +53,7 @@ class MainTest {
             .contains("Usage: kaos")
             .contains("--bootstrap-server", "localhost:9092")
             .contains("--port", "8081")
+            .contains("--proxy-port", "19092")
             .contains("--help", "--version");
         assertThat(command.server()).isNull();
     }
@@ -70,6 +71,15 @@ class MainTest {
         assertThat(execute("--nope")).isEqualTo(Main.EXIT_USAGE);
 
         assertThat(err.toString()).contains("--nope").contains("Usage: kaos");
+        assertThat(command.server()).isNull();
+    }
+
+    @Test
+    void anOutOfRangeProxyPortIsAUsageError() {
+        assertThat(execute("--proxy-port", "0")).isEqualTo(Main.EXIT_USAGE);
+        assertThat(execute("--proxy-port", "65536")).isEqualTo(Main.EXIT_USAGE);
+
+        assertThat(err.toString()).contains("--proxy-port").contains("out of range (1-65535)");
         assertThat(command.server()).isNull();
     }
 
