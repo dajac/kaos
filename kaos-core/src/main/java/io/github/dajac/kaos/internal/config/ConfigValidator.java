@@ -150,6 +150,46 @@ public final class ConfigValidator {
                 violations.add(duplicate(consumerPath + ".id", "consumer", consumer.id()));
             }
         }
+        checkCommonClassicAssignor(join(path, "consumers"), group.consumers(), violations);
+    }
+
+    /**
+     * Checks that the consumers that speak the classic protocol have an assignor in common. The
+     * coordinator only accepts a classic member that supports a protocol every other classic
+     * member supports, and refuses the others for good. A consumer with a named assignor supports
+     * that one, and a consumer with the default of the client supports those of
+     * {@link Assignors#classicDefaults()}. The consumers of the consumer protocol take no part in
+     * this, so a mixed group is valid. An assignor that is unknown is reported on its own.
+     */
+    private static void checkCommonClassicAssignor(
+        String path,
+        List<ConsumerSpec> consumers,
+        List<Violation> violations
+    ) {
+        Set<String> common = null;
+        var used = new ArrayList<String>();
+        for (int i = 0; i < consumers.size(); i++) {
+            var effective = consumers.get(i).effective();
+            if (effective.protocol() != Protocol.CLASSIC) {
+                continue;
+            }
+            if (!Assignors.isValid(Protocol.CLASSIC, effective.assignor())) {
+                continue;
+            }
+            var supported = Assignors.supportedClassicAssignors(effective.assignor());
+            used.add("consumers[" + i + "] supports " + String.join(" and ", supported));
+            if (common == null) {
+                common = new HashSet<>(supported);
+            } else {
+                common.retainAll(supported);
+            }
+        }
+        if (common != null && common.isEmpty()) {
+            violations.add(new Violation(
+                path,
+                "the consumers of the classic protocol must have an assignor in common: " + String.join(", ", used)
+            ));
+        }
     }
 
     /**

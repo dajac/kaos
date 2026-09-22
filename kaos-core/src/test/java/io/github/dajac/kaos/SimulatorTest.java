@@ -8,6 +8,7 @@ import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -90,6 +91,109 @@ class SimulatorTest {
             assertThat(producer.state()).isEqualTo(ProducerState.STOPPED);
             assertThat(received).contains(snapshot);
         }
+    }
+
+    @Test
+    void describesTheDeclaredGroups() {
+        try (var simulator = new Simulator("localhost:9092")) {
+            var orders = simulator.addTopic("orders", 12);
+            var defaults = new ConsumerSettings(Protocol.CLASSIC, "", false, "", 0, 1000, 300_000);
+            var rackA = ConsumerOptions.overrides(c -> c.rackId("a"));
+            var group = simulator.addGroup(new GroupSpec(
+                "next",
+                List.of("orders"),
+                10_000,
+                5000,
+                1000,
+                defaults,
+                List.of(
+                    new ConsumerSpec("consumer-1", rackA, null), ConsumerSpec.inheriting(), ConsumerSpec.inheriting()
+                )
+            ));
+            var fromSpec = simulator.addGroup(new GroupSpec("other", List.of("orders"), 45000, 5000, 1000, null, null));
+
+            assertThat(group.id()).isEqualTo("next");
+            assertThat(group.subscribedTopics()).containsExactly("orders");
+            // The supplied id is kept, and the assigned ids skip it.
+            assertThat(group.consumers()).extracting(ConsumerHandle::id)
+                .containsExactly("consumer-1", "consumer-0", "consumer-2");
+            assertThat(group.consumer(2)).isSameAs(group.consumer("consumer-2"));
+            assertThat(group.consumer(0).clientId()).isEqualTo("next-consumer-0");
+            assertThat(group.consumer(0).protocol()).isEqualTo(Protocol.CLASSIC);
+            assertThat(group.consumer(0).subscribed()).isTrue();
+            assertThat(group.autopilot().enabled()).isFalse();
+            assertThat(group.warnings()).isEmpty();
+            assertThatThrownBy(() -> group.consumer(3)).isInstanceOf(IllegalArgumentException.class);
+            assertThat(fromSpec.consumers()).isEmpty();
+            assertThat(simulator.groups()).containsExactly(group, fromSpec);
+            assertThat(simulator.describe().groups()).containsExactly(group.describe(), fromSpec.describe());
+            assertThat(group.describe().sessionTimeoutMs()).isEqualTo(10_000);
+            assertThat(group.describe().consumers()).extracting(ConsumerSpec::id)
+                .containsExactly("consumer-1", "consumer-0", "consumer-2");
+            assertThat(group.describe().consumers().get(0).effective().rackId()).isEqualTo("a");
+
+            // A declared group shows its consumers as joining, with nothing from the coordinator.
+            var snapshot = group.awaitSnapshot(s -> s.consumers().size() == 3, TIMEOUT);
+            assertThat(snapshot.type()).isEqualTo(GroupType.UNKNOWN);
+            assertThat(snapshot.consumers()).extracting(ConsumerSnapshot::status).containsOnly(ConsumerStatus.JOINING);
+            assertThat(snapshot.lag()).containsExactly(Map.entry("orders", java.util.Collections.nCopies(12, -1L)));
+            var both = simulator.awaitSnapshot(s -> s.groups().size() == 2, TIMEOUT);
+            assertThat(both.groups()).containsExactly(snapshot, fromSpec.snapshot());
+
+            // The flags flip before the start, and the snapshot shows them.
+            group.consumer(0).leave();
+            group.consumer(0).inject(Fault.freeze());
+            group.consumer(0).switchProtocol(Protocol.CONSUMER);
+            var flipped = group.awaitSnapshot(
+                s -> !s.consumers().get(1).subscribed()
+                    && !s.consumers().get(1).faults().isEmpty()
+                    && s.consumers().get(1).protocol() == Protocol.CONSUMER,
+                TIMEOUT
+            );
+            assertThat(flipped.consumers().get(1).status()).isEqualTo(ConsumerStatus.STOPPED);
+            assertThat(flipped.consumers().get(1).faults()).containsExactly(Fault.freeze());
+            assertThat(flipped.consumers().get(1).protocol()).isEqualTo(Protocol.CONSUMER);
+            assertThatThrownBy(() -> group.autopilot().start(Duration.ofSeconds(1), Duration.ofSeconds(2)))
+                .isInstanceOf(SimulationStateException.class);
+        }
+    }
+
+    @Test
+    void refusesInvalidGroups() {
+        try (var simulator = new Simulator("localhost:9092")) {
+            simulator.addTopic("orders", 3);
+            simulator.addGroup(new GroupSpec("a-b", List.of("orders"), 45000, 5000, 1000, null, List.of(named("c"))));
+
+            assertThatThrownBy(() -> simulator.addGroup("a-b", g -> g.subscribe("orders")))
+                .isInstanceOfSatisfying(InvalidConfigException.class, e -> assertThat(e.violations())
+                    .containsExactly(new Violation("groups[1].id", "duplicate group 'a-b'")));
+            assertThatThrownBy(() -> simulator.addGroup("g", g -> g.subscribe("unknown")))
+                .isInstanceOfSatisfying(InvalidConfigException.class, e -> assertThat(e.violations())
+                    .containsExactly(new Violation("groups[1].subscribedTopics[0]", "unknown topic 'unknown'")));
+            assertThatThrownBy(() -> simulator.addGroup("g", g -> g
+                .subscribe("orders")
+                .consumerDefaults(c -> c.protocol(Protocol.CLASSIC).assignor("range"))
+                .consumer(c -> c.assignor("cooperative-sticky"))
+                .consumers(1)
+            ))
+                .isInstanceOfSatisfying(InvalidConfigException.class, e -> assertThat(e.violations())
+                    .extracting(Violation::field).containsExactly("groups[1].consumers"));
+            // The client id a-b-c is taken, whichever way it is split into a group and a consumer.
+            assertThatThrownBy(() -> simulator.addGroup(
+                new GroupSpec("a", List.of("orders"), 45000, 5000, 1000, null, List.of(named("b-c")))
+            ))
+                .isInstanceOfSatisfying(InvalidConfigException.class, e -> assertThat(e.violations())
+                    .containsExactly(new Violation(
+                        "groups[1].consumers[0].id",
+                        "the client id 'a-b-c' is already used by a consumer of group 'a-b'"
+                    )));
+
+            assertThat(simulator.groups()).hasSize(1);
+        }
+    }
+
+    private static ConsumerSpec named(String id) {
+        return new ConsumerSpec(id, null, null);
     }
 
     @Test

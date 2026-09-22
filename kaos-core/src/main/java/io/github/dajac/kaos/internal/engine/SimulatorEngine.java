@@ -10,6 +10,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import io.github.dajac.kaos.ConsumerGroup;
+import io.github.dajac.kaos.GroupSpec;
 import io.github.dajac.kaos.InvalidConfigException;
 import io.github.dajac.kaos.Phase;
 import io.github.dajac.kaos.ProducerHandle;
@@ -22,11 +24,19 @@ import io.github.dajac.kaos.SimulatorSpec;
 import io.github.dajac.kaos.SnapshotListener;
 import io.github.dajac.kaos.Topic;
 import io.github.dajac.kaos.TopicSpec;
+import io.github.dajac.kaos.Violation;
 import io.github.dajac.kaos.internal.config.ConfigValidator;
 import io.github.dajac.kaos.internal.kafka.ClientFactory;
+import io.github.dajac.kaos.internal.kafka.GroupCleanup;
+import io.github.dajac.kaos.internal.kafka.GroupConfigManager;
+import io.github.dajac.kaos.internal.kafka.GroupPoller;
 import io.github.dajac.kaos.internal.kafka.TopicManager;
 import io.github.dajac.kaos.internal.proxy.NetworkFaults;
+import io.github.dajac.kaos.internal.proxy.NetworkProxy;
 import io.github.dajac.kaos.internal.proxy.ProxyLauncher;
+import io.github.dajac.kaos.internal.state.AdminView;
+import io.github.dajac.kaos.internal.state.EventLog;
+import io.github.dajac.kaos.internal.state.SnapshotAssembler;
 import io.github.dajac.kaos.internal.state.SnapshotPublisher;
 import org.apache.kafka.clients.producer.Producer;
 import org.slf4j.Logger;
@@ -51,11 +61,52 @@ import org.slf4j.LoggerFactory;
 public final class SimulatorEngine {
 
     /** The phase and the components. The lists are immutable and replaced as a whole. */
-    private record State(Phase phase, String lastError, List<TopicComponent> topics, List<ProducerRunner> producers) {
-        private static final State EMPTY = new State(Phase.IDLE, "", List.of(), List.of());
+    private record State(
+        Phase phase,
+        String lastError,
+        List<TopicComponent> topics,
+        List<ProducerRunner> producers,
+        List<GroupRuntime> groups
+    ) {
+        private static final State EMPTY = new State(Phase.IDLE, "", List.of(), List.of(), List.of());
 
         State withPhase(Phase newPhase, String newLastError) {
-            return new State(newPhase, newLastError, topics, producers);
+            return new State(newPhase, newLastError, topics, producers, groups);
+        }
+
+        State withTopics(List<TopicComponent> newTopics) {
+            return new State(phase, lastError, newTopics, producers, groups);
+        }
+
+        State withProducers(List<ProducerRunner> newProducers) {
+            return new State(phase, lastError, topics, newProducers, groups);
+        }
+
+        State withGroups(List<GroupRuntime> newGroups) {
+            return new State(phase, lastError, topics, producers, newGroups);
+        }
+    }
+
+    /** What the groups and their consumers call back. */
+    private final class GroupHarness implements GroupRuntime.Harness {
+        @Override
+        public void changed() {
+            publisher.poke();
+        }
+
+        @Override
+        public void refuseBlocking() {
+            refuseListenerThread();
+        }
+
+        @Override
+        public SimulatorSnapshot snapshot() {
+            return publisher.current();
+        }
+
+        @Override
+        public SimulatorSnapshot awaitSnapshot(Predicate<SimulatorSnapshot> condition, Duration timeout) {
+            return SimulatorEngine.this.awaitSnapshot(condition, timeout);
         }
     }
 
@@ -64,13 +115,18 @@ public final class SimulatorEngine {
     private static final Duration ADMIN_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration PROXY_LAUNCH_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration ADMIN_CLOSE_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration GROUP_ADMIN_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration POLL_TIMEOUT = Duration.ofSeconds(5);
 
     private final ReentrantLock structureLock = new ReentrantLock();
     private final Threads threads = new Threads();
     private final SnapshotPublisher publisher;
     private final String bootstrapServers;
+    private final GroupRuntime.Harness groupHarness = new GroupHarness();
 
     private volatile State state = State.EMPTY;
+    /** The poller of a started simulator. The publisher thread reads the views of the groups from it. */
+    private volatile GroupPoller poller;
 
     // Guarded by the structureLock.
     private final Map<String, String> clientProperties = new HashMap<>();
@@ -84,6 +140,7 @@ public final class SimulatorEngine {
             throw new IllegalArgumentException("The bootstrap servers must not be blank");
         }
         this.publisher = new SnapshotPublisher(this::assemble, task -> threads.newThread("publisher", task));
+        this.publisher.addListener(new EventLog());
     }
 
     /** @throws IllegalStateException once the simulator is started */
@@ -135,8 +192,7 @@ public final class SimulatorEngine {
                 new SimulatorSpec(append(description.topics(), spec), description.producers(), description.groups()));
 
             var topic = new TopicComponent(spec);
-            declare(
-                new State(current.phase(), current.lastError(), append(current.topics(), topic), current.producers()));
+            declare(current.withTopics(append(current.topics(), topic)));
             return topic;
         } finally {
             structureLock.unlock();
@@ -161,11 +217,60 @@ public final class SimulatorEngine {
                 .filter(topic -> identified.topics().contains(topic.name()))
                 .toList();
             var producer = new ProducerRunner(identified, targets, publisher::poke);
-            declare(new State(current.phase(), current.lastError(), current.topics(),
-                append(current.producers(), producer)));
+            declare(current.withProducers(append(current.producers(), producer)));
             return producer;
         } finally {
             structureLock.unlock();
+        }
+    }
+
+    public ConsumerGroup addGroup(GroupSpec spec) {
+        Objects.requireNonNull(spec, "spec");
+        refuseListenerThread();
+        structureLock.lock();
+        try {
+            var current = declarableState();
+            var description = describe(current);
+            validate(
+                new SimulatorSpec(description.topics(), description.producers(), append(description.groups(), spec))
+            );
+
+            var subscribed = current.topics().stream()
+                .map(TopicComponent::spec)
+                .filter(topic -> spec.subscribedTopics().contains(topic.name()))
+                .toList();
+            var group = new GroupRuntime(spec, subscribed, groupHarness);
+            checkClientIds(current, group);
+            declare(current.withGroups(append(current.groups(), group)));
+            return group;
+        } finally {
+            structureLock.unlock();
+        }
+    }
+
+    /**
+     * A client id is {@code <groupId>-<consumerId>}, and both parts may contain a dash, so two
+     * groups can end up with the same one. The network faults match on it, so it must be unique.
+     */
+    private static void checkClientIds(State current, GroupRuntime added) {
+        var violations = new ArrayList<Violation>();
+        var runners = added.runners();
+        for (int i = 0; i < runners.size(); i++) {
+            var clientId = runners.get(i).clientId();
+            for (var group : current.groups()) {
+                if (group.runners().stream().anyMatch(runner -> runner.clientId().equals(clientId))) {
+                    violations.add(
+                        new Violation(
+                            "groups[" + current.groups().size() + "].consumers[" + i + "].id",
+                            "the client id '" + clientId + "' is already used by a consumer of group '"
+                                + group.id() + "'"
+                        )
+                    );
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new InvalidConfigException(violations);
         }
     }
 
@@ -195,7 +300,8 @@ public final class SimulatorEngine {
     }
 
     /**
-     * Starts the proxy, then the topics, then the producers, and returns when all of them run. A
+     * Starts the proxy, then the topics, the producers and the groups, and returns when all of
+     * them run. A
      * failure undoes the steps that succeeded, brings the simulator back to {@link Phase#IDLE}
      * with its components still declared, and is published as the {@code lastError} of the
      * snapshot before it is thrown.
@@ -241,9 +347,10 @@ public final class SimulatorEngine {
         var admin = clients.createAdmin(Threads.PREFIX + "admin");
         starting.register("admin client", () -> admin.close(ADMIN_CLOSE_TIMEOUT));
 
+        NetworkProxy proxy;
         try {
-            var proxy =
-                new ProxyLauncher(bootstrapServers, proxyPort, PROXY_LAUNCH_TIMEOUT).launch(admin, new NetworkFaults());
+            var launcher = new ProxyLauncher(bootstrapServers, proxyPort, PROXY_LAUNCH_TIMEOUT);
+            proxy = launcher.launch(admin, new NetworkFaults());
             starting.register("proxy", proxy::close);
         } catch (IllegalStateException e) {
             throw new SimulationException("The proxy failed to start: " + e.getMessage(), e);
@@ -262,6 +369,39 @@ public final class SimulatorEngine {
             Supplier<Producer<String, String>> client =
                 () -> clients.createProducer(Threads.PREFIX + producer.threadName());
             producer.start(client, threads, component);
+        }
+
+        // The poller reads the groups from the state at every poll. It runs before them, so that
+        // the snapshot shows their members as they join, and stops after them.
+        var polling = new GroupPoller(
+            admin,
+            () -> state.groups().stream().map(GroupRuntime::target).toList(),
+            publisher::poke,
+            GroupPoller.INTERVAL,
+            POLL_TIMEOUT
+        );
+        polling.start(task -> threads.newThread("poller", task));
+        poller = polling;
+        starting.register("poller", () -> {
+            try {
+                polling.stop();
+            } finally {
+                poller = null;
+            }
+        });
+
+        var proxyBootstrapServers = proxy.bootstrapServers();
+        var services = new GroupRuntime.Services(
+            new ConsumerRunner.Services(
+                settings -> clients.createConsumer(proxyBootstrapServers, settings),
+                threads,
+                proxy.faults()
+            ),
+            new GroupConfigManager(admin, GROUP_ADMIN_TIMEOUT),
+            new GroupCleanup(admin, GROUP_ADMIN_TIMEOUT)
+        );
+        for (var group : current.groups()) {
+            group.start(services, starting.child("group " + group.id()));
         }
     }
 
@@ -314,6 +454,10 @@ public final class SimulatorEngine {
         return List.copyOf(state.producers());
     }
 
+    public List<ConsumerGroup> groups() {
+        return List.copyOf(state.groups());
+    }
+
     public SimulatorSnapshot snapshot() {
         return publisher.current();
     }
@@ -336,21 +480,27 @@ public final class SimulatorEngine {
         return new SimulatorSpec(
             current.topics().stream().map(TopicComponent::spec).toList(),
             current.producers().stream().map(ProducerRunner::spec).toList(),
-            List.of()
+            current.groups().stream().map(GroupRuntime::describe).toList()
         );
     }
 
     /** Called by the publisher thread. */
     private SimulatorSnapshot assemble() {
         var current = state;
+        var polling = poller;
         return new SimulatorSnapshot(
             0,
             current.phase(),
-            false,
+            polling != null && polling.stale(),
             current.lastError(),
             current.topics().stream().map(TopicComponent::spec).toList(),
             current.producers().stream().map(ProducerRunner::snapshot).toList(),
-            List.of()
+            current.groups().stream()
+                .map(group -> SnapshotAssembler.assemble(
+                    group.localState(),
+                    polling == null ? AdminView.unknown() : polling.view(group.id())
+                ))
+                .toList()
         );
     }
 

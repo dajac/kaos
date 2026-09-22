@@ -57,7 +57,11 @@ public final class KafkaCluster implements AutoCloseable {
 
     /** Starts a broker and returns once it accepts connections. */
     static KafkaCluster start() {
-        var container = new KafkaContainer(image());
+        var container = new KafkaContainer(image())
+            // The defaults of the broker refuse a consumer group session timeout under 45 s and a
+            // heartbeat interval under 5 s, which would make every eviction test that long.
+            .withEnv("KAFKA_GROUP_CONSUMER_MIN_SESSION_TIMEOUT_MS", "1000")
+            .withEnv("KAFKA_GROUP_CONSUMER_MIN_HEARTBEAT_INTERVAL_MS", "500");
         container.start();
         return new KafkaCluster(container, ThreadLocalRandom.current().nextInt(PROXY_PORT_MIN, PROXY_PORT_MAX));
     }

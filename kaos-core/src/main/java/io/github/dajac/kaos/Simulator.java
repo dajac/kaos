@@ -9,14 +9,16 @@ import io.github.dajac.kaos.internal.config.ConfigValidator;
 import io.github.dajac.kaos.internal.engine.SimulatorEngine;
 
 /**
- * The simulator harness. It holds topics and producers, which run against a Kafka cluster between
- * {@link #start()} and {@link #stop()}.
+ * The simulator harness. It holds topics, producers and consumer groups, which run against a Kafka
+ * cluster between {@link #start()} and {@link #stop()}.
  *
  * <pre>{@code
  * try (Simulator simulator = new Simulator("localhost:9092")) {
  *     Topic orders = simulator.addTopic("orders", 36);
  *     ProducerHandle load = simulator.addProducer(p -> p.topics(orders));
+ *     ConsumerGroup group = simulator.addGroup("orders-app", g -> g.subscribe(orders).consumers(3));
  *     simulator.start();
+ *     group.consumer(0).inject(Fault.freeze());
  *     load.pause();
  * }
  * }</pre>
@@ -129,6 +131,24 @@ public final class Simulator implements AutoCloseable {
         return engine.addProducer(spec);
     }
 
+    /**
+     * Declares a consumer group, which {@link #start()} starts: it sets the group configs that the
+     * options set, and starts the consumers, which connect through the proxy. A consumer gets the
+     * id {@code consumer-N} unless its spec has one.
+     *
+     * @throws InvalidConfigException if the group is invalid, subscribes to a topic that is not
+     *     declared, or has an id that is taken
+     * @throws SimulationStateException if the simulator is started
+     */
+    public ConsumerGroup addGroup(String id, Consumer<GroupOptions> options) {
+        return addGroup(GroupSpec.of(id, options));
+    }
+
+    /** Declares a consumer group from its spec. See {@link #addGroup(String, Consumer)}. */
+    public ConsumerGroup addGroup(GroupSpec spec) {
+        return engine.addGroup(spec);
+    }
+
     /** The topics, in the order they were added. */
     public List<Topic> topics() {
         return engine.topics();
@@ -139,9 +159,14 @@ public final class Simulator implements AutoCloseable {
         return engine.producers();
     }
 
+    /** The consumer groups, in the order they were added. */
+    public List<ConsumerGroup> groups() {
+        return engine.groups();
+    }
+
     /**
-     * Starts the proxy, creates the topics and starts the producers, in that order. The call
-     * blocks until everything runs.
+     * Starts the proxy, creates the topics, and starts the producers and then the groups. The
+     * call blocks until everything runs; the consumers then join their groups on their own.
      *
      * <p>When a step fails, the steps that succeeded are undone: no thread, port or topic is
      * left behind. The simulator is then {@link Phase#IDLE} again, with its components still
@@ -156,8 +181,10 @@ public final class Simulator implements AutoCloseable {
     }
 
     /**
-     * Stops the producers, deletes the topics, stops the proxy and removes every component. The
-     * call blocks, and is idempotent. The simulator can be used again afterwards.
+     * Stops the groups and the producers, deletes the topics, stops the proxy and removes every
+     * component. The call blocks, and is idempotent. The simulator can be used again afterwards.
+     * Stopping a group stops its consumers, which leave the group, removes the static members
+     * that could not, deletes the group when it is empty and reverts its group configs.
      *
      * <p>A call that is concurrent with {@link #start()} waits for the start to finish, and then
      * stops what it started. A call that finds nothing running, such as the one that removes the

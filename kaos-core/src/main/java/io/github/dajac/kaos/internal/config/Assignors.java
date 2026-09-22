@@ -1,5 +1,6 @@
 package io.github.dajac.kaos.internal.config;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -23,6 +24,8 @@ public final class Assignors {
         "cooperative-sticky", CooperativeStickyAssignor.class.getName()
     );
 
+    private static final List<String> CLASSIC_DEFAULTS = List.of("range", "cooperative-sticky");
+
     private Assignors() {}
 
     /** Whether the assignor name can be used with the protocol. */
@@ -36,6 +39,22 @@ public final class Assignors {
      */
     public static Optional<String> classicAssignorClass(String assignor) {
         return Optional.ofNullable(CLASSIC_CLASSES.get(assignor));
+    }
+
+    /**
+     * The assignors of a classic consumer that keeps the default of the client, which lists
+     * {@code range} and then {@code cooperative-sticky}.
+     */
+    public static List<String> classicDefaults() {
+        return CLASSIC_DEFAULTS;
+    }
+
+    /**
+     * The assignors that a classic consumer with the given assignor name offers to its group: the
+     * named one, or {@link #classicDefaults()} for the empty name.
+     */
+    public static List<String> supportedClassicAssignors(String assignor) {
+        return assignor.isEmpty() ? CLASSIC_DEFAULTS : List.of(assignor);
     }
 
     /**

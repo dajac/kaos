@@ -267,6 +267,58 @@ class ConfigValidatorTest {
     }
 
     @Test
+    void rejectsClassicConsumersWithoutAnAssignorInCommon() {
+        var spec = withGroup(GroupSpec.of("g", g -> g
+            .subscribe("orders")
+            .consumerDefaults(c -> c.protocol(Protocol.CLASSIC).assignor("range"))
+            .consumer(c -> c.assignor("cooperative-sticky"))
+            .consumer(c -> c.protocol(Protocol.CONSUMER).assignor("uniform"))
+            .consumers(1)
+        ));
+
+        assertThat(ConfigValidator.validate(spec)).containsExactly(new Violation(
+            "groups[0].consumers",
+            "the consumers of the classic protocol must have an assignor in common: "
+                + "consumers[0] supports cooperative-sticky, consumers[2] supports range"
+        ));
+    }
+
+    @Test
+    void acceptsClassicConsumersWithAnAssignorInCommon() {
+        // The client default lists range and cooperative-sticky, so it fits either of them.
+        var spec = withGroup(GroupSpec.of("g", g -> g
+            .subscribe("orders")
+            .consumerDefaults(c -> c.protocol(Protocol.CLASSIC))
+            .consumer(c -> c.assignor("cooperative-sticky"))
+            .consumers(1)
+        ));
+
+        assertThat(ConfigValidator.validate(spec)).isEmpty();
+
+        var explicit = withGroup(GroupSpec.of("g", g -> g
+            .subscribe("orders")
+            .consumerDefaults(c -> c.protocol(Protocol.CLASSIC).assignor("sticky"))
+            .consumer(c -> c.assignor("sticky"))
+            .consumer(c -> c.protocol(Protocol.CONSUMER).assignor("range"))
+        ));
+
+        assertThat(ConfigValidator.validate(explicit)).isEmpty();
+    }
+
+    @Test
+    void rejectsClassicConsumersWithoutAnAssignorInCommonWhenOneKeepsTheClientDefault() {
+        var spec = withGroup(GroupSpec.of("g", g -> g
+            .subscribe("orders")
+            .consumerDefaults(c -> c.protocol(Protocol.CLASSIC))
+            .consumer(c -> c.assignor("roundrobin"))
+            .consumers(1)
+        ));
+
+        assertThat(ConfigValidator.validate(spec)).singleElement()
+            .extracting(Violation::field).isEqualTo("groups[0].consumers");
+    }
+
+    @Test
     void rejectsAGroupSubscribedToAnUnknownTopic() {
         var group = GroupSpec.of("g", g -> g.subscribe("orders", "missing"));
 
