@@ -28,8 +28,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Sets the dynamic configs of a group, and puts them back.
  *
- * <p>Only the settings that the user set are sent: a setting of the spec that has its default in
- * {@link ConfigMetadata} is left to the broker. Each key is sent on its own, so a key that the
+ * <p>Only the explicit settings are sent. A setting is explicit when its value differs from its
+ * default in {@link ConfigMetadata}; a setting with that default is left to the broker, even when
+ * the user set it to that value. Each key is sent on its own, so a key that the
  * broker refuses does not take the others with it. The broker refuses a key it does not know, as a
  * broker before 4.3 does with {@code consumer.assignment.interval.ms}, and a value outside the
  * bounds of its own configuration. Such a key becomes a warning and the group runs without it. Any
@@ -92,8 +93,8 @@ public final class GroupConfigManager {
     }
 
     /**
-     * The group configs to set for a spec: the settings whose value is not the default, in a stable
-     * order.
+     * The group configs to set for a spec: the explicit settings, that is those whose value differs
+     * from their default in {@link ConfigMetadata}, in a stable order.
      */
     public static Map<String, String> explicitConfigs(GroupSpec spec) {
         var configs = new LinkedHashMap<String, String>();

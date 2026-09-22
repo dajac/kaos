@@ -3,12 +3,17 @@ package io.github.dajac.kaos;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -168,9 +173,11 @@ class ConsumerGroupLifecycleTest {
             frozen.inject(Fault.freeze());
 
             assertThat(frozen.faults()).containsExactly(Fault.freeze());
+            // The session timeout is the default of 45 s and the heartbeats go on, so an eviction
+            // within 15 s comes from the max poll interval of 3 s.
             var evicted = group.awaitSnapshot(
                 allAssigned(4, "consumer-1").and(s -> consumer(s, "consumer-0").memberId().isEmpty()),
-                TIMEOUT
+                Duration.ofSeconds(15)
             );
             assertThat(consumer(evicted, "consumer-0").status()).isEqualTo(ConsumerStatus.FROZEN);
             assertThat(consumer(evicted, "consumer-0").faults()).containsExactly(Fault.freeze());
@@ -380,8 +387,39 @@ class ConsumerGroupLifecycleTest {
         }
     }
 
+    /** A simulator whose proxy takes a free port block away from the default one. */
     private Simulator newSimulator() {
-        return new Simulator(cluster.bootstrapServers());
+        return new Simulator(cluster.bootstrapServers()).withProxyPort(freePortBlock());
+    }
+
+    /**
+     * A port from which two ports are free: the proxy takes one port plus one per broker. It is
+     * taken below the ephemeral ranges, away from the outgoing connections of the clients.
+     */
+    private static int freePortBlock() {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            var port = ThreadLocalRandom.current().nextInt(20000, 30000);
+            if (isFree(port) && isFree(port + 1)) {
+                return port;
+            }
+        }
+        throw new IllegalStateException("No free port block found");
+    }
+
+    /** Probes a port the way the proxy binds it, on the wildcard and the loopback addresses. */
+    private static boolean isFree(int port) {
+        return canBind(new InetSocketAddress(port))
+            && canBind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+    }
+
+    private static boolean canBind(InetSocketAddress address) {
+        try (var socket = new ServerSocket()) {
+            socket.setReuseAddress(true);
+            socket.bind(address);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /**

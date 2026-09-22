@@ -219,6 +219,27 @@ class ConsumerRunnerTest {
     }
 
     @Test
+    void anIsolationRacingAStopLeavesNoFaultOnTheProxy() throws Exception {
+        for (int round = 0; round < 20; round++) {
+            var runner = runner();
+            runner.start(services, new Resources("round " + round));
+            var injector = threads.newThread("injector", () -> {
+                for (int i = 0; i < 200; i++) {
+                    runner.inject(Fault.networkIsolation());
+                    runner.clear(Fault.networkIsolation());
+                }
+                runner.inject(Fault.networkIsolation());
+            });
+            injector.start();
+
+            runner.stop();
+            injector.join();
+
+            assertThat(network.snapshot()).as("round %d", round).isEmpty();
+        }
+    }
+
+    @Test
     void switchingTheProtocolReplacesTheClientAndKeepsTheFlags() {
         var runner = runner();
         runner.start(services, resources);

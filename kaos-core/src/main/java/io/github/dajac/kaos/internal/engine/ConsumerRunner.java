@@ -264,6 +264,16 @@ public final class ConsumerRunner implements ConsumerHandle {
         }
     }
 
+    /**
+     * Detaches the runner from the proxy and clears its fault there, under the monitor of
+     * {@link #applyNetworkFaults()}: a fault injected concurrently either comes before and is
+     * cleared, or comes after and finds no proxy.
+     */
+    private synchronized void forgetNetworkFaults(NetworkFaults proxy) {
+        network = null;
+        proxy.clear(clientId);
+    }
+
     /** Makes the loop read the flags again, wherever it waits. */
     private void signal() {
         signals.incrementAndGet();
@@ -316,9 +326,8 @@ public final class ConsumerRunner implements ConsumerHandle {
             try {
                 stopLoop();
             } finally {
-                services.network().clear(clientId);
+                forgetNetworkFaults(services.network());
                 services = null;
-                network = null;
                 onChange.run();
             }
         } finally {

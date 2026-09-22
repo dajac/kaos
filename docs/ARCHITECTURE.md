@@ -373,7 +373,10 @@ try (Simulator simulator = new Simulator("localhost:9092")
   simulator knows it: its type and state `UNKNOWN`, its consumers
   `JOINING` and its lag unknown.
 - Starting a group sets its group configs, starts its consumers and
-  opens its autopilot. `warnings()` lists what the start could not
+  opens its autopilot. The group configs it sets are the explicit
+  settings of the spec, those whose value differs from the default in
+  `ConfigMetadata`; a setting with that default is left to the broker,
+  even when the user set it to that value. `warnings()` lists what the start could not
   apply and went on without; it is empty while the group does not run.
 - The consumers connect through the proxy. Their Kafka settings come
   from the effective settings of the consumer: `group.protocol`,
@@ -640,6 +643,11 @@ built with the runner; the removal itself is planned.
   frozen or out of the group, and pauses for the poll delay between two
   polls. A flag flip unparks it and calls `wakeup()`, so it reacts at
   once wherever it waits.
+- The loop subscribes before it checks the freeze, as the prototype
+  does. So a consumer frozen before it joins still subscribes: with the
+  consumer protocol, whose heartbeats run in the background, it joins
+  the group and is later evicted by the max poll interval; with the
+  classic protocol, which only joins in `poll`, it never joins.
 - There is one `kaos-producer-<id>` thread per producer.
 - `kaos-poller` runs one thread for the whole simulator. It covers all
   groups, because `describeConsumerGroups` takes a list.
@@ -667,9 +675,11 @@ built with the runner; the removal itself is planned.
   alive. An exception that ends one of them is logged through an
   uncaught exception handler. For a producer loop, the unexpected
   exception also brings the producer back to `STOPPED` in the snapshot.
-- The Kafka clients of a simulator have client ids that start with
+- The admin client and the producers have client ids that start with
   `kaos-` (`kaos-admin`, `kaos-producer-<id>`), so their threads can be
-  told apart as well.
+  told apart as well. The consumers do not: their client id is
+  `<groupId>-<consumerId>`, which the network faults match on, and
+  their loop threads are `kaos-<groupId>-<consumerId>`.
 - Javalin serves HTTP requests on virtual threads (a config flag).
   Handlers only flip flags, read the snapshot reference or submit work
   to the lifecycle executor.
