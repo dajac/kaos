@@ -23,14 +23,17 @@ import io.github.dajac.kaos.internal.engine.SimulatorEngine;
  * }
  * }</pre>
  *
- * <p>Components are declared with {@code add…} before {@code start()}. Every method is
- * thread-safe, and several simulators can run in one JVM.
+ * <p>Components are added with {@code add…} and removed with their {@code remove()}. Before
+ * {@code start()}, they are declared and {@code start()} starts them; while the simulator runs, they
+ * are started or stopped at once, and the call blocks until they are. A component that fails to
+ * start while the simulator runs leaves the simulator as it was. Every method is thread-safe, and
+ * several simulators can run in one JVM.
  *
  * <p>The simulator has one thread of its own, {@code kaos-publisher}, from the first declaration
  * (or {@code start()}) until {@code stop()} or {@code close()}. So a simulator that has declared
  * something is closed even when it never started, or failed to start.
  *
- * <p>{@code start}, {@code stop}, {@code close}, {@code with…}, {@code add…} and
+ * <p>{@code start}, {@code stop}, {@code close}, {@code with…}, {@code add…}, {@code remove()} and
  * {@code awaitSnapshot} block, and throw a {@link SimulationStateException} when a
  * {@link SnapshotListener} calls them.
  */
@@ -100,51 +103,54 @@ public final class Simulator implements AutoCloseable {
     }
 
     /**
-     * Declares a topic. {@link #start()} creates it and {@link #stop()} deletes it.
+     * Adds a topic. {@link #start()} creates it, or the call creates it and waits until the cluster
+     * reports it when the simulator runs. {@link #stop()} and {@link Topic#remove()} delete it.
      *
      * @throws InvalidConfigException if the topic is invalid or its name is taken
-     * @throws SimulationStateException if the simulator is started
+     * @throws SimulationException if the simulator runs and the topic cannot be created
      */
     public Topic addTopic(String name, int partitions) {
         return addTopic(new TopicSpec(name, partitions));
     }
 
-    /** Declares a topic from its spec. See {@link #addTopic(String, int)}. */
+    /** Adds a topic from its spec. See {@link #addTopic(String, int)}. */
     public Topic addTopic(TopicSpec spec) {
         return engine.addTopic(spec);
     }
 
     /**
-     * Declares a producer, which {@link #start()} starts. It gets the id {@code producer-N}
-     * unless the options set one.
+     * Adds a producer, which {@link #start()} starts, or which starts at once when the simulator
+     * runs. It gets the id {@code producer-N} unless the options set one; an assigned id is never
+     * used again until {@link #stop()}.
      *
      * @throws InvalidConfigException if the producer is invalid, names a topic that is not
      *     declared, or has an id that is taken
-     * @throws SimulationStateException if the simulator is started
+     * @throws SimulationException if the simulator runs and the producer cannot be started
      */
     public ProducerHandle addProducer(Consumer<ProducerOptions> options) {
         return addProducer(ProducerSpec.of(options));
     }
 
-    /** Declares a producer from its spec. See {@link #addProducer(Consumer)}. */
+    /** Adds a producer from its spec. See {@link #addProducer(Consumer)}. */
     public ProducerHandle addProducer(ProducerSpec spec) {
         return engine.addProducer(spec);
     }
 
     /**
-     * Declares a consumer group, which {@link #start()} starts: it sets the group configs that the
-     * options set, and starts the consumers, which connect through the proxy. A consumer gets the
-     * id {@code consumer-N} unless its spec has one.
+     * Adds a consumer group, which {@link #start()} starts, or which starts at once when the
+     * simulator runs: it sets the group configs that the options set, and starts the consumers,
+     * which connect through the proxy. A consumer gets the id {@code consumer-N} unless its spec
+     * has one.
      *
      * @throws InvalidConfigException if the group is invalid, subscribes to a topic that is not
      *     declared, or has an id that is taken
-     * @throws SimulationStateException if the simulator is started
+     * @throws SimulationException if the simulator runs and the group cannot be started
      */
     public ConsumerGroup addGroup(String id, Consumer<GroupOptions> options) {
         return addGroup(GroupSpec.of(id, options));
     }
 
-    /** Declares a consumer group from its spec. See {@link #addGroup(String, Consumer)}. */
+    /** Adds a consumer group from its spec. See {@link #addGroup(String, Consumer)}. */
     public ConsumerGroup addGroup(GroupSpec spec) {
         return engine.addGroup(spec);
     }

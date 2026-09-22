@@ -50,6 +50,40 @@ class ResourcesTest {
     }
 
     @Test
+    void aStepThatSucceedsKeepsItsStackInTheParent() {
+        var resources = new Resources("test");
+        resources.register("proxy", () -> undone.add("proxy"));
+
+        var topic = resources.start("topic", stack -> stack.register("create", () -> undone.add("topic")));
+
+        assertThat(undone).isEmpty();
+        topic.register("later", () -> undone.add("later"));
+        resources.close();
+        assertThat(undone).containsExactly("later", "topic", "proxy");
+    }
+
+    @Test
+    void aStepThatFailsIsUndoneAtOnceAndLeavesTheParentUnchanged() {
+        var resources = new Resources("test");
+        resources.register("proxy", () -> undone.add("proxy"));
+        var failure = new IllegalStateException("step failed");
+
+        var thrown = catchThrowable(() -> resources.start("group", stack -> {
+            stack.register("configs", () -> undone.add("configs"));
+            stack.register("broken", () -> {
+                throw new IOException("undo failed");
+            });
+            throw failure;
+        }));
+
+        assertThat(thrown).isSameAs(failure);
+        assertThat(thrown.getSuppressed()).singleElement().isInstanceOf(IOException.class);
+        assertThat(undone).containsExactly("configs");
+        resources.close();
+        assertThat(undone).containsExactly("configs", "proxy");
+    }
+
+    @Test
     void aChildClosedOnItsOwnIsNotUndoneAgainByTheParent() {
         var resources = new Resources("test");
         resources.register("proxy", () -> undone.add("proxy"));

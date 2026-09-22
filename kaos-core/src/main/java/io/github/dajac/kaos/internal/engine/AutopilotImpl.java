@@ -184,12 +184,16 @@ public final class AutopilotImpl implements Autopilot {
             return;
         }
         var victim = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
-        if (victim.subscribed()) {
-            EVENTS.info("[{}] autopilot asks {} to leave", groupId, victim.id());
-            victim.leave();
-        } else {
-            EVENTS.info("[{}] autopilot asks {} to join", groupId, victim.id());
-            victim.join();
+        try {
+            if (victim.subscribed()) {
+                EVENTS.info("[{}] autopilot asks {} to leave", groupId, victim.id());
+                victim.leave();
+            } else {
+                EVENTS.info("[{}] autopilot asks {} to join", groupId, victim.id());
+                victim.join();
+            }
+        } catch (SimulationStateException e) {
+            // The consumer was removed since the list was read; the next flip picks another one.
         }
     }
 }

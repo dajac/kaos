@@ -65,8 +65,22 @@ class ConsumerRunnerTest {
             "g",
             new ConsumerSpec("consumer-0", null, settings),
             List.of("orders"),
-            changes::incrementAndGet,
-            () -> guard.get().run()
+            new ConsumerRunner.Owner() {
+                @Override
+                public void changed() {
+                    changes.incrementAndGet();
+                }
+
+                @Override
+                public void refuseBlocking() {
+                    guard.get().run();
+                }
+
+                @Override
+                public void remove(ConsumerRunner consumer) {
+                    consumer.markRemoved();
+                }
+            }
         );
     }
 

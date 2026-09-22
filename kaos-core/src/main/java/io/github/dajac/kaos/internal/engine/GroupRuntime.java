@@ -3,19 +3,24 @@ package io.github.dajac.kaos.internal.engine;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import io.github.dajac.kaos.Autopilot;
 import io.github.dajac.kaos.ConsumerGroup;
 import io.github.dajac.kaos.ConsumerHandle;
+import io.github.dajac.kaos.ConsumerOptions;
 import io.github.dajac.kaos.ConsumerSpec;
 import io.github.dajac.kaos.GroupSnapshot;
 import io.github.dajac.kaos.GroupSpec;
+import io.github.dajac.kaos.SimulationStateException;
 import io.github.dajac.kaos.SimulatorSnapshot;
 import io.github.dajac.kaos.TopicSpec;
 import io.github.dajac.kaos.internal.kafka.GroupCleanup;
@@ -31,7 +36,8 @@ import io.github.dajac.kaos.internal.state.SnapshotAssembler;
  *
  * <p>The consumers are an immutable list behind a volatile reference, replaced as a whole by
  * whoever holds the structure lock of the simulator. The publisher, the poller and the autopilot
- * read it without a lock.
+ * read it without a lock. Adding and removing consumers, and removing the group, go through the
+ * {@link Harness}, which takes that lock and calls back the methods documented as such.
  */
 public final class GroupRuntime implements ConsumerGroup {
 
@@ -48,6 +54,15 @@ public final class GroupRuntime implements ConsumerGroup {
 
         /** Waits for a snapshot. */
         SimulatorSnapshot awaitSnapshot(Predicate<SimulatorSnapshot> condition, Duration timeout);
+
+        /** Adds a consumer to the group, under the structure lock. */
+        ConsumerHandle addConsumer(GroupRuntime group, ConsumerSpec spec);
+
+        /** Removes a consumer from the group, under the structure lock. */
+        void removeConsumer(GroupRuntime group, ConsumerRunner consumer);
+
+        /** Removes the group from the simulator, under the structure lock. */
+        void removeGroup(GroupRuntime group);
     }
 
     /**
@@ -65,18 +80,44 @@ public final class GroupRuntime implements ConsumerGroup {
         }
     }
 
+    /** What the consumers call back. */
+    private final class ConsumerOwner implements ConsumerRunner.Owner {
+        @Override
+        public void changed() {
+            harness.changed();
+        }
+
+        @Override
+        public void refuseBlocking() {
+            harness.refuseBlocking();
+        }
+
+        @Override
+        public void remove(ConsumerRunner consumer) {
+            harness.removeConsumer(GroupRuntime.this, consumer);
+        }
+    }
+
     private static final String ASSIGNED_ID_PREFIX = "consumer-";
 
     private final GroupSpec spec;
     private final List<TopicSpec> topics;
     private final Harness harness;
+    private final ConsumerRunner.Owner owner = new ConsumerOwner();
     private final AutopilotImpl autopilot;
 
     private volatile List<ConsumerRunner> consumers;
     private volatile List<String> warnings = List.of();
+    private volatile boolean removed;
 
     // Guarded by the structure lock of the simulator.
-    private int nextConsumerNumber;
+    /** Every consumer id the group has or had. An id is never used twice in the life of the group. */
+    private final Set<String> usedIds = new HashSet<>();
+    /** The sub-stack of each running consumer. */
+    private final Map<ConsumerRunner, Resources> consumerResources = new IdentityHashMap<>();
+    /** Set while the group runs. */
+    private Services services;
+    private Resources resources;
 
     /**
      * @param spec the description of the group; its consumers without an id get one
@@ -90,30 +131,24 @@ public final class GroupRuntime implements ConsumerGroup {
         this.autopilot = new AutopilotImpl(spec.id(), this::runners, harness::changed);
 
         // The ids that were supplied are taken first, so that no assigned id collides with one.
-        var taken = spec.consumers().stream()
-            .map(ConsumerSpec::id)
-            .filter(id -> !id.isEmpty())
-            .collect(Collectors.toCollection(HashSet::new));
+        spec.consumers().stream().map(ConsumerSpec::id).filter(id -> !id.isEmpty()).forEach(usedIds::add);
         var runners = new ArrayList<ConsumerRunner>();
         for (var consumer : spec.consumers()) {
-            var identified = consumer.id().isEmpty()
-                ? new ConsumerSpec(nextConsumerId(taken), consumer.overrides(), consumer.effective())
-                : consumer;
-            runners.add(new ConsumerRunner(
-                spec.id(), identified, spec.subscribedTopics(), harness::changed, harness::refuseBlocking
-            ));
+            var runner = newConsumer(consumer);
+            usedIds.add(runner.id());
+            runners.add(runner);
         }
         this.consumers = List.copyOf(runners);
     }
 
     /**
-     * The first {@code consumer-N} that no consumer of the group has or had. The numbers only grow,
-     * so an id is never used twice in the life of the group.
+     * The first {@code consumer-N} that no consumer of the group has or had. The used ids only
+     * grow, so an id is never used twice in the life of the group.
      */
-    private String nextConsumerId(Set<String> taken) {
-        while (true) {
-            var id = ASSIGNED_ID_PREFIX + nextConsumerNumber++;
-            if (taken.add(id)) {
+    private String nextConsumerId() {
+        for (var number = 0;; number++) {
+            var id = ASSIGNED_ID_PREFIX + number;
+            if (!usedIds.contains(id)) {
                 return id;
             }
         }
@@ -131,6 +166,15 @@ public final class GroupRuntime implements ConsumerGroup {
 
     @Override
     public GroupSpec describe() {
+        return withConsumers(consumers.stream().map(ConsumerRunner::spec).toList());
+    }
+
+    /** The description of the group as it would be with the given consumer added. */
+    GroupSpec describeWith(ConsumerSpec added) {
+        return withConsumers(append(consumers.stream().map(ConsumerRunner::spec).toList(), added));
+    }
+
+    private GroupSpec withConsumers(List<ConsumerSpec> specs) {
         return new GroupSpec(
             spec.id(),
             spec.subscribedTopics(),
@@ -138,7 +182,7 @@ public final class GroupRuntime implements ConsumerGroup {
             spec.heartbeatIntervalMs(),
             spec.assignmentIntervalMs(),
             spec.consumerDefaults(),
-            consumers.stream().map(ConsumerRunner::spec).toList()
+            specs
         );
     }
 
@@ -167,6 +211,22 @@ public final class GroupRuntime implements ConsumerGroup {
     }
 
     @Override
+    public ConsumerHandle addConsumer(Consumer<ConsumerOptions> options) {
+        return addConsumer(ConsumerSpec.of(options));
+    }
+
+    @Override
+    public ConsumerHandle addConsumer(ConsumerSpec consumer) {
+        Objects.requireNonNull(consumer, "consumer");
+        return harness.addConsumer(this, consumer);
+    }
+
+    @Override
+    public void remove() {
+        harness.removeGroup(this);
+    }
+
+    @Override
     public Autopilot autopilot() {
         return autopilot;
     }
@@ -186,6 +246,7 @@ public final class GroupRuntime implements ConsumerGroup {
     @Override
     public GroupSnapshot awaitSnapshot(Predicate<GroupSnapshot> condition, Duration timeout) {
         Objects.requireNonNull(condition, "condition");
+        checkNotRemoved();
         var matched = harness.awaitSnapshot(snapshot -> slice(snapshot).filter(condition).isPresent(), timeout);
         return slice(matched).orElseThrow();
     }
@@ -209,13 +270,102 @@ public final class GroupRuntime implements ConsumerGroup {
         );
     }
 
+    /** @throws SimulationStateException if the group is removed */
+    public void checkNotRemoved() {
+        if (removed) {
+            throw new SimulationStateException("The group " + spec.id() + " is removed");
+        }
+    }
+
+    /**
+     * Called by the simulator, under the structure lock, once the group is removed: the group and
+     * its consumers refuse to act from now on.
+     */
+    public void markRemoved() {
+        removed = true;
+        consumers.forEach(ConsumerRunner::markRemoved);
+    }
+
+    /** Whether the group has, or had, a consumer with the id. The caller holds the structure lock. */
+    public boolean everHad(String consumerId) {
+        return usedIds.contains(consumerId);
+    }
+
+    /**
+     * Creates the runner of a consumer, with its id assigned, without adding it to the group: the
+     * caller starts it with {@link #startConsumer} when the group runs, and then adds it with
+     * {@link #commitConsumer}. A consumer that is never committed uses up no id. The caller holds
+     * the structure lock.
+     */
+    public ConsumerRunner newConsumer(ConsumerSpec consumer) {
+        var identified = consumer.id().isEmpty()
+            ? new ConsumerSpec(nextConsumerId(), consumer.overrides(), consumer.effective())
+            : consumer;
+        return new ConsumerRunner(spec.id(), identified, spec.subscribedTopics(), owner);
+    }
+
+    /**
+     * Starts a consumer of a running group, on its own sub-stack of the group. A start that fails
+     * leaves nothing behind. The caller holds the structure lock.
+     */
+    public void startConsumer(ConsumerRunner consumer) {
+        var running = services;
+        if (running == null) {
+            throw new SimulationStateException("The group " + spec.id() + " does not run");
+        }
+        var child = resources.start(
+            "consumer " + consumer.clientId(),
+            stack -> consumer.start(running.consumers(), stack)
+        );
+        consumerResources.put(consumer, child);
+    }
+
+    /** Adds a consumer created by {@link #newConsumer} to the group. The caller holds the structure lock. */
+    public void commitConsumer(ConsumerRunner consumer) {
+        usedIds.add(consumer.id());
+        consumers = append(consumers, consumer);
+        harness.changed();
+    }
+
+    /**
+     * Removes a consumer: stops it when the group runs, which makes it leave the group, and removes
+     * a static member that could not leave. The consumer is out of the group afterwards, even when
+     * its stop failed. The caller holds the structure lock.
+     */
+    public void removeConsumer(ConsumerRunner consumer) {
+        var running = services;
+        var child = consumerResources.remove(consumer);
+        try {
+            if (child != null) {
+                child.close();
+            }
+            if (running != null && !consumer.instanceId().isEmpty()) {
+                running.cleanup().removeStaticMembers(spec.id(), Set.of(consumer.instanceId()));
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            consumer.markRemoved();
+            consumers = consumers.stream().filter(other -> other != consumer).toList();
+            harness.changed();
+        }
+    }
+
     /**
      * Sets the group configs and starts the consumers. Closing {@code resources} turns the
      * autopilot off, stops the consumers, removes the static members that are left, deletes the
-     * group and reverts the group configs, in that order.
+     * group and reverts the group configs, in that order. The caller holds the structure lock.
      */
     public void start(Services services, Resources resources) {
         var groupId = spec.id();
+        this.services = services;
+        this.resources = resources;
+        // Undone last: the group runs until everything it started is undone.
+        resources.register("runtime of group " + groupId, () -> {
+            this.services = null;
+            this.resources = null;
+            consumerResources.clear();
+        });
 
         var applied = services.configs().apply(spec);
         warnings = applied.warnings();
@@ -224,17 +374,14 @@ public final class GroupRuntime implements ConsumerGroup {
             services.configs().revert(groupId, applied.previous());
         });
         resources.register("group " + groupId, () -> services.cleanup().deleteGroup(groupId));
-        var instanceIds = consumers.stream()
-            .map(ConsumerRunner::instanceId)
-            .filter(instanceId -> !instanceId.isEmpty())
-            .collect(Collectors.toUnmodifiableSet());
+        // The instance ids are read when the undo runs, so they cover the consumers added later.
         resources.register(
             "static members of group " + groupId,
-            () -> services.cleanup().removeStaticMembers(groupId, instanceIds)
+            () -> services.cleanup().removeStaticMembers(groupId, instanceIds())
         );
 
         for (var consumer : consumers) {
-            consumer.start(services.consumers(), resources.child("consumer " + consumer.clientId()));
+            startConsumer(consumer);
         }
         // Undone first: the loops end together, and each consumer then only waits for its own.
         resources.register("consumers of group " + groupId, () -> consumers.forEach(ConsumerRunner::requestStop));
@@ -242,5 +389,18 @@ public final class GroupRuntime implements ConsumerGroup {
         autopilot.open(services.consumers().threads());
         resources.register("autopilot of group " + groupId, autopilot::close);
         harness.changed();
+    }
+
+    private Set<String> instanceIds() {
+        return consumers.stream()
+            .map(ConsumerRunner::instanceId)
+            .filter(instanceId -> !instanceId.isEmpty())
+            .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static <T> List<T> append(List<T> list, T element) {
+        var appended = new ArrayList<T>(list);
+        appended.add(element);
+        return List.copyOf(appended);
     }
 }

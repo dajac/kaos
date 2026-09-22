@@ -3,14 +3,19 @@ package io.github.dajac.kaos.internal.engine;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import io.github.dajac.kaos.ConsumerGroup;
+import io.github.dajac.kaos.ConsumerHandle;
+import io.github.dajac.kaos.ConsumerSpec;
 import io.github.dajac.kaos.GroupSpec;
 import io.github.dajac.kaos.InvalidConfigException;
 import io.github.dajac.kaos.Phase;
@@ -51,6 +56,12 @@ import org.slf4j.LoggerFactory;
  * swapped under the lock, so the publisher reads a consistent structure without a lock. Flag
  * flips, such as pausing a producer, take no lock and poke the publisher.
  *
+ * <p>Components are added and removed the same way whether the simulator is idle or runs. While it
+ * runs, a component is started on its own sub-stack of the {@link Resources} of its kind before it
+ * joins the state, so a failed start unwinds that sub-stack and leaves the state as it was. A
+ * removal closes the sub-stack, which undoes that component only, and takes the component out of
+ * the state even when an undo action failed.
+ *
  * <p>The publisher thread runs from the first declaration, or the start, until the stop. It is
  * the only thread of an idle simulator.
  *
@@ -87,6 +98,21 @@ public final class SimulatorEngine {
         }
     }
 
+    /**
+     * What a started simulator holds. The components of each kind have a stack of their own, in
+     * the order of the start, so that the stop undoes the groups first and the topics last,
+     * whenever they were added.
+     */
+    private record Running(
+        Resources all,
+        Resources topics,
+        Resources producers,
+        Resources groups,
+        ClientFactory clients,
+        TopicManager topicManager,
+        GroupRuntime.Services groupServices
+    ) {}
+
     /** What the groups and their consumers call back. */
     private final class GroupHarness implements GroupRuntime.Harness {
         @Override
@@ -107,6 +133,21 @@ public final class SimulatorEngine {
         @Override
         public SimulatorSnapshot awaitSnapshot(Predicate<SimulatorSnapshot> condition, Duration timeout) {
             return SimulatorEngine.this.awaitSnapshot(condition, timeout);
+        }
+
+        @Override
+        public ConsumerHandle addConsumer(GroupRuntime group, ConsumerSpec spec) {
+            return SimulatorEngine.this.addConsumer(group, spec);
+        }
+
+        @Override
+        public void removeConsumer(GroupRuntime group, ConsumerRunner consumer) {
+            SimulatorEngine.this.removeConsumer(group, consumer);
+        }
+
+        @Override
+        public void removeGroup(GroupRuntime group) {
+            SimulatorEngine.this.removeGroup(group);
         }
     }
 
@@ -131,8 +172,11 @@ public final class SimulatorEngine {
     // Guarded by the structureLock.
     private final Map<String, String> clientProperties = new HashMap<>();
     private int proxyPort = ProxyLauncher.DEFAULT_PORT;
-    private int nextProducerId;
-    private Resources resources;
+    /** Every producer id used since the simulator was created, or last stopped. */
+    private final Set<String> usedProducerIds = new HashSet<>();
+    /** The sub-stack of each topic, producer and group, while the simulator runs. */
+    private final Map<Object, Resources> componentResources = new IdentityHashMap<>();
+    private Running running;
 
     public SimulatorEngine(String bootstrapServers) {
         this.bootstrapServers = Objects.requireNonNull(bootstrapServers, "bootstrapServers");
@@ -186,13 +230,22 @@ public final class SimulatorEngine {
         refuseListenerThread();
         structureLock.lock();
         try {
-            var current = declarableState();
+            var current = changeableState();
             var description = describe(current);
             validate(
                 new SimulatorSpec(append(description.topics(), spec), description.producers(), description.groups()));
 
-            var topic = new TopicComponent(spec);
-            declare(current.withTopics(append(current.topics(), topic)));
+            var topic = new TopicComponent(spec, this::removeTopic);
+            var started = running;
+            if (started != null) {
+                startComponent(
+                    started.topics(),
+                    topic,
+                    "topic " + topic.name(),
+                    resources -> startTopic(started.topicManager(), topic, resources)
+                );
+            }
+            change(current.withTopics(append(current.topics(), topic)));
             return topic;
         } finally {
             structureLock.unlock();
@@ -204,20 +257,30 @@ public final class SimulatorEngine {
         refuseListenerThread();
         structureLock.lock();
         try {
-            var current = declarableState();
+            var current = changeableState();
             var description = describe(current);
             validate(
                 new SimulatorSpec(description.topics(), append(description.producers(), spec), description.groups()));
 
             var identified = spec.id().isEmpty()
-                ? new ProducerSpec(nextProducerId(current), spec.topics(), spec.ratePerPartition())
+                ? new ProducerSpec(nextProducerId(), spec.topics(), spec.ratePerPartition())
                 : spec;
             var targets = current.topics().stream()
                 .map(TopicComponent::spec)
                 .filter(topic -> identified.topics().contains(topic.name()))
                 .toList();
-            var producer = new ProducerRunner(identified, targets, publisher::poke);
-            declare(current.withProducers(append(current.producers(), producer)));
+            var producer = new ProducerRunner(identified, targets, publisher::poke, this::removeProducer);
+            var started = running;
+            if (started != null) {
+                startComponent(
+                    started.producers(),
+                    producer,
+                    "producer " + producer.id(),
+                    resources -> startProducer(started.clients(), producer, resources)
+                );
+            }
+            usedProducerIds.add(producer.id());
+            change(current.withProducers(append(current.producers(), producer)));
             return producer;
         } finally {
             structureLock.unlock();
@@ -229,7 +292,7 @@ public final class SimulatorEngine {
         refuseListenerThread();
         structureLock.lock();
         try {
-            var current = declarableState();
+            var current = changeableState();
             var description = describe(current);
             validate(
                 new SimulatorSpec(description.topics(), description.producers(), append(description.groups(), spec))
@@ -240,9 +303,54 @@ public final class SimulatorEngine {
                 .filter(topic -> spec.subscribedTopics().contains(topic.name()))
                 .toList();
             var group = new GroupRuntime(spec, subscribed, groupHarness);
-            checkClientIds(current, group);
-            declare(current.withGroups(append(current.groups(), group)));
+            var index = current.groups().size();
+            var runners = group.runners();
+            for (int i = 0; i < runners.size(); i++) {
+                var field = "groups[" + index + "].consumers[" + i + "].id";
+                checkClientId(current, null, runners.get(i).clientId(), field);
+            }
+            var started = running;
+            if (started != null) {
+                startComponent(
+                    started.groups(),
+                    group,
+                    "group " + group.id(),
+                    resources -> group.start(started.groupServices(), resources)
+                );
+            }
+            change(current.withGroups(append(current.groups(), group)));
             return group;
+        } finally {
+            structureLock.unlock();
+        }
+    }
+
+    /**
+     * Adds a consumer to a group. The whole spec is validated with the consumer appended to its
+     * group, so the violations have the paths of the whole spec.
+     */
+    private ConsumerHandle addConsumer(GroupRuntime group, ConsumerSpec spec) {
+        refuseListenerThread();
+        structureLock.lock();
+        try {
+            group.checkNotRemoved();
+            var current = changeableState();
+            var description = describe(current);
+            var index = current.groups().indexOf(group);
+            var candidate = group.describeWith(spec);
+            var groups = new ArrayList<>(description.groups());
+            groups.set(index, candidate);
+            validate(new SimulatorSpec(description.topics(), description.producers(), groups));
+
+            // The group spec resolved the effective settings of the consumer against its defaults.
+            var position = candidate.consumers().size() - 1;
+            var consumer = group.newConsumer(candidate.consumers().get(position));
+            checkClientId(current, group, consumer.clientId(), "groups[" + index + "].consumers[" + position + "].id");
+            if (running != null) {
+                wrapFailure("consumer " + consumer.clientId(), () -> group.startConsumer(consumer));
+            }
+            group.commitConsumer(consumer);
+            return consumer;
         } finally {
             structureLock.unlock();
         }
@@ -251,49 +359,153 @@ public final class SimulatorEngine {
     /**
      * A client id is {@code <groupId>-<consumerId>}, and both parts may contain a dash, so two
      * groups can end up with the same one. The network faults match on it, so it must be unique.
+     *
+     * @param owner the group of the consumer when it is in the state already, or {@code null}
      */
-    private static void checkClientIds(State current, GroupRuntime added) {
-        var violations = new ArrayList<Violation>();
-        var runners = added.runners();
-        for (int i = 0; i < runners.size(); i++) {
-            var clientId = runners.get(i).clientId();
-            for (var group : current.groups()) {
-                if (group.runners().stream().anyMatch(runner -> runner.clientId().equals(clientId))) {
-                    violations.add(
-                        new Violation(
-                            "groups[" + current.groups().size() + "].consumers[" + i + "].id",
-                            "the client id '" + clientId + "' is already used by a consumer of group '"
-                                + group.id() + "'"
-                        )
-                    );
-                }
+    private static void checkClientId(State current, GroupRuntime owner, String clientId, String field) {
+        for (var group : current.groups()) {
+            if (group != owner && group.runners().stream().anyMatch(runner -> runner.clientId().equals(clientId))) {
+                throw new InvalidConfigException(List.of(new Violation(
+                    field,
+                    "the client id '" + clientId + "' is already used by a consumer of group '" + group.id() + "'"
+                )));
             }
-        }
-        if (!violations.isEmpty()) {
-            throw new InvalidConfigException(violations);
         }
     }
 
-    /** Components are only declared while the simulator is idle. */
-    private State declarableState() {
+    /**
+     * Removes a topic that no producer and no group uses. While the simulator runs, the topic is
+     * deleted and the call waits until the cluster no longer reports it.
+     */
+    private void removeTopic(TopicComponent topic) {
+        refuseListenerThread();
+        structureLock.lock();
+        try {
+            topic.checkNotRemoved();
+            var current = changeableState();
+            var users = new ArrayList<String>();
+            current.producers().stream()
+                .filter(producer -> producer.topics().contains(topic.name()))
+                .forEach(producer -> users.add("producer " + producer.id()));
+            current.groups().stream()
+                .filter(group -> group.subscribedTopics().contains(topic.name()))
+                .forEach(group -> users.add("group " + group.id()));
+            if (!users.isEmpty()) {
+                throw new SimulationStateException(
+                    "The topic " + topic.name() + " is still used by " + String.join(", ", users)
+                );
+            }
+            try {
+                closeComponent(topic);
+            } finally {
+                topic.markRemoved();
+                change(current.withTopics(without(current.topics(), topic)));
+            }
+        } finally {
+            structureLock.unlock();
+        }
+    }
+
+    private void removeProducer(ProducerRunner producer) {
+        refuseListenerThread();
+        structureLock.lock();
+        try {
+            producer.checkNotRemoved();
+            var current = changeableState();
+            try {
+                closeComponent(producer);
+            } finally {
+                producer.markRemoved();
+                change(current.withProducers(without(current.producers(), producer)));
+            }
+        } finally {
+            structureLock.unlock();
+        }
+    }
+
+    private void removeGroup(GroupRuntime group) {
+        refuseListenerThread();
+        structureLock.lock();
+        try {
+            group.checkNotRemoved();
+            var current = changeableState();
+            try {
+                closeComponent(group);
+            } finally {
+                group.markRemoved();
+                change(current.withGroups(without(current.groups(), group)));
+            }
+        } finally {
+            structureLock.unlock();
+        }
+    }
+
+    private void removeConsumer(GroupRuntime group, ConsumerRunner consumer) {
+        refuseListenerThread();
+        structureLock.lock();
+        try {
+            consumer.checkNotRemoved();
+            changeableState();
+            group.removeConsumer(consumer);
+        } finally {
+            structureLock.unlock();
+        }
+    }
+
+    /**
+     * Starts a component added while the simulator runs, on its own sub-stack of the stack of its
+     * kind. A failure unwinds that sub-stack, and leaves the stack of its kind as it was.
+     */
+    private void startComponent(Resources kind, Object component, String name, Resources.Step step) {
+        wrapFailure(name, () -> componentResources.put(component, kind.start(name, step)));
+    }
+
+    /** Runs the start of a component, and reports its failure as a {@link SimulationException}. */
+    private static void wrapFailure(String name, Runnable start) {
+        try {
+            start.run();
+        } catch (SimulationException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new SimulationException("Could not start " + name + ": " + e, e);
+        }
+    }
+
+    /** Undoes the start of a component, when it runs. */
+    private void closeComponent(Object component) {
+        var stack = componentResources.remove(component);
+        if (stack != null) {
+            stack.close();
+        }
+    }
+
+    /**
+     * The state to add components to or remove them from. The caller holds the lock, and a start or
+     * a stop holds it from its first phase change to its last, so the phase is idle or running.
+     */
+    private State changeableState() {
         var current = state;
-        if (current.phase() != Phase.IDLE) {
-            throw new SimulationStateException("Components cannot be added while the simulator is " + current.phase());
+        if (current.phase() != Phase.IDLE && current.phase() != Phase.RUNNING) {
+            throw new SimulationStateException(
+                "Components cannot be changed while the simulator is " + current.phase());
         }
         return current;
     }
 
-    private void declare(State newState) {
+    private void change(State newState) {
         state = newState;
         publisher.start();
         publisher.poke();
     }
 
-    /** The first {@code producer-N} that no producer has. The numbers only grow until the stop. */
-    private String nextProducerId(State current) {
-        while (true) {
-            var id = "producer-" + nextProducerId++;
-            if (current.producers().stream().noneMatch(producer -> producer.id().equals(id))) {
+    /**
+     * The first {@code producer-N} that no producer has or had since the simulator was created, or
+     * last stopped.
+     */
+    private String nextProducerId() {
+        for (var number = 0;; number++) {
+            var id = "producer-" + number;
+            if (!usedProducerIds.contains(id)) {
                 return id;
             }
         }
@@ -321,19 +533,21 @@ public final class SimulatorEngine {
             publisher.flush();
 
             var starting = new Resources("the simulator");
+            Running started;
             try {
-                startComponents(current, starting);
+                started = startComponents(current, starting);
             } catch (Throwable e) {
                 var failure = e instanceof SimulationException known
                     ? known
                     : new SimulationException("The simulator failed to start: " + e, e);
                 LOG.warn("The start failed, undoing it: {}", failure.getMessage());
                 starting.close(failure);
+                componentResources.clear();
                 state = current.withPhase(Phase.IDLE, failure.getMessage());
                 publisher.flush();
                 throw failure;
             }
-            resources = starting;
+            running = started;
             state = current.withPhase(Phase.RUNNING, "");
             publisher.flush();
         } finally {
@@ -341,7 +555,7 @@ public final class SimulatorEngine {
         }
     }
 
-    private void startComponents(State current, Resources starting) {
+    private Running startComponents(State current, Resources starting) {
         var clients = new ClientFactory(bootstrapServers, clientProperties);
 
         var admin = clients.createAdmin(Threads.PREFIX + "admin");
@@ -357,18 +571,19 @@ public final class SimulatorEngine {
         }
 
         var topicManager = new TopicManager(admin, ADMIN_TIMEOUT);
+        var topics = starting.child("topics");
         for (var topic : current.topics()) {
-            var component = starting.child("topic " + topic.name());
-            topicManager.create(topic.spec());
-            component.register("topic " + topic.name(), () -> topicManager.delete(topic.name()));
-            topicManager.awaitCreated(topic.name());
+            var stack = topics.start("topic " + topic.name(), resources -> startTopic(topicManager, topic, resources));
+            componentResources.put(topic, stack);
         }
 
+        var producers = starting.child("producers");
         for (var producer : current.producers()) {
-            var component = starting.child("producer " + producer.id());
-            Supplier<Producer<String, String>> client =
-                () -> clients.createProducer(Threads.PREFIX + producer.threadName());
-            producer.start(client, threads, component);
+            var stack = producers.start(
+                "producer " + producer.id(),
+                resources -> startProducer(clients, producer, resources)
+            );
+            componentResources.put(producer, stack);
         }
 
         // The poller reads the groups from the state at every poll. It runs before them, so that
@@ -400,9 +615,25 @@ public final class SimulatorEngine {
             new GroupConfigManager(admin, GROUP_ADMIN_TIMEOUT),
             new GroupCleanup(admin, GROUP_ADMIN_TIMEOUT)
         );
+        var groups = starting.child("groups");
         for (var group : current.groups()) {
-            group.start(services, starting.child("group " + group.id()));
+            var stack = groups.start("group " + group.id(), resources -> group.start(services, resources));
+            componentResources.put(group, stack);
         }
+        return new Running(starting, topics, producers, groups, clients, topicManager, services);
+    }
+
+    /** Creates a topic and waits until the cluster reports it. Its undo deletes it. */
+    private static void startTopic(TopicManager topicManager, TopicComponent topic, Resources resources) {
+        topicManager.create(topic.spec());
+        resources.register("topic " + topic.name(), () -> topicManager.delete(topic.name()));
+        topicManager.awaitCreated(topic.name());
+    }
+
+    private void startProducer(ClientFactory clients, ProducerRunner producer, Resources resources) {
+        Supplier<Producer<String, String>> client =
+            () -> clients.createProducer(Threads.PREFIX + producer.threadName());
+        producer.start(client, threads, resources);
     }
 
     /**
@@ -418,20 +649,26 @@ public final class SimulatorEngine {
         try {
             SimulationException failure = null;
             var lastError = state.lastError();
-            var running = resources;
-            if (running != null) {
+            var started = running;
+            if (started != null) {
                 lastError = "";
                 state = state.withPhase(Phase.STOPPING, "");
                 publisher.flush();
                 try {
-                    running.close();
+                    started.all().close();
                 } catch (SimulationException e) {
                     failure = e;
                 }
-                resources = null;
+                running = null;
+                componentResources.clear();
             }
+            // The handles of the removed components refuse to act from now on.
+            var removed = state;
+            removed.topics().forEach(TopicComponent::markRemoved);
+            removed.producers().forEach(ProducerRunner::markRemoved);
+            removed.groups().forEach(GroupRuntime::markRemoved);
             state = State.EMPTY.withPhase(Phase.IDLE, failure == null ? lastError : failure.getMessage());
-            nextProducerId = 0;
+            usedProducerIds.clear();
             // Publishes the final snapshot before its thread ends.
             publisher.stop();
             if (failure != null) {
@@ -509,6 +746,10 @@ public final class SimulatorEngine {
         if (!violations.isEmpty()) {
             throw new InvalidConfigException(violations);
         }
+    }
+
+    private static <T> List<T> without(List<T> list, T element) {
+        return list.stream().filter(other -> other != element).toList();
     }
 
     private static <T> List<T> append(List<? extends T> list, T element) {

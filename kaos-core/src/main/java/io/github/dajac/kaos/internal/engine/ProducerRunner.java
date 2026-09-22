@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import io.github.dajac.kaos.ProducerHandle;
@@ -12,6 +13,7 @@ import io.github.dajac.kaos.ProducerSnapshot;
 import io.github.dajac.kaos.ProducerSpec;
 import io.github.dajac.kaos.ProducerState;
 import io.github.dajac.kaos.SimulationException;
+import io.github.dajac.kaos.SimulationStateException;
 import io.github.dajac.kaos.TopicSpec;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -24,7 +26,8 @@ import org.slf4j.LoggerFactory;
  * tick of its rate it writes one record to every partition of its topics.
  *
  * <p>{@link #pause()} and {@link #resume()} only flip a flag that the loop reads. The loop waits
- * with {@code park}, so a resume and a stop take effect at once.
+ * with {@code park}, so a resume and a stop take effect at once. {@link #remove()} goes through the
+ * simulator, which holds its structure lock while it stops the producer.
  */
 public final class ProducerRunner implements ProducerHandle {
 
@@ -36,21 +39,30 @@ public final class ProducerRunner implements ProducerHandle {
     private final ProducerSpec spec;
     private final List<TopicSpec> targets;
     private final Runnable onChange;
+    private final Consumer<ProducerRunner> remover;
     private final AtomicBoolean paused = new AtomicBoolean();
 
     /** The loop thread, or {@code null} while the producer is not started. */
     private volatile Thread thread;
     private volatile boolean running;
+    private volatile boolean removed;
 
     /**
      * @param spec the description of the producer, with its id assigned
      * @param targets the topics of the spec, with their partition counts
      * @param onChange called, from any thread, when the state of the producer changed
+     * @param remover removes the producer from the simulator
      */
-    public ProducerRunner(ProducerSpec spec, List<TopicSpec> targets, Runnable onChange) {
+    public ProducerRunner(
+        ProducerSpec spec,
+        List<TopicSpec> targets,
+        Runnable onChange,
+        Consumer<ProducerRunner> remover
+    ) {
         this.spec = Objects.requireNonNull(spec, "spec");
         this.targets = List.copyOf(targets);
         this.onChange = Objects.requireNonNull(onChange, "onChange");
+        this.remover = Objects.requireNonNull(remover, "remover");
     }
 
     public ProducerSpec spec() {
@@ -91,6 +103,7 @@ public final class ProducerRunner implements ProducerHandle {
 
     @Override
     public void pause() {
+        checkNotRemoved();
         if (paused.compareAndSet(false, true)) {
             onChange.run();
         }
@@ -98,9 +111,27 @@ public final class ProducerRunner implements ProducerHandle {
 
     @Override
     public void resume() {
+        checkNotRemoved();
         if (paused.compareAndSet(true, false)) {
             LockSupport.unpark(thread);
             onChange.run();
+        }
+    }
+
+    @Override
+    public void remove() {
+        remover.accept(this);
+    }
+
+    /** Called by the simulator once the producer is removed. */
+    public void markRemoved() {
+        removed = true;
+    }
+
+    /** @throws SimulationStateException if the producer is removed */
+    public void checkNotRemoved() {
+        if (removed) {
+            throw new SimulationStateException("The producer " + spec.id() + " is removed");
         }
     }
 

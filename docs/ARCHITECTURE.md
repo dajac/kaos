@@ -14,7 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
-| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups declared before `start()` (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`); adding or removing components while running is planned |
+| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
 | `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
 | `kaos-ui` | planned |
 
@@ -212,15 +212,13 @@ Status: the spec, options and validation model is built. This covers
 the paragraphs "Options lambdas", "Records as the data view" and
 "Validation" below, the `Fault` type and the `Protocol` enum. The
 snapshot records and the enums of "Own small types" are built as well;
-see [Snapshot pipeline](#snapshot-pipeline). The harness is built for
-topics, producers and consumer groups that are declared before
-`start()`: the `with…` methods, `addTopic`, `addProducer`, `addGroup`,
-`start`, `stop`, `close`, `describe`, `snapshot`, the listeners and
-`awaitSnapshot`, and, on the groups, `consumer(..)`, `autopilot()`,
-`warnings()`, `snapshot()` and `awaitSnapshot`, and every method of
-`ConsumerHandle`. Planned: `add…` while the simulator runs, which
-throws `SimulationStateException` for now, `group.addConsumer`, and
-`remove()`.
+see [Snapshot pipeline](#snapshot-pipeline). The harness is built: the
+`with…` methods, `addTopic`, `addProducer`, `addGroup`, `start`,
+`stop`, `close`, `describe`, `snapshot`, the listeners and
+`awaitSnapshot`, and, on the groups, `consumer(..)`, `addConsumer`,
+`autopilot()`, `warnings()`, `snapshot()` and `awaitSnapshot`, every
+method of `ConsumerHandle`, and `remove()` on every component, before
+`start()` and while the simulator runs.
 
 The model is a harness, `Simulator`, with independent components under
 it. The style is Testcontainers-like: construct, configure, `start()`,
@@ -322,7 +320,7 @@ try (Simulator simulator = new Simulator("localhost:9092")
   timeout)` tests the current snapshot and then every new one, returns
   the first match, and throws `SimulationException` at the timeout.
 - A listener must not call a blocking method of the simulator (`start`,
-  `stop`, `close`, `with…`, `add…`, `awaitSnapshot`): they throw
+  `stop`, `close`, `with…`, `add…`, `remove()`, `awaitSnapshot`): they throw
   `SimulationStateException` on the publisher thread. See "Locks" in
   [Threading and failure model](#threading-and-failure-model).
 - `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle` and
@@ -334,16 +332,38 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `ConsumerHandle`.
 - They are created with `add…` and destroyed with `remove()`.
 - The same calls work before `start()` (declared, then started by
-  `start()`) and while running (started immediately).
+  `start()`) and while running (started immediately; the call blocks
+  until the component runs or is stopped). A component is added to a
+  group with `group.addConsumer(options)` or `addConsumer(ConsumerSpec)`,
+  and to the simulator with the other `add…` methods.
 - Each component has its own internal start and stop, and its own undo
   entries.
+- A failed `add…` while running unwinds what the component started and
+  leaves the simulator unchanged, in its state and on the cluster. A
+  failure that is not already a `SimulationException`, such as a Kafka
+  client that refuses its properties, is wrapped in one (`Could not
+  start <component>`). It does not set `lastError`, which is kept for
+  the start and the stop.
 - `remove()` rules:
   - Removing a topic that a producer or group still uses throws
-    `SimulationStateException`.
-  - Removing a group stops its consumers, removes static members,
-    reverts its group configs and deletes the group (best-effort).
+    `SimulationStateException`, and changes nothing.
+  - Removing a group turns its autopilot off, stops its consumers,
+    removes static members, deletes the group and reverts its group
+    configs (the Kafka steps best-effort).
+  - Removing a consumer stops it, which leaves the group, and removes
+    its static member if the coordinator still lists it.
   - Removing a simulator-owned topic deletes it and waits for the
     deletion.
+  - A component is removed even when one of its undo actions failed;
+    the failure is then thrown as a `SimulationException`.
+- A removed component is gone from `describe()`, the lists and the
+  snapshot. Its handle keeps answering its accessors (`id()`,
+  `name()`, …), and the methods that act on it (`remove()`, `pause`,
+  `join`, `inject`, `switchProtocol`, `addConsumer`, …) throw
+  `SimulationStateException`. `stop()` removes every component, so the
+  handles of a stopped simulator behave the same.
+- Topic names and group ids are supplied, not assigned, so a name can
+  be used again once its component is removed.
 
 **Decoupled producers**
 - A `ProducerHandle` targets topics, not groups.
@@ -359,7 +379,8 @@ try (Simulator simulator = new Simulator("localhost:9092")
 - `pause()` lets the round in flight finish. A producer paused before
   `start()` starts paused.
 - Assigned producer ids are `producer-N`. They are never reused until
-  `stop()`, and skip the ids that were supplied.
+  `stop()`, not even the id of a removed producer, and skip the ids that
+  were supplied.
 
 **Consumer groups**
 - A group is declared with `addGroup(id, options)` or
@@ -413,14 +434,16 @@ try (Simulator simulator = new Simulator("localhost:9092")
 - Client ids are `<groupId>-<consumerId>`, so `<groupId>-consumer-N`
   for an assigned id. They must be unique across groups, because the
   network fault matches on `client.id`. A group id and a consumer id
-  may both contain a dash, so `addGroup` also refuses, as an
-  `InvalidConfigException`, a consumer whose client id another group
-  already uses.
+  may both contain a dash, so `addGroup` and `addConsumer` also refuse,
+  as an `InvalidConfigException`, a consumer whose client id another
+  group already uses.
 - Consumer ids (`consumer-N`) are stable within their group and are
   never reused. A supplied id is honored and an empty one is assigned:
-  the group counts from `consumer-0` and skips the supplied ids, so an
-  assigned id never collides with a supplied one, even one that is
-  added later.
+  the group counts from `consumer-0` and skips every id that it has or
+  had, supplied or assigned, so an assigned id never collides with a
+  supplied one, even one that is added later, and the id of a removed
+  consumer is not assigned again. A refused `addConsumer` uses up no
+  id. A supplied id that a removed consumer had is honored.
 
 **Options lambdas**
 - `ProducerOptions`, `GroupOptions` and `ConsumerOptions`.
@@ -480,7 +503,7 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `Violation`.
 - Matching `TopicSpec`, `ProducerSpec`, `GroupSpec` and `ConsumerSpec`
   records are accepted by overloads: `addTopic(TopicSpec)`,
-  `addProducer(ProducerSpec)`, `addGroup(GroupSpec)` and, planned,
+  `addProducer(ProducerSpec)`, `addGroup(GroupSpec)` and
   `addConsumer(ConsumerSpec)`. The server uses these overloads for
   request bodies.
 
@@ -529,16 +552,18 @@ try (Simulator simulator = new Simulator("localhost:9092")
 - `add…` and `start()` throw `InvalidConfigException` with a list of
   `Violation(field, message)`. `field` is a path such as
   `groups[0].consumers[1].overrides.pollDelayMs`.
-- An `add…` before `start()` validates the whole spec with the new
-  component appended, so it also catches duplicates and the topic limit,
-  and its paths are those of the whole spec (`topics[1].name`). A
-  refused component changes nothing.
+- An `add…`, before `start()` or while running, validates the whole
+  spec with the new component appended (a consumer to its group), so it
+  also catches duplicates, unknown topics and the topic limit, and its
+  paths are those of the whole spec (`topics[1].name`,
+  `groups[0].consumers[2].overrides.assignor`). A refused component
+  changes nothing.
 - `Simulator.validate(SimulatorSpec)` runs the same check without side
   effects. The server uses it to return 400 before going async.
 - `ConfigValidator` is a set of pure functions that return every
   violation at once. Next to the whole-spec check, it checks one topic,
-  producer, group or consumer against the existing topics, for the
-  `add…` calls made while running.
+  producer, group or consumer on its own, against the existing topics.
+  The harness uses the whole-spec check for every `add…`.
 - The checks:
   - the ranges of `ConfigMetadata`;
   - the name rule, on topic names, on group ids, and on the producer
@@ -634,7 +659,7 @@ try (Simulator simulator = new Simulator("localhost:9092")
 
 Status: built, for the components that are declared before `start()`.
 The per-runner `switchLock` and the consumer removal it guards are
-built with the runner; the removal itself is planned.
+built with the runner, and so is the removal.
 
 **Threads**
 - `kaos-<groupId>-<consumerId>` is the sole owner of its
@@ -713,7 +738,7 @@ built with the runner; the removal itself is planned.
 - A listener that called a method taking the `structureLock` during
   such a flush would wait for the lock while its holder waits for the
   listener. So every method that takes the lock (`start`, `stop`,
-  `close`, `with…`, `add…`), and `awaitSnapshot`, fails fast: on the
+  `close`, `with…`, `add…`, `remove()`), and `awaitSnapshot`, fails fast: on the
   publisher thread it throws `SimulationStateException` before taking
   the lock. The publisher logs it like any listener exception and the
   simulator stays healthy. `SnapshotPublisher.stop()`, `flush()` and
@@ -727,14 +752,22 @@ built with the runner; the removal itself is planned.
 - Undo actions are registered only after their step succeeded.
 - The order of `start()` is: admin client, proxy, topics, producers,
   poller, groups. The undo order is the reverse, so the poller still
-  reports the members while the consumers leave. Within a group: the
+  reports the members while the consumers leave. The topics, the
+  producers and the groups each have a sub-stack of the top-level stack,
+  and a component has a sub-stack of the one of its kind; a component
+  added while running goes there too, so `stop()` keeps that order
+  whenever the components were added. A group keeps the sub-stacks of
+  its consumers in its own stack. Within a group: the
   group configs are set, the consumers are started, the autopilot is
   opened. Undoing a group turns the autopilot off, asks every consumer
   loop to end and then waits for each, removes the static members that
   the coordinator still lists, deletes the group, and reverts the group
   configs.
 - A failed `start`, a failed `add…`, `remove()` and `close()` all unwind
-  through the same code.
+  through the same code. An `add…` while running starts the component on
+  a new sub-stack (`Resources.start`) before the component joins the
+  state; a failure closes that sub-stack at once. `remove()` closes the
+  sub-stack of its component and swaps the lists.
 - Each undo runs in its own try/catch. Failures are attached as
   suppressed exceptions on a single `SimulationException`, flat across
   the sub-stacks: the failure of the start when a start is undone, a new
@@ -776,7 +809,8 @@ built with the runner; the removal itself is planned.
 - A poller error keeps the last `AdminView` and sets `stale` on the
   snapshot.
 - Autopilot validates `min ≤ max`. It does nothing when its group has no
-  consumers, and it stops when its group is removed.
+  consumers, and it stops when its group is removed. A consumer that is
+  removed while the autopilot picks it is skipped.
 
 **Change log**
 - The logger `kaos.events` reports what changes in the groups: a group
@@ -1313,7 +1347,7 @@ the build.
   port and no topic, are seen by a listener as `STARTING` then `IDLE`
   with `lastError`, and can be retried; a `stop()` after a failed start
   keeps `lastError`; `with…`
-  and `add…` after the start throw; two simulators run in one JVM.
+  after the start throw; two simulators run in one JVM.
 - `ConsumerGroupLifecycleTest` drives consumer groups through the
   `Simulator`: a full lifecycle with one group (join, leave, rejoin,
   lag, the group deleted at stop); `switchProtocol` in both directions;
@@ -1325,6 +1359,17 @@ the build.
   protocols; listeners fire only on change; an unsupported
   consumer-protocol assignor leaves the consumer `FAILED` while the
   simulator runs; the autopilot flips subscriptions.
+- `DynamicComponentsTest` drives components added and removed while the
+  simulator runs: two groups with different protocols on one topic, the
+  second added while running, report independent assignments and lag;
+  adding or removing a consumer triggers a rebalance that the snapshot
+  shows, and a removed consumer's id is not assigned again; removing a
+  group (static members, group configs, autopilot) leaves the other
+  group's members and epoch untouched; topics and producers are added
+  and removed while running, a topic in use refuses its removal, and a
+  removed topic is deleted; a failed `add…` of a topic, a producer or a
+  group leaves the simulator unchanged. Each test checks that `close()`
+  leaves no thread, topic or group behind.
 - When `kaos-server` needs the harness, `kaos-core` will publish its
   test sources as a `test-jar` that the server consumes in test scope.
   This is planned.

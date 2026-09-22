@@ -278,10 +278,6 @@ class SimulatorLifecycleTest {
             assertThatThrownBy(() -> simulator.withProxyPort(19092)).isInstanceOf(IllegalStateException.class);
             assertThatThrownBy(() -> simulator.withListener(snapshot -> {})).isInstanceOf(IllegalStateException.class);
             assertThatThrownBy(simulator::start).isInstanceOf(SimulationStateException.class);
-            assertThatThrownBy(() -> simulator.addTopic(cluster.uniqueName("late"), 1))
-                .isInstanceOf(SimulationStateException.class);
-            assertThatThrownBy(() -> simulator.addProducer(p -> p.topics(topic)))
-                .isInstanceOf(SimulationStateException.class);
 
             // A listener can still be added, and removed, while the simulator runs.
             var snapshots = new CopyOnWriteArrayList<SimulatorSnapshot>();

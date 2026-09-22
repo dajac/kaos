@@ -226,6 +226,176 @@ class SimulatorTest {
     }
 
     @Test
+    void removesDeclaredComponentsAndRefusesATopicInUse() {
+        try (var simulator = new Simulator("localhost:9092")) {
+            var orders = simulator.addTopic("orders", 3);
+            var payments = simulator.addTopic("payments", 2);
+            var producer = simulator.addProducer(p -> p.topics(orders));
+            var group = simulator.addGroup("app", g -> g.subscribe(orders, payments).consumers(1));
+
+            assertThatThrownBy(orders::remove).isInstanceOf(SimulationStateException.class)
+                .hasMessageContaining("producer producer-0").hasMessageContaining("group app");
+            assertThatThrownBy(payments::remove).isInstanceOf(SimulationStateException.class)
+                .hasMessageContaining("group app");
+
+            group.remove();
+            payments.remove();
+            producer.remove();
+            orders.remove();
+
+            assertThat(simulator.describe()).isEqualTo(new SimulatorSpec(List.of(), List.of(), List.of()));
+            assertThat(simulator.topics()).isEmpty();
+            assertThat(simulator.producers()).isEmpty();
+            assertThat(simulator.groups()).isEmpty();
+            simulator.awaitSnapshot(s -> s.topics().isEmpty() && s.producers().isEmpty() && s.groups().isEmpty(),
+                TIMEOUT);
+            // A name is free again once its component is removed.
+            simulator.addTopic("orders", 1);
+        }
+    }
+
+    @Test
+    void aRemovedHandleRefusesToAct() {
+        try (var simulator = new Simulator("localhost:9092")) {
+            var orders = simulator.addTopic("orders", 3);
+            var producer = simulator.addProducer(p -> p.topics(orders));
+            var group = simulator.addGroup("app", g -> g.subscribe(orders).consumers(2));
+            var consumer = group.consumer(0);
+
+            consumer.remove();
+
+            assertThat(group.consumers()).extracting(ConsumerHandle::id).containsExactly("consumer-1");
+            assertThatThrownBy(() -> group.consumer(0)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(consumer::remove).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(consumer::leave).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(consumer::join).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(() -> consumer.inject(Fault.freeze())).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(() -> consumer.clear(Fault.freeze())).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(consumer::clearFaults).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(() -> consumer.switchProtocol(Protocol.CLASSIC))
+                .isInstanceOf(SimulationStateException.class);
+            // The accessors keep answering.
+            assertThat(consumer.id()).isEqualTo("consumer-0");
+
+            var remaining = group.consumer(1);
+            group.remove();
+
+            assertThatThrownBy(group::remove).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(() -> group.addConsumer(c -> {})).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(remaining::leave).isInstanceOf(SimulationStateException.class);
+            assertThat(group.id()).isEqualTo("app");
+
+            producer.remove();
+
+            assertThatThrownBy(producer::remove).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(producer::pause).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(producer::resume).isInstanceOf(SimulationStateException.class);
+
+            orders.remove();
+
+            assertThatThrownBy(orders::remove).isInstanceOf(SimulationStateException.class);
+        }
+    }
+
+    @Test
+    void theHandlesOfAStoppedSimulatorRefuseToAct() {
+        var simulator = new Simulator("localhost:9092");
+        var orders = simulator.addTopic("orders", 3);
+        var producer = simulator.addProducer(p -> p.topics(orders));
+        var group = simulator.addGroup("app", g -> g.subscribe(orders).consumers(1));
+
+        simulator.close();
+
+        assertThatThrownBy(orders::remove).isInstanceOf(SimulationStateException.class);
+        assertThatThrownBy(producer::pause).isInstanceOf(SimulationStateException.class);
+        assertThatThrownBy(group::remove).isInstanceOf(SimulationStateException.class);
+        assertThatThrownBy(() -> group.consumer(0).leave()).isInstanceOf(SimulationStateException.class);
+    }
+
+    @Test
+    void assignedIdsAreNeverReused() {
+        try (var simulator = new Simulator("localhost:9092")) {
+            simulator.addTopic("orders", 3);
+            var first = simulator.addProducer(p -> p.topics("orders"));
+            var named = simulator.addProducer(p -> p.id("producer-1").topics("orders"));
+            first.remove();
+            named.remove();
+
+            assertThat(simulator.addProducer(p -> p.topics("orders")).id()).isEqualTo("producer-2");
+
+            var group = simulator.addGroup("app", g -> g.subscribe("orders").consumers(2));
+            group.consumer(1).remove();
+            var added = group.addConsumer(c -> c.rackId("b"));
+
+            assertThat(added.id()).isEqualTo("consumer-2");
+            assertThat(group.consumers()).extracting(ConsumerHandle::id).containsExactly("consumer-0", "consumer-2");
+            // A supplied id is honored, and the assigned ids skip it.
+            assertThat(group.addConsumer(new ConsumerSpec("consumer-3", null, null)).id()).isEqualTo("consumer-3");
+            assertThat(group.addConsumer(ConsumerSpec.inheriting()).id()).isEqualTo("consumer-4");
+        }
+    }
+
+    @Test
+    void anAddedConsumerInheritsTheGroupDefaultsAndIsDescribed() {
+        try (var simulator = new Simulator("localhost:9092")) {
+            simulator.addTopic("orders", 3);
+            var group = simulator.addGroup("app", g -> g
+                .subscribe("orders")
+                .consumerDefaults(c -> c.protocol(Protocol.CLASSIC).assignor("range"))
+            );
+
+            // The effective settings of the argument are not trusted.
+            var added = group.addConsumer(new ConsumerSpec("", ConsumerOptions.overrides(c -> c.rackId("b")),
+                ConsumerSettings.defaults()));
+
+            assertThat(added.protocol()).isEqualTo(Protocol.CLASSIC);
+            var described = group.describe().consumers();
+            assertThat(described).singleElement().satisfies(consumer -> {
+                assertThat(consumer.id()).isEqualTo("consumer-0");
+                assertThat(consumer.effective().assignor()).isEqualTo("range");
+                assertThat(consumer.effective().rackId()).isEqualTo("b");
+            });
+            assertThat(simulator.describe().groups()).containsExactly(group.describe());
+            simulator.awaitSnapshot(s -> s.groups().get(0).consumers().size() == 1, TIMEOUT);
+        }
+    }
+
+    @Test
+    void refusesAnInvalidConsumerAndLeavesTheGroupUnchanged() {
+        try (var simulator = new Simulator("localhost:9092")) {
+            simulator.addTopic("orders", 3);
+            simulator.addGroup(new GroupSpec("a-b", List.of("orders"), 45000, 5000, 1000, null, List.of(named("c"))));
+            var group = simulator.addGroup("a", g -> g
+                .subscribe("orders")
+                .consumerDefaults(c -> c.protocol(Protocol.CLASSIC).assignor("range"))
+                .consumers(1)
+            );
+
+            assertThatThrownBy(() -> group.addConsumer(c -> c.assignor("no-such-assignor")))
+                .isInstanceOfSatisfying(InvalidConfigException.class, e -> assertThat(e.violations())
+                    .extracting(Violation::field)
+                    .contains("groups[1].consumers[1].overrides.assignor"));
+            assertThatThrownBy(() -> group.addConsumer(c -> c.assignor("cooperative-sticky")))
+                .isInstanceOfSatisfying(InvalidConfigException.class, e -> assertThat(e.violations())
+                    .extracting(Violation::field).containsExactly("groups[1].consumers"));
+            assertThatThrownBy(() -> group.addConsumer(named("consumer-0")))
+                .isInstanceOfSatisfying(InvalidConfigException.class, e -> assertThat(e.violations())
+                    .containsExactly(new Violation("groups[1].consumers[1].id", "duplicate consumer 'consumer-0'")));
+            // The client id a-b-c is taken by the other group.
+            assertThatThrownBy(() -> group.addConsumer(named("b-c")))
+                .isInstanceOfSatisfying(InvalidConfigException.class, e -> assertThat(e.violations())
+                    .containsExactly(new Violation(
+                        "groups[1].consumers[1].id",
+                        "the client id 'a-b-c' is already used by a consumer of group 'a-b'"
+                    )));
+
+            assertThat(group.consumers()).extracting(ConsumerHandle::id).containsExactly("consumer-0");
+            // A refused consumer does not use up an id.
+            assertThat(group.addConsumer(c -> {}).id()).isEqualTo("consumer-1");
+        }
+    }
+
+    @Test
     void closeRemovesTheComponentsAndEndsThePublisherThread() {
         var simulator = new Simulator("localhost:9092");
         simulator.addTopic("orders", 3);
@@ -265,6 +435,8 @@ class SimulatorTest {
             failures.put("start", catchThrowable(simulator::start));
             failures.put("addTopic", catchThrowable(() -> simulator.addTopic("late", 1)));
             failures.put("addProducer", catchThrowable(() -> simulator.addProducer(p -> p.topics("orders"))));
+            failures.put("addGroup", catchThrowable(() -> simulator.addGroup("late", g -> g.subscribe("orders"))));
+            failures.put("remove", catchThrowable(() -> simulator.topics().get(0).remove()));
             failures.put("withClientProperty", catchThrowable(() -> simulator.withClientProperty("key", "value")));
             failures.put("withProxyPort", catchThrowable(() -> simulator.withProxyPort(19092)));
             failures.put("withListener", catchThrowable(() -> simulator.withListener(s -> {})));
@@ -285,7 +457,7 @@ class SimulatorTest {
             await().atMost(TIMEOUT).untilTrue(done);
 
             assertThat(readsFailure.get()).isNull();
-            assertThat(failures).hasSize(9).allSatisfy((method, failure) -> assertThat(failure).as(method)
+            assertThat(failures).hasSize(11).allSatisfy((method, failure) -> assertThat(failure).as(method)
                 .isInstanceOf(SimulationStateException.class)
                 .hasMessageContaining("must not be called from a snapshot listener"));
             // The simulator is unharmed: nothing was added, and it still declares and closes.
