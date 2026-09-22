@@ -74,15 +74,14 @@
             <scope>test</scope>
         </dependency>
         <!-- The contract test validates the JSON of the API against the
-             schemas of the OpenAPI 3.1 document. -->
+             schemas of the OpenAPI 3.1 document, which it reads with
+             jackson-dataformat-yaml. That module comes from kaos-core in
+             compile scope, since the proxy launcher needs it at run time;
+             declaring it here in test scope would drop it from the
+             shaded jar. -->
         <dependency>
             <groupId>com.networknt</groupId>
             <artifactId>json-schema-validator</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.dataformat</groupId>
-            <artifactId>jackson-dataformat-yaml</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -119,6 +118,18 @@
         </resources>
 
         <plugins>
+            <!-- ShadedJarTest runs the shaded jar, which the package phase
+                 builds before the integration tests. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <kaos.test.jar>${project.build.directory}/${project.build.finalName}.jar</kaos.test.jar>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>

@@ -30,14 +30,16 @@ class CliOptionsTest {
 
         assertThat(options.bootstrapServer()).isEqualTo("localhost:9092");
         assertThat(options.port()).isEqualTo(8081);
+        assertThat(options.proxyPort()).isEqualTo(19092);
     }
 
     @Test
     void parsesAllOptionsInAnyOrder() {
-        CliOptions options = parse("--port", "0", "--bootstrap-server", "broker:9092");
+        CliOptions options = parse("--proxy-port", "25000", "--port", "0", "--bootstrap-server", "broker:9092");
 
         assertThat(options.bootstrapServer()).isEqualTo("broker:9092");
         assertThat(options.port()).isZero();
+        assertThat(options.proxyPort()).isEqualTo(25000);
     }
 
     @Test
@@ -80,6 +82,28 @@ class CliOptionsTest {
             .isInstanceOf(ParameterException.class)
             .hasMessageContaining("--port")
             .hasMessageContaining("out of range");
+    }
+
+    @Test
+    void acceptsTheBoundsOfTheProxyPort() {
+        assertThat(parse("--proxy-port", "1").proxyPort()).isEqualTo(1);
+        assertThat(parse("--proxy-port=65535").proxyPort()).isEqualTo(65535);
+    }
+
+    @Test
+    void rejectsAnInvalidProxyPort() {
+        assertThatThrownBy(() -> parse("--proxy-port", "0"))
+            .isInstanceOf(ParameterException.class)
+            .hasMessageContaining("--proxy-port")
+            .hasMessageContaining("out of range (1-65535)");
+        assertThatThrownBy(() -> parse("--proxy-port", "65536"))
+            .isInstanceOf(ParameterException.class)
+            .hasMessageContaining("--proxy-port")
+            .hasMessageContaining("out of range (1-65535)");
+        assertThatThrownBy(() -> parse("--proxy-port", "abc"))
+            .isInstanceOf(ParameterException.class)
+            .hasMessageContaining("--proxy-port")
+            .hasMessageContaining("not a number");
     }
 
     private static CliOptions parse(String... args) {

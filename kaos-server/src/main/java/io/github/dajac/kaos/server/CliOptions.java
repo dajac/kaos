@@ -27,6 +27,7 @@ final class CliOptions {
 
     static final String DEFAULT_BOOTSTRAP_SERVER = "localhost:9092";
     static final int DEFAULT_PORT = 8081;
+    static final int DEFAULT_PROXY_PORT = 19092;
 
     @Option(
         names = "--bootstrap-server",
@@ -46,6 +47,15 @@ final class CliOptions {
     )
     private int port = DEFAULT_PORT;
 
+    @Option(
+        names = "--proxy-port",
+        paramLabel = "<port>",
+        defaultValue = "" + DEFAULT_PROXY_PORT,
+        converter = ProxyPortConverter.class,
+        description = "First port the proxy tries; it moves up when busy (default: ${DEFAULT-VALUE})"
+    )
+    private int proxyPort = DEFAULT_PROXY_PORT;
+
     /**
      * Returns the Kafka bootstrap servers the simulator connects to.
      */
@@ -58,6 +68,13 @@ final class CliOptions {
      */
     int port() {
         return port;
+    }
+
+    /**
+     * Returns the port the proxy requests first.
+     */
+    int proxyPort() {
+        return proxyPort;
     }
 
     /**
@@ -79,16 +96,30 @@ final class CliOptions {
     static final class PortConverter implements ITypeConverter<Integer> {
         @Override
         public Integer convert(String value) {
-            int port;
-            try {
-                port = Integer.parseInt(value);
-            } catch (NumberFormatException e) {
-                throw new TypeConversionException("'" + value + "' is not a number");
-            }
-            if (port < 0 || port > 65535) {
-                throw new TypeConversionException("port " + value + " is out of range (0-65535)");
-            }
-            return port;
+            return parsePort(value, 0);
         }
+    }
+
+    /**
+     * Accepts the ports 1 to 65535: the proxy needs a fixed port to start from.
+     */
+    static final class ProxyPortConverter implements ITypeConverter<Integer> {
+        @Override
+        public Integer convert(String value) {
+            return parsePort(value, 1);
+        }
+    }
+
+    private static int parsePort(String value, int min) {
+        int port;
+        try {
+            port = Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new TypeConversionException("'" + value + "' is not a number");
+        }
+        if (port < min || port > 65535) {
+            throw new TypeConversionException("port " + value + " is out of range (" + min + "-65535)");
+        }
+        return port;
     }
 }
