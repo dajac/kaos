@@ -16,7 +16,7 @@ section that describes it.
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
 | `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
 | `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`, and so is `StaticUi`, which serves the UI at `/` |
-| `kaos-ui` | the scaffold is built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, an empty shell, the generated `api/schema.d.ts` with its check, and Vitest; the screens are planned |
+| `kaos-ui` | the scaffold is built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, an empty shell, the generated `api/schema.d.ts` with its check, and Vitest; so is the pure UI model (`model/`: the config form, the assignors, the lag gauge, the axis and the tooltip placement); the state and the screens are planned |
 
 ## Context
 
@@ -566,7 +566,7 @@ try (Simulator simulator = new Simulator("localhost:9092")
 | topic | `partitions` | 36 | 1–100 |
 | producer | `ratePerPartition` | 2.0 (1 record every 500 ms) | > 0 |
 | group | `id` | `kaos` | the name rule |
-| group | `numConsumers` | 4 | |
+| group | `numConsumers` | 3 | |
 | group | `sessionTimeoutMs` | 45000 | 1000–300000 |
 | group | `heartbeatIntervalMs` | 5000 | 500–60000 |
 | group | `assignmentIntervalMs` | 1000 | 0–60000 |
@@ -1336,8 +1336,51 @@ failed.
 ### Frontend (`kaos-ui`)
 
 Status: the scaffold is built: the build, the fonts, the tokens and base
-styles, and an empty shell drawn with the tokens. The state, the
-heatmap and the other styles are planned.
+styles, and an empty shell drawn with the tokens. So is the pure model
+under `model/`. The state, the heatmap and the other styles are planned.
+
+**Model (`model/`)**
+- Framework-free TypeScript: no React and no DOM. Every function is
+  pure and returns a new state. The API shapes are the generated types
+  of `api/schema.d.ts`; the defaults, labels, ranges and assignors come
+  from `/api/v1/meta`, never from constants in the UI.
+- `configModel.ts` is the state of the config panel. It holds
+  `groups[]`: each group has its id, its number of topics and of
+  partitions (its topics are `<groupId>-1..N`), protocol, assignor,
+  static membership, the optional settings in the order they were
+  added, and its consumers. A consumer holds only its overrides, in the
+  order they were added, and inherits the rest from its group. The
+  module derives the chips of a collapsed consumer, the "inherits all
+  settings" note and the entries of the "+ Add …" menus, and has
+  duplicate-last and remove.
+- `buildStartRequest` gives the body of `POST /simulator`: the topics
+  of every group, one producer that writes to all of them at the rate
+  of `/meta`, and each group with its `consumerDefaults` and the
+  overrides of its consumers, whose ids the group assigns
+  (`consumer-0..N-1`). `startProblems` refuses a start while a group
+  has no consumer ("Add at least one consumer before starting."), as
+  the prototype did; the core accepts such a group.
+- Rehydration follows the prototype: on load, the form is rebuilt from
+  `GET /simulator` only when its phase is `RUNNING`, so that the locked
+  panel shows the running config; in any other phase the form is the
+  initial one. `configFromSimulator` applies this rule. It rebuilds the
+  form from the `spec`, overrides included; an optional setting is
+  added when it differs from its default.
+- `assignors.ts`: the presets of a protocol are the names of `/meta`,
+  then "custom" when the protocol accepts a custom name (the consumer
+  protocol). A new group starts on the first preset of its protocol
+  (`uniform`), and a switch to a protocol that refuses the assignor
+  falls back to the first preset of that protocol (`range` for
+  classic). On the consumer protocol, a name outside the presets, the
+  empty one included, is a custom name; a custom name left empty sends
+  the empty name, the default of the protocol. A spec's empty name on
+  the classic protocol shows as the first preset.
+- `lag.ts`: the gauge rounds a lag up to a multiple of 5 and scales it
+  to 100; `-1`, an unknown lag, fills nothing.
+- `axis.ts`: the tick stride, 20 from 100 partitions, 10 from 40, 5
+  from 15, and a quarter of the partitions below.
+- `tooltip.ts`: the tooltip is 8 px below the cell, centred on it and
+  clamped 4 px inside the viewport, and its text.
 
 **State (Zustand)**
 - Components use selector subscriptions.
