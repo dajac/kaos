@@ -25,6 +25,13 @@
             <groupId>io.github.dajac</groupId>
             <artifactId>kaos-core</artifactId>
         </dependency>
+        <!-- The UI, in the classpath directory /ui, which StaticUi serves.
+             It is empty in a build with -DskipUi. -->
+        <dependency>
+            <groupId>io.github.dajac</groupId>
+            <artifactId>kaos-ui</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>io.javalin</groupId>
             <artifactId>javalin</artifactId>

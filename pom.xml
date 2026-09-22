@@ -22,6 +22,7 @@
 
     <modules>
         <module>kaos-core</module>
+        <module>kaos-ui</module>
         <module>kaos-server</module>
     </modules>
 
@@ -56,9 +57,18 @@
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
         <exec-maven-plugin.version>3.6.4</exec-maven-plugin.version>
         <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
+        <frontend-maven-plugin.version>2.0.2</frontend-maven-plugin.version>
 
-        <!-- The Apache License 2.0 header of every Java source file, applied
-             by Spotless. The year is fixed: the header does not change when
+        <!-- The Node of the UI build, installed by frontend-maven-plugin.
+             kaos-ui/.nvmrc names the same version for the dev loop. -->
+        <node.version>v24.21.0</node.version>
+        <!-- -DskipUi skips every frontend step of kaos-ui: the Node install,
+             npm, the type check, the Vite build and Vitest. -->
+        <skipUi>false</skipUi>
+
+        <!-- The Apache License 2.0 header of every Java source file, and of
+             the TypeScript and CSS sources of kaos-ui, applied by Spotless.
+             The year is fixed: the header does not change when
              the calendar year does. -->
         <license.header>/*
  * Copyright 2026 The Kaos Authors
@@ -116,6 +126,11 @@
                 <artifactId>kaos-core</artifactId>
                 <version>${project.version}</version>
                 <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dajac</groupId>
+                <artifactId>kaos-ui</artifactId>
+                <version>${project.version}</version>
             </dependency>
 
             <!-- kafka-clients is pinned here and excluded from Kroxylicious,
@@ -231,6 +246,11 @@
                         <skip>true</skip>
                         <mainClass>none</mainClass>
                     </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>com.github.eirslett</groupId>
+                    <artifactId>frontend-maven-plugin</artifactId>
+                    <version>${frontend-maven-plugin.version}</version>
                 </plugin>
                 <plugin>
                     <groupId>com.diffplug.spotless</groupId>

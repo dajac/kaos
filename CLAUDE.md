@@ -48,6 +48,12 @@ with the Apache License 2.0 header (the `license.header` property of
 the parent `pom.xml`): `spotless:check` fails on a missing or different
 header and `spotless:apply` adds it.
 
+The TypeScript and CSS sources of `kaos-ui`, and its `vite.config.ts`,
+start with the same header: `spotless:check` fails
+without it and `spotless:apply` adds it. The generated
+`src/api/schema.d.ts` is left alone; the build fails when it differs
+from `npm run gen:api`.
+
 One coding preference, separate from the formatter: prefer `var` for
 local variables when the type is evident from the right-hand side,
 enhanced-`for` variables included. With a diamond, move the type
@@ -61,16 +67,16 @@ arguments to the right: `var ids = new HashSet<String>()`.
 | `kaos-server` | Javalin adapter exposing the HTTP API v1 (REST + SSE, OpenAPI); builds the shaded runnable jar |
 | `kaos-ui` | React + TypeScript UI, built by Vite and embedded in the jar under `/ui` |
 
-`kaos-core` and `kaos-server` are built (the static UI is planned) and
-`kaos-ui` is planned; see `docs/ARCHITECTURE.md` for their status.
+`kaos-core` and `kaos-server` are built and `kaos-ui` is a scaffold;
+see `docs/ARCHITECTURE.md` for their status.
 
 ## Build and run
 
 ```sh
-./mvnw verify                 # unit tests, Testcontainers ITs (needs Docker) and the format check; later also UI build + Vitest
-./mvnw spotless:apply         # format the Java sources; verify fails on unformatted code
+./mvnw verify                 # unit tests, Testcontainers ITs (needs Docker), the format check, UI build + Vitest
+./mvnw spotless:apply         # format the Java sources, add the UI license headers; verify fails otherwise
 ./mvnw verify -DskipITs       # skip the integration tests, keep the unit tests
-./mvnw verify -DskipUi        # skip the frontend build (planned, no effect yet)
+./mvnw verify -DskipUi        # skip the frontend build (Node, npm, type check, Vite, Vitest)
 ./run.sh [options]            # build and run; all options go to the app, see ./run.sh --help
 java -jar kaos-server/target/kaos-*.jar [--bootstrap-server localhost:9092] [--port 8081]
 ```
@@ -86,7 +92,8 @@ Frontend dev loop:
 
 ```sh
 ./mvnw -pl kaos-server -am -DskipUi compile exec:java   # backend on localhost:8081
-npm run dev                                             # in kaos-ui/ (planned); Vite proxies /api
+npm run dev                                             # in kaos-ui/; Vite proxies /api
+npm run gen:api                                         # in kaos-ui/; regenerate src/api/schema.d.ts after a change of the OpenAPI document
 ```
 
 A local broker for manual testing:

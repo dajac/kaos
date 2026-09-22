@@ -1,0 +1,45 @@
+/*
+ * Copyright 2026 The Kaos Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* -- Design tokens: the :root block of the prototype. The fonts are the
+      variable fonts of fontsource, bundled with the UI, then the families
+      the prototype loaded from Google Fonts. -- */
+:root {
+  --bg: #0a0e14;
+  --surface: #12171f;
+  --surface2: #1a2029;
+  --surface3: #222a35;
+  --border: #2a3342;
+  --border-subtle: #1e2736;
+  --text: #d4dce8;
+  --text-muted: #6b7a8d;
+  --text-dim: #4a5568;
+  --accent: #4c9aff;
+  --accent-dim: rgba(76,154,255,0.12);
+  --green: #34d399;
+  --green-dim: rgba(52,211,153,0.12);
+  --yellow: #fbbf24;
+  --yellow-dim: rgba(251,191,36,0.10);
+  --red: #f87171;
+  --red-dim: rgba(248,113,113,0.10);
+  --fault: #5cd5ff;
+  --fault-dim: rgba(92,213,255,0.12);
+  --orange: #f97316;
+  --orange-dim: rgba(249,115,22,0.14);
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+  --font-body: 'DM Sans Variable', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --sidebar-w: 340px;
+}

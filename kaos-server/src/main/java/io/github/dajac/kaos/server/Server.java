@@ -24,7 +24,8 @@ import io.javalin.json.JavalinJackson;
 
 /**
  * The HTTP server. It owns the Javalin instance, the {@link SimulationService} with its
- * {@link Simulator}, and the {@link SseHub}, and registers the routes of the HTTP API v1.
+ * {@link Simulator}, and the {@link SseHub}, registers the routes of the HTTP API v1 and serves the
+ * UI through {@link StaticUi}.
  *
  * <p>Usage: construct, {@link #start(int)}, then {@link #close()}, which also closes the simulator.
  */
@@ -39,10 +40,14 @@ public final class Server implements AutoCloseable {
      * Creates a server for the given simulator, which it owns from now on.
      */
     public Server(Simulator simulator) {
-        this(simulator, SseHub.PING_INTERVAL);
+        this(simulator, SseHub.PING_INTERVAL, new StaticUi());
     }
 
     Server(Simulator simulator, Duration pingInterval) {
+        this(simulator, pingInterval, new StaticUi());
+    }
+
+    Server(Simulator simulator, Duration pingInterval, StaticUi ui) {
         var mapper = Json.mapper();
         this.service = new SimulationService(simulator);
         this.hub = new SseHub(mapper, service::snapshot, service::status, pingInterval);
@@ -59,6 +64,7 @@ public final class Server implements AutoCloseable {
             config.jsonMapper(new JavalinJackson(mapper, true));
             routes.register(config.routes);
             problems.register(config.routes);
+            ui.register(config);
         });
     }
 

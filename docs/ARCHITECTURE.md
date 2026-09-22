@@ -15,8 +15,8 @@ section that describes it.
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
 | `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
-| `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`; `StaticUi` is planned |
-| `kaos-ui` | planned |
+| `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`, and so is `StaticUi`, which serves the UI at `/` |
+| `kaos-ui` | the scaffold is built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, an empty shell, the generated `api/schema.d.ts` with its check, and Vitest; the screens are planned |
 
 ## Context
 
@@ -78,8 +78,9 @@ Status: the Java build rows are in place (Java 21, Kafka, Kroxylicious,
 Javalin, Jackson, the command line, logging, packaging, the code format,
 and JUnit 6 with AssertJ, Awaitility, Testcontainers and failsafe).
 The API contract is in place on the Java side: the hand-written OpenAPI
-document and its contract test. Mockito, the frontend and the generated
-TypeScript types are planned.
+document and its contract test, and so is the frontend build with the
+generated TypeScript types. Mockito, Zustand and React Testing Library
+are planned.
 
 The versions below were checked on 2026-09-19. When a tool rejects a
 brand-new major (JUnit 6, TypeScript 7, frontend-maven-plugin 2.x), the
@@ -97,8 +98,8 @@ build steps back one major.
 | Packaging | `maven-shade-plugin` 3.6.x |
 | Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`), import ordering and the Apache License 2.0 header, checked in `verify` |
 | Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration`, `com.networknt:json-schema-validator` 2.0.x (the Jackson 2 line) for the contract test |
-| Frontend | Node 24 LTS (pinned by frontend-maven-plugin + `.nvmrc`), Vite 8, React 19, TypeScript, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
-| Frontend tests | Vitest, React Testing Library. Playwright is deferred. |
+| Frontend | Node 24 LTS (pinned by `frontend-maven-plugin` 2.0.x + `.nvmrc`), Vite 8, React 19, TypeScript 6, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
+| Frontend tests | Vitest 5, React Testing Library. Playwright is deferred. |
 | API contract | Hand-written OpenAPI 3.1 YAML, with `openapi-typescript` generating the TS types |
 
 Notes:
@@ -139,9 +140,29 @@ Notes:
 - **Jackson in the server.** `kaos-server` adds `jackson-datatype-jdk8`
   for the `Optional`s of `ConsumerOverrides`.
 - **Contract enforcement.** The committed `schema.d.ts` is checked with a
-  diff (planned), and a Java contract test, `OpenApiContractTest`,
-  validates the fixtures against the spec with the OpenAPI 3.1 dialect
-  of `json-schema-validator`.
+  diff: the build runs `npm run check:api`, which is `openapi-typescript
+  --check` on the OpenAPI document of `kaos-server`, and fails when a
+  fresh generation differs; `npm run gen:api` regenerates the file. A
+  Java contract test, `OpenApiContractTest`, validates the fixtures
+  against the spec with the OpenAPI 3.1 dialect of
+  `json-schema-validator`.
+- **TypeScript 6.** TypeScript 7 has no compiler API, which
+  `openapi-typescript` needs, so the build steps back to 6.
+  `openapi-typescript` 7.x declares a peer range of TypeScript 5, and an
+  `overrides` entry of `package.json` gives it the project's TypeScript.
+- **Frontend build.** `frontend-maven-plugin` installs the pinned Node,
+  with its npm, into `kaos-ui/node`, then runs `npm ci`, the check of
+  the generated types, `tsc --noEmit`, `vite build` into
+  `target/classes/ui` and `vitest run`. There is no linter. `-DskipUi`
+  skips all these steps: `kaos-ui` is then an empty jar and the server
+  serves no UI.
+- **License headers of the UI.** The TypeScript and CSS sources of
+  `kaos-ui` and `vite.config.ts` start with the same header, the
+  `license.header` property of the parent `pom.xml`, checked by Spotless's `licenseHeader` step in a generic
+  format of `kaos-ui/pom.xml`, with the same `spotless:check` and
+  `spotless:apply`. The header ends at the first line that is neither
+  `/*` nor inside a block comment. The generated `schema.d.ts` has no
+  header.
 
 ## Project structure
 
@@ -165,8 +186,11 @@ snapshot records, the six enums next to `Protocol`, and the whole
 `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, `engine/GroupRuntime`,
 `ConsumerRunner` and `AutopilotImpl`, `kafka/GroupConfigManager`,
 `GroupPoller` and `GroupCleanup`, and `state/EventLog`. Everything else
-in the tree below is planned, including `StaticUi`,
-the `kaos-ui` module and the `-DskipUi` switch. The test harness of `kaos-core` also exists; see
+in the tree below is planned. `StaticUi` exists, and so does the
+`kaos-ui` scaffold with the `-DskipUi` switch: `package.json`,
+`vite.config.ts`, `tsconfig.json`, `index.html`, `.nvmrc`, `pom.xml`,
+`main.tsx`, `App.tsx`, `api/schema.d.ts`, `styles/tokens.css` and
+`styles/base.css`. The test harness of `kaos-core` also exists; see
 [Verification](#verification).
 
 ```
@@ -203,7 +227,7 @@ kaos/
     src/test/scripts/curl-session.sh   scripted curl session against a running server
     src/main/resources/openapi/kaos-v1.yaml
   kaos-ui/                     packaging jar; vite build -> target/classes/ui
-    package.json vite.config.ts tsconfig.json index.html pom.xml
+    package.json package-lock.json vite.config.ts tsconfig.json index.html .nvmrc pom.xml
     src/ main.tsx App.tsx
       api/        schema.d.ts (generated), client.ts, events.ts (EventSource + backoff)
       state/      simulationStore.ts, configStore.ts, uiSettings.ts ('kaos.uiSettings')
@@ -1062,7 +1086,7 @@ consumers exist.
 
 ### HTTP API v1 (`kaos-server`)
 
-Status: built, except `StaticUi`, which is planned. The command line is
+Status: built. The command line is
 `--bootstrap-server <host:port>` (default `localhost:9092`),
 `--port <port>` (default 8081), `--help` and `--version`. picocli parses
 it: `CliOptions` holds the annotated options, `Main` is the command that
@@ -1123,7 +1147,8 @@ GET    /api/v1/openapi.yaml             this API as an OpenAPI 3.1 document (app
   the autopilot, the faults, and the `join` and `leave` actions.
 - `DELETE /simulator` answers 204 when there is nothing to stop, and
   keeps `lastError` then.
-- `/` is not served until `StaticUi` lands.
+- `/` and every other path outside `/api` belong to the UI (see
+  "Metadata and static files" below).
 
 **Status**
 - The status is `{phase, lastError, warnings}`. It is the body of the
@@ -1296,12 +1321,23 @@ failed.
 **Metadata and static files**
 - `/meta` is served from `ConfigMetadata`. `ConfigValidator` uses the
   same table, so there is one source of truth.
-- `StaticUi` serves the classpath `/ui` directory with an SPA fallback.
-  Hashed assets are immutable; `index.html` is `no-cache`. (Planned.)
+- `StaticUi` serves the classpath `/ui` directory, which the `kaos-ui`
+  jar holds, at `/`:
+  - the hashed assets of the Vite build, under `/assets`, are
+    `Cache-Control: public, max-age=31536000, immutable`;
+  - every other file, `index.html` included, is `no-cache`;
+  - the SPA fallback answers `index.html` (`no-cache`) to any other
+    `GET` that accepts HTML, except under `/api` and `/assets`, which
+    answer a 404 problem detail, so that a missing asset, such as a
+    chunk of a previous build, is not answered with HTML.
+- Without the UI on the classpath, a build with `-DskipUi`, `StaticUi`
+  registers nothing and `/` is a 404.
 
 ### Frontend (`kaos-ui`)
 
-Status: planned.
+Status: the scaffold is built: the build, the fonts, the tokens and base
+styles, and an empty shell drawn with the tokens. The state, the
+heatmap and the other styles are planned.
 
 **State (Zustand)**
 - Components use selector subscriptions.
@@ -1319,7 +1355,12 @@ Status: planned.
 **CSS**
 - The styles are the prototype's `<style>` block (`simulator.html` on
   `initial-setup`), lifted **verbatim** and split by region into
-  `styles/*.css`. The class names are kept.
+  `styles/*.css`. The class names are kept. `tokens.css` (the `:root`
+  block) and `base.css` (the `*`, `html, body` and `body` rules) exist.
+- The fonts are bundled from fontsource instead of Google Fonts.
+  `--font-mono` and `--font-body` name the variable families,
+  `'JetBrains Mono Variable'` and `'DM Sans Variable'`, first, then the
+  families of the prototype.
 - The Bento rules and the dead rules are not carried over.
 - No CSS modules. The visual result is identical to the prototype.
 
@@ -1327,8 +1368,8 @@ Status: planned.
 - The Vite dev server proxies `/api`, including SSE, to `localhost:8081`.
 - Command: `./mvnw -pl kaos-server -am -DskipUi compile exec:java` plus
   `npm run dev`. The `compile` phase lets the reactor resolve
-  `kaos-core` from its `target/classes`. The backend half works today;
-  `exec:java` is skipped in every module except `kaos-server`.
+  `kaos-core` from its `target/classes`; `exec:java` is skipped in every
+  module except `kaos-server`. `.nvmrc` names the Node of the build.
 
 ## Features
 
@@ -1409,8 +1450,9 @@ Mixed-protocol groups are supported.
 ## Verification
 
 Status: planned, except that `./mvnw verify` already builds the modules,
-runs the unit tests, the integration-test harness below and the code
-format check, and produces the shaded jar, that `-DskipITs` works, that
+runs the unit tests, the integration-test harness below, the code
+format check and the UI build with Vitest, and produces the shaded jar
+with the UI, that `-DskipITs` and `-DskipUi` work, that
 `./run.sh` builds and starts the server, that the CI workflow runs
 the build, and the server tests and the scripted curl session below.
 
@@ -1430,8 +1472,8 @@ the build, and the server tests and the scripted curl session below.
   every push to `main` runs to completion. The token is limited to
   `contents: read`, and the surefire and failsafe reports are uploaded
   as the `test-reports` artifact when the build fails.
-- The UI build will join the same job through `frontend-maven-plugin`,
-  with no workflow change.
+- The UI build runs in the same job through `frontend-maven-plugin`,
+  which downloads its own Node, with no workflow change.
 
 **Integration-test harness**
 - The broker sets `group.consumer.min.session.timeout.ms` to 1 s and
