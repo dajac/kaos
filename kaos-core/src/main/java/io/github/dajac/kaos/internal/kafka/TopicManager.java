@@ -67,7 +67,8 @@ public final class TopicManager {
         } catch (ExecutionException e) {
             if (e.getCause() instanceof TopicExistsException) {
                 throw new SimulationException(
-                    "The topic '" + topic.name() + "' already exists; the simulator only creates topics it owns",
+                    "The topic '" + topic.name() + "' already exists; the simulator only creates topics it owns: "
+                        + "delete it or use another topic name",
                     e.getCause()
                 );
             }
