@@ -431,8 +431,25 @@
 }
 .config-banner-close:hover { opacity: 1; background: var(--red-dim); }
 
-/* -- Keyboard access, not in the prototype: a consumer header is a div with
-      the role of a button, so that its × can be a real button; it keeps
-      the metrics of the <button> header, and the × shows while focused. -- */
+/* -- Keyboard and screen-reader access, not in the prototype: a consumer
+      header is a div that holds two buttons, the toggle and the ×, instead
+      of a <button> around a <span>. It keeps the metrics of the <button>
+      header: the toggle lays out the chevron, the title and the tag as the
+      header did and fills the header up to the ×, and the × shows while
+      focused. -- */
 div.section-toggle { line-height: normal; }
+.section-toggle-btn {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: normal;
+  text-align: left;
+  cursor: pointer;
+}
 .section-remove:focus-visible { opacity: 1; }

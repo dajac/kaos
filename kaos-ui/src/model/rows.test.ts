@@ -23,6 +23,7 @@ import {
   formatNumber,
   groupStateBadge,
   groupTypeLabel,
+  sameLagOf,
   stripCells,
   stripSignature,
   topicStates,
@@ -107,5 +108,22 @@ describe('stripCells', () => {
 
     expect(otherLag).toBe(before);
     expect(ownLag).not.toBe(before);
+  });
+});
+
+describe('sameLagOf', () => {
+  const partitions = group().consumers[0]!.partitions;
+  const lag = { 'orders-1': [0, 12, -1, 3], 'orders-2': [0, 0, 0, 0] };
+
+  it('follows the lag of the partitions of the consumer only', () => {
+    expect(sameLagOf(partitions, lag, lag)).toBe(true);
+    expect(sameLagOf(partitions, lag, { ...lag, 'orders-1': [0, 12, 50, 99] })).toBe(true);
+    expect(sameLagOf(partitions, lag, { ...lag, 'orders-1': [0, 13, -1, 3] })).toBe(false);
+    expect(sameLagOf(partitions, lag, { ...lag, 'orders-2': [0, 0, 0, 1] })).toBe(false);
+  });
+
+  it('sees a topic that appears or goes away', () => {
+    expect(sameLagOf(partitions, lag, { 'orders-1': lag['orders-1'] })).toBe(false);
+    expect(sameLagOf([], lag, {})).toBe(true);
   });
 });

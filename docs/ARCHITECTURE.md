@@ -79,8 +79,8 @@ Javalin, Jackson, the command line, logging, packaging, the code format,
 and JUnit 6 with AssertJ, Awaitility, Testcontainers and failsafe).
 The API contract is in place on the Java side: the hand-written OpenAPI
 document and its contract test, and so is the frontend build with the
-generated TypeScript types, and Zustand. Mockito and React Testing
-Library are planned.
+generated TypeScript types, Zustand, and React Testing Library with
+jsdom. Mockito is planned.
 
 The versions below were checked on 2026-09-19. When a tool rejects a
 brand-new major (JUnit 6, TypeScript 7, frontend-maven-plugin 2.x), the
@@ -99,7 +99,7 @@ build steps back one major.
 | Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`), import ordering and the Apache License 2.0 header, checked in `verify` |
 | Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration`, `com.networknt:json-schema-validator` 2.0.x (the Jackson 2 line) for the contract test |
 | Frontend | Node 24 LTS (pinned by `frontend-maven-plugin` 2.0.x + `.nvmrc`), Vite 8, React 19, TypeScript 6, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
-| Frontend tests | Vitest 5, React Testing Library. Playwright is deferred. |
+| Frontend tests | Vitest 5, React Testing Library 16 with `user-event` 14 and jsdom 30. Playwright is deferred. |
 | API contract | Hand-written OpenAPI 3.1 YAML, with `openapi-typescript` generating the TS types |
 
 Notes:
@@ -1489,7 +1489,12 @@ their styles.
   epoch, or the generation of a classic group; `STARTING` until the
   group is reported. Then the `Legend` and the `UiSettingsMenu` (⚙).
 - `RowsGrid` renders one memoized `ConsumerRow` per consumer and sets
-  `--strip-height`. `ConsumerRow` renders a `PartitionStrip` per topic,
+  `--strip-height`. The lag map of the group changes with the lag of any
+  partition, so `ConsumerRow` compares it with `sameLagOf` (`rows.ts`):
+  a row renders again only when its consumer changes or the lag of one
+  of its own partitions does. `Legend` and `UiSettingsMenu` are
+  memoized, since the header renders again with every change of the
+  group. `ConsumerRow` renders a `PartitionStrip` per topic,
   the axis rail, the name (the consumer id, its client id as the title)
   with the badge, the hover meta (protocol, member id, instance, epoch
   or generation) and the `ActionMenu`.
@@ -1572,8 +1577,12 @@ removing components at runtime.
   `FieldError`), with Start and Stop, the Auto-Pilot, inline validation
   errors and the error banner.
 - Keyboard: a dropdown closes on Escape and when the focus leaves it,
-  and its button carries `aria-expanded`; the × of a consumer is a
-  button of its own, inside a header that has the role of a button.
+  and its button carries `aria-expanded`. The header of a consumer is
+  a `div` that toggles on a click anywhere in it and holds two sibling
+  buttons: the toggle (chevron, name and protocol tag, with
+  `aria-expanded`) and the ×. A button inside an element with the role
+  of a button would be hidden from assistive technologies. The layout
+  is the prototype's, pixel for pixel.
 
 **Lifecycle**
 - Start: create the topics, apply the group configs, start the proxy,
@@ -1794,6 +1803,33 @@ the build, and the server tests and the scripted curl session below.
   scripted curl session: against a running server, it creates and
   starts a simulator, watches the SSE stream, injects and clears a
   fault, shows the problem details and stops.
+
+**UI tests**
+- Vitest runs the pure model tests in Node, and the component tests in
+  jsdom (`// @vitest-environment jsdom` at the top of the file) with
+  React Testing Library and `user-event`. The client is mocked by
+  stubbing `fetch`, so a test checks the method, the path and the body
+  of each request.
+- `ConfigPanel.test.tsx` drives the config panel: the consumer header
+  (a toggle and a × that are separate buttons, mouse and keyboard),
+  adding, editing and removing an override, the chips of a collapsed
+  consumer in menu order, the "inherits all settings" note,
+  duplicate-last and add, a custom assignor name, the fallback to the
+  first preset after a protocol switch (override and group), a
+  violation of a refused start on its field, cleared by an edit, and the
+  locked panel.
+- `ConsumerRow.test.tsx` checks the state badge of every status on both
+  protocols (hidden for a healthy classic member), and the "Actions ▾"
+  menu for every protocol, membership and set of faults, whatever the
+  status: the items, their order, which are destructive and enabled, as
+  in the prototype, and the request each enabled item sends.
+- `rerender.test.tsx` renders the Rows view with 3 topics of 100
+  partitions and 12 consumers and feeds it snapshots: only the row and
+  the strip of what changed render again (a lag, a status, a partition
+  state), a change of the group alone renders no row, and a snapshot
+  that changes nothing renders nothing. `src/test/renderTracker.ts`
+  records the components rendered by each commit through the global
+  hook of React DevTools, as its profiler does.
 
 **Backend end-to-end**
 1. Start a local broker:

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { CSSProperties } from 'react';
+import { memo, type CSSProperties } from 'react';
 
 // The legend of the cell states, with the swatches of the prototype. The lag
 // gradient of the prototype belonged to the Bento view and is not shown.
@@ -25,7 +25,9 @@ const ITEMS: readonly { readonly label: string; readonly swatch: CSSProperties }
   { label: 'Revoking', swatch: { background: 'var(--yellow-dim)', border: '1px solid rgba(251,191,36,0.35)' } },
 ];
 
-export function Legend() {
+// Memoized: it takes no props, and the header renders again with every change
+// of the group.
+export const Legend = memo(function Legend() {
   return (
     <div className="legend">
       {ITEMS.map((item) => (
@@ -35,4 +37,4 @@ export function Legend() {
       ))}
     </div>
   );
-}
+});

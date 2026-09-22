@@ -17,7 +17,7 @@
 import { memo, useMemo } from 'react';
 
 import type { ConsumerSnapshot } from '../../api/client';
-import { consumerBadge, DASH, formatNumber, stripCells, topicStates } from '../../model/rows';
+import { consumerBadge, DASH, formatNumber, sameLagOf, stripCells, topicStates } from '../../model/rows';
 import { ActionMenu } from './ActionMenu';
 import { AxisBand, PartitionStrip } from './PartitionStrip';
 
@@ -60,6 +60,17 @@ function MetaItem({ kind, label, value, title }: MetaItemProps) {
 }
 
 const Separator = () => <span className="row-header-meta-sep">&middot;</span>;
+
+// The lag map of the group changes with the lag of any partition; a row
+// renders again only when the lag of one of its own partitions changes.
+function sameProps(prev: ConsumerRowProps, next: ConsumerRowProps): boolean {
+  return (
+    prev.groupId === next.groupId &&
+    prev.consumer === next.consumer &&
+    prev.topics === next.topics &&
+    sameLagOf(next.consumer.partitions, prev.lag, next.lag)
+  );
+}
 
 export const ConsumerRow = memo(function ConsumerRow({ groupId, consumer, topics, lag }: ConsumerRowProps) {
   const badge = consumerBadge(consumer);
@@ -123,4 +134,4 @@ export const ConsumerRow = memo(function ConsumerRow({ groupId, consumer, topics
       </div>
     </div>
   );
-});
+}, sameProps);
