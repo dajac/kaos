@@ -27,6 +27,12 @@ export type Meta = JsonBody<operations['getMeta']['responses'][200]>;
 export type Simulator = JsonBody<operations['getSimulator']['responses'][200]>;
 export type StartRequest = operations['startSimulator']['requestBody']['content']['application/json'];
 export type Status = JsonBody<operations['startSimulator']['responses'][202]>;
+export type Snapshot = components['schemas']['SimulatorSnapshot'];
+export type GroupSnapshot = components['schemas']['GroupSnapshot'];
+export type ConsumerSnapshot = components['schemas']['ConsumerSnapshot'];
+export type AutopilotRequest = components['schemas']['AutopilotRequest'];
+export type ActionRequest = components['schemas']['ActionRequest'];
+export type FaultId = components['schemas']['FaultId'];
 export type Problem = components['schemas']['Problem'];
 export type Violation = components['schemas']['Violation'];
 
@@ -55,6 +61,14 @@ export interface ApiClient {
   startSimulator(request: StartRequest): Promise<Status>;
   /** Stops the simulation: 202 with the status, or `null` for a 204, when there is nothing to stop. */
   stopSimulator(): Promise<Status | null>;
+  /** Turns the autopilot of a group on or off: 204. */
+  setAutopilot(groupId: string, request: AutopilotRequest): Promise<void>;
+  /** Injects a fault into a consumer: 204. */
+  injectFault(groupId: string, consumerId: string, fault: FaultId): Promise<void>;
+  /** Clears a fault of a consumer: 204. */
+  clearFault(groupId: string, consumerId: string, fault: FaultId): Promise<void>;
+  /** Runs an action of a consumer: 204 for join and leave, 202 with the status for switch-protocol. */
+  runAction(groupId: string, consumerId: string, action: ActionRequest): Promise<Status | null>;
 }
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -102,10 +116,23 @@ export function createClient(fetchFn: Fetch = (input, init) => fetch(input, init
     return result;
   }
 
+  const consumerPath = (groupId: string, consumerId: string) =>
+    `/simulator/groups/${encodeURIComponent(groupId)}/consumers/${encodeURIComponent(consumerId)}`;
+
   return {
     getMeta: () => requestBody<Meta>('GET', '/meta'),
     getSimulator: () => requestBody<Simulator>('GET', '/simulator'),
     startSimulator: (startRequest) => requestBody<Status>('POST', '/simulator', startRequest),
     stopSimulator: () => request<Status>('DELETE', '/simulator'),
+    setAutopilot: async (groupId, autopilot) => {
+      await request('PUT', `/simulator/groups/${encodeURIComponent(groupId)}/autopilot`, autopilot);
+    },
+    injectFault: async (groupId, consumerId, fault) => {
+      await request('PUT', `${consumerPath(groupId, consumerId)}/faults/${encodeURIComponent(fault)}`);
+    },
+    clearFault: async (groupId, consumerId, fault) => {
+      await request('DELETE', `${consumerPath(groupId, consumerId)}/faults/${encodeURIComponent(fault)}`);
+    },
+    runAction: (groupId, consumerId, action) => request<Status>('POST', `${consumerPath(groupId, consumerId)}/actions`, action),
   };
 }

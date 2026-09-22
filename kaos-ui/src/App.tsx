@@ -14,19 +14,11 @@
  * limitations under the License.
  */
 
-import type { CSSProperties } from 'react';
-
 import { ConfigPanel } from './components/config/ConfigPanel';
+import { RowsView } from './components/rows/RowsView';
 
 // The layout of the prototype: the sidebar with the config panel, and the
-// main area, which the Rows view fills in a later task.
-const main: CSSProperties = {
-  display: 'grid',
-  placeItems: 'center',
-  color: 'var(--text-muted)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: '12px',
-};
+// main area with the Rows view.
 
 export function App() {
   return (
@@ -38,7 +30,7 @@ export function App() {
         </div>
         <ConfigPanel />
       </aside>
-      <main style={main}>Nothing to show yet</main>
+      <RowsView />
     </div>
   );
 }

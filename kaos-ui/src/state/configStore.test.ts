@@ -28,8 +28,6 @@ import { META } from '../model/meta.fixture';
 import { groupFieldKey, overrideFieldKey } from '../model/violations';
 import { createConfigStore } from './configStore';
 
-const POLL_MS = 100;
-
 const IDLE: Simulator = { phase: 'IDLE', spec: { topics: [], producers: [], groups: [] }, lastError: '', warnings: [] };
 
 function status(phase: Status['phase'], lastError = ''): Status {
@@ -72,11 +70,15 @@ function fakeClient(simulator: Simulator = IDLE) {
     getSimulator: vi.fn<ApiClient['getSimulator']>().mockResolvedValue(simulator),
     startSimulator: vi.fn<ApiClient['startSimulator']>().mockResolvedValue(status('STARTING')),
     stopSimulator: vi.fn<ApiClient['stopSimulator']>().mockResolvedValue(status('STOPPING')),
+    setAutopilot: vi.fn<ApiClient['setAutopilot']>(),
+    injectFault: vi.fn<ApiClient['injectFault']>(),
+    clearFault: vi.fn<ApiClient['clearFault']>(),
+    runAction: vi.fn<ApiClient['runAction']>(),
   };
 }
 
 async function loaded(client = fakeClient()) {
-  const store = createConfigStore({ client, pollIntervalMs: POLL_MS });
+  const store = createConfigStore({ client });
   await store.getState().load();
   return store;
 }
@@ -115,7 +117,21 @@ describe('load', () => {
     expect(store.getState().config).toEqual(initialConfig(META));
 
     client.getSimulator.mockResolvedValue(running());
-    await vi.advanceTimersByTimeAsync(POLL_MS);
+    store.getState().applyStatus(status('RUNNING'));
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().phase).toBe('RUNNING');
+    expect(store.getState().config?.groups[0]?.id).toBe('orders');
+  });
+
+  it('keeps the phase of a status that came before the answer of GET /simulator', async () => {
+    const client = fakeClient({ ...IDLE, phase: 'STARTING' });
+    client.getSimulator.mockResolvedValueOnce({ ...IDLE, phase: 'STARTING' }).mockResolvedValue(running());
+    const store = createConfigStore({ client });
+    store.getState().applyStatus(status('RUNNING'));
+
+    await store.getState().load();
+    await vi.runAllTimersAsync();
 
     expect(store.getState().phase).toBe('RUNNING');
     expect(store.getState().config?.groups[0]?.id).toBe('orders');
@@ -156,7 +172,7 @@ describe('editGroup', () => {
 });
 
 describe('start', () => {
-  it('posts the request of the form, locks the panel and polls until it runs', async () => {
+  it('posts the request of the form, locks the panel and follows the status until it runs', async () => {
     const client = fakeClient();
     const store = await loaded(client);
 
@@ -165,18 +181,28 @@ describe('start', () => {
     expect(client.startSimulator).toHaveBeenCalledWith(buildStartRequest(META, initialConfig(META)));
     expect(store.getState().phase).toBe('STARTING');
 
-    client.getSimulator.mockResolvedValue({ ...IDLE, phase: 'STARTING' });
-    await vi.advanceTimersByTimeAsync(POLL_MS);
+    store.getState().applyStatus(status('STARTING'));
     expect(store.getState().phase).toBe('STARTING');
 
-    client.getSimulator.mockResolvedValue(running());
-    await vi.advanceTimersByTimeAsync(POLL_MS);
+    store.getState().applyStatus(status('RUNNING'));
+    await vi.runAllTimersAsync();
     expect(store.getState().phase).toBe('RUNNING');
     // The form that was started stays as it is.
     expect(store.getState().config).toEqual(initialConfig(META));
+    expect(client.getSimulator).toHaveBeenCalledTimes(1);
+  });
 
-    await vi.advanceTimersByTimeAsync(10 * POLL_MS);
-    expect(client.getSimulator).toHaveBeenCalledTimes(3);
+  it('keeps the phase that a status gave while the start request was in flight', async () => {
+    const client = fakeClient();
+    const store = await loaded(client);
+    client.startSimulator.mockImplementation(async () => {
+      store.getState().applyStatus(status('RUNNING'));
+      return status('STARTING');
+    });
+
+    await store.getState().start();
+
+    expect(store.getState().phase).toBe('RUNNING');
   });
 
   it('shows the violations of a 400 on their fields, and the others in the banner', async () => {
@@ -223,8 +249,7 @@ describe('start', () => {
     const store = await loaded(client);
     await store.getState().start();
 
-    client.getSimulator.mockResolvedValue({ ...IDLE, lastError: 'Topic orders-1 already exists' });
-    await vi.advanceTimersByTimeAsync(POLL_MS);
+    store.getState().applyStatus(status('IDLE', 'Topic orders-1 already exists'));
 
     expect(store.getState().phase).toBe('IDLE');
     expect(store.getState().banner).toBe('The simulation failed to start.');
@@ -252,7 +277,7 @@ describe('start', () => {
 });
 
 describe('stop', () => {
-  it('stops and polls until the simulator is idle', async () => {
+  it('stops and follows the status until the simulator is idle', async () => {
     const client = fakeClient(running());
     const store = await loaded(client);
 
@@ -260,9 +285,9 @@ describe('stop', () => {
     expect(client.stopSimulator).toHaveBeenCalledOnce();
     expect(store.getState().phase).toBe('STOPPING');
 
-    client.getSimulator.mockResolvedValue(IDLE);
-    await vi.advanceTimersByTimeAsync(POLL_MS);
+    store.getState().applyStatus(status('IDLE'));
     expect(store.getState().phase).toBe('IDLE');
+    expect(store.getState().banner).toBeNull();
     expect(store.getState().config?.groups[0]?.id).toBe('orders');
   });
 

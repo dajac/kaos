@@ -67,8 +67,8 @@ arguments to the right: `var ids = new HashSet<String>()`.
 | `kaos-server` | Javalin adapter exposing the HTTP API v1 (REST + SSE, OpenAPI); builds the shaded runnable jar |
 | `kaos-ui` | React + TypeScript UI, built by Vite and embedded in the jar under `/ui` |
 
-`kaos-core` and `kaos-server` are built and `kaos-ui` is a scaffold;
-see `docs/ARCHITECTURE.md` for their status.
+`kaos-core`, `kaos-server` and `kaos-ui` (the config panel and the Rows
+view) are built; see `docs/ARCHITECTURE.md` for their status.
 
 ## Build and run
 

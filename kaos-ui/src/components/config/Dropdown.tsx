@@ -14,12 +14,78 @@
  * limitations under the License.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type RefObject } from 'react';
 
 // The dropdown of the prototype (`.dd`): a button that shows the selected
 // label and opens a menu of options, each with an optional hint. Opening a
 // dropdown closes the others, and a click outside, Escape or moving the
 // focus out of it closes it.
+
+/** The open state of a `.dd` and the handlers of its root, for every menu of the prototype. */
+export interface DropdownState {
+  readonly open: boolean;
+  setOpen(open: boolean): void;
+  readonly buttonRef: RefObject<HTMLButtonElement | null>;
+  readonly rootProps: {
+    readonly className: string;
+    readonly ref: RefObject<HTMLDivElement | null>;
+    readonly onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+    readonly onBlur: (event: FocusEvent<HTMLDivElement>) => void;
+  };
+}
+
+/** The state of a dropdown whose root has the classes `dd` and `extraClass`. */
+export function useDropdown(extraClass?: string): DropdownState {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    // In the capture phase, like the prototype, so that opening another
+    // dropdown closes this one first.
+    const close = (event: MouseEvent) => {
+      if (!(event.target instanceof Node) || !root.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('click', close, true);
+    return () => document.removeEventListener('click', close, true);
+  }, [open]);
+
+  const classes = ['dd'];
+  if (extraClass !== undefined) {
+    classes.push(extraClass);
+  }
+  if (open) {
+    classes.push('open');
+  }
+
+  return {
+    open,
+    setOpen,
+    buttonRef,
+    rootProps: {
+      className: classes.join(' '),
+      ref: root,
+      onKeyDown: (event) => {
+        if (open && event.key === 'Escape') {
+          event.stopPropagation();
+          setOpen(false);
+          buttonRef.current?.focus();
+        }
+      },
+      onBlur: (event) => {
+        // Focus left the dropdown, as with Tab out of its last item.
+        if (!(event.relatedTarget instanceof Node) || !root.current?.contains(event.relatedTarget)) {
+          setOpen(false);
+        }
+      },
+    },
+  };
+}
 
 export interface DropdownOption {
   readonly value: string;
@@ -39,50 +105,16 @@ export interface DropdownProps {
 }
 
 export function Dropdown({ options, value, buttonLabel, addVariant = false, onChange }: DropdownProps) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-    // In the capture phase, like the prototype, so that opening another
-    // dropdown closes this one first.
-    const close = (event: MouseEvent) => {
-      if (!(event.target instanceof Node) || !root.current?.contains(event.target)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('click', close, true);
-    return () => document.removeEventListener('click', close, true);
-  }, [open]);
+  const { open, setOpen, buttonRef, rootProps } = useDropdown();
 
   const selected = options.find((option) => option.value === value);
   const label = buttonLabel ?? selected?.label ?? value ?? '';
 
-  const button = useRef<HTMLButtonElement>(null);
-
   return (
-    <div
-      className={open ? 'dd open' : 'dd'}
-      ref={root}
-      onKeyDown={(event) => {
-        if (open && event.key === 'Escape') {
-          event.stopPropagation();
-          setOpen(false);
-          button.current?.focus();
-        }
-      }}
-      onBlur={(event) => {
-        // Focus left the dropdown, as with Tab out of its last item.
-        if (!(event.relatedTarget instanceof Node) || !root.current?.contains(event.relatedTarget)) {
-          setOpen(false);
-        }
-      }}
-    >
+    <div {...rootProps}>
       <button
         type="button"
-        ref={button}
+        ref={buttonRef}
         className={addVariant ? 'dd-btn dd-btn-add' : 'dd-btn'}
         aria-haspopup="true"
         aria-expanded={open}
