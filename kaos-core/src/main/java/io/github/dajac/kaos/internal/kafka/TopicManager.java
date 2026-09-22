@@ -1,8 +1,5 @@
 package io.github.dajac.kaos.internal.kafka;
 
-import io.github.dajac.kaos.SimulationException;
-import io.github.dajac.kaos.TopicSpec;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -12,6 +9,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
 
+import io.github.dajac.kaos.SimulationException;
+import io.github.dajac.kaos.TopicSpec;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
@@ -53,10 +52,12 @@ public final class TopicManager {
         } catch (ExecutionException e) {
             if (e.getCause() instanceof TopicExistsException) {
                 throw new SimulationException(
-                    "The topic '" + topic.name() + "' already exists; the simulator only creates topics it owns", e.getCause()
+                    "The topic '" + topic.name() + "' already exists; the simulator only creates topics it owns",
+                    e.getCause()
                 );
             }
-            throw new SimulationException("Could not create the topic '" + topic.name() + "': " + e.getCause(), e.getCause());
+            throw new SimulationException("Could not create the topic '" + topic.name() + "': " + e.getCause(),
+                e.getCause());
         } catch (TimeoutException e) {
             throw new SimulationException("Timed out creating the topic '" + topic.name() + "' after " + timeout, e);
         } catch (InterruptedException e) {
@@ -95,7 +96,8 @@ public final class TopicManager {
                 get(admin.deleteTopics(List.of(name)).all(), timeout);
             } catch (ExecutionException e) {
                 if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
-                    throw new SimulationException("Could not delete the topic '" + name + "': " + e.getCause(), e.getCause());
+                    throw new SimulationException("Could not delete the topic '" + name + "': " + e.getCause(),
+                        e.getCause());
                 }
             }
             awaitExistence(name, false, deadline);
@@ -108,7 +110,8 @@ public final class TopicManager {
     }
 
     /** Polls the cluster until it reports the topic, or no longer does. */
-    private void awaitExistence(String name, boolean expected, long deadline) throws InterruptedException, TimeoutException {
+    private void awaitExistence(String name, boolean expected, long deadline)
+        throws InterruptedException, TimeoutException {
         while (exists(name, deadline) != expected) {
             LockSupport.parkNanos(this, POLL_INTERVAL.toNanos());
             if (Thread.interrupted()) {

@@ -4,11 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import io.github.dajac.kaos.ProducerSnapshot;
 import io.github.dajac.kaos.ProducerSpec;
 import io.github.dajac.kaos.ProducerState;
 import io.github.dajac.kaos.TopicSpec;
-
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -18,18 +22,14 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicInteger;
-
 /** Drives the producer loop against a mock Kafka producer. */
 class ProducerRunnerTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
     private static final Duration QUIET = Duration.ofMillis(500);
 
-    private final MockProducer<String, String> client = new MockProducer<>(true, null, new StringSerializer(), new StringSerializer());
+    private final MockProducer<String, String> client =
+        new MockProducer<>(true, null, new StringSerializer(), new StringSerializer());
     private final AtomicInteger changes = new AtomicInteger();
     private final Threads threads = new Threads();
     private final Resources resources = new Resources("test");
@@ -47,7 +47,8 @@ class ProducerRunnerTest {
     @Test
     void isStoppedUntilItStarts() {
         assertThat(runner.state()).isEqualTo(ProducerState.STOPPED);
-        assertThat(runner.snapshot()).isEqualTo(new ProducerSnapshot("load", List.of("a", "b"), ProducerState.STOPPED, 200));
+        assertThat(runner.snapshot())
+            .isEqualTo(new ProducerSnapshot("load", List.of("a", "b"), ProducerState.STOPPED, 200));
         assertThat(runner.id()).isEqualTo("load");
         assertThat(runner.topics()).containsExactly("a", "b");
         assertThat(runner.ratePerPartition()).isEqualTo(200);
@@ -173,7 +174,8 @@ class ProducerRunnerTest {
     /** Waits until nothing is written for a while, and returns the number of records written. */
     private int awaitNoMoreWrites() {
         var last = new AtomicInteger(-1);
-        await().atMost(TIMEOUT).pollInterval(QUIET).until(() -> last.getAndSet(client.history().size()) == client.history().size());
+        await().atMost(TIMEOUT).pollInterval(QUIET)
+            .until(() -> last.getAndSet(client.history().size()) == client.history().size());
         return client.history().size();
     }
 

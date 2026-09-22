@@ -28,7 +28,8 @@ public final class Threads implements ThreadFactory {
         return Thread.ofPlatform()
             .name(PREFIX + name)
             .daemon(true)
-            .uncaughtExceptionHandler((thread, error) -> LOG.error("The thread {} ended on an unexpected error", thread.getName(), error))
+            .uncaughtExceptionHandler(
+                (thread, error) -> LOG.error("The thread {} ended on an unexpected error", thread.getName(), error))
             .unstarted(task);
     }
 

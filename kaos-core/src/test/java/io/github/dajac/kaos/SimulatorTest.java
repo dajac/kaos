@@ -6,14 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.awaitility.Awaitility.await;
 
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.Test;
 
 /** The harness before {@code start()}, which needs no cluster. */
 class SimulatorTest {
@@ -35,7 +35,8 @@ class SimulatorTest {
     @Test
     void theInitialSnapshotIsIdleAndEmpty() {
         try (var simulator = new Simulator("localhost:9092")) {
-            assertThat(simulator.snapshot()).isEqualTo(new SimulatorSnapshot(0, Phase.IDLE, false, "", List.of(), List.of(), List.of()));
+            assertThat(simulator.snapshot())
+                .isEqualTo(new SimulatorSnapshot(0, Phase.IDLE, false, "", List.of(), List.of(), List.of()));
             assertThat(simulator.describe()).isEqualTo(new SimulatorSpec(List.of(), List.of(), List.of()));
         }
     }
@@ -193,12 +194,16 @@ class SimulatorTest {
     void aStopWithNothingRunningKeepsTheLastError() {
         var received = new CopyOnWriteArrayList<SimulatorSnapshot>();
         // The admin client refuses the property, so the start fails before it reaches a cluster.
-        try (var simulator = new Simulator("localhost:9092").withClientProperty("security.protocol", "bogus").withListener(received::add)) {
+        try (
+            var simulator = new Simulator("localhost:9092").withClientProperty("security.protocol", "bogus")
+                .withListener(received::add)
+        ) {
             simulator.addTopic("orders", 3);
 
             var failure = catchThrowable(simulator::start);
 
-            assertThat(failure).isInstanceOf(SimulationException.class).hasMessageContaining("The simulator failed to start");
+            assertThat(failure).isInstanceOf(SimulationException.class)
+                .hasMessageContaining("The simulator failed to start");
             assertThat(simulator.snapshot().lastError()).isEqualTo(failure.getMessage());
             assertThat(simulator.snapshot().topics()).hasSize(1);
 

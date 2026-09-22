@@ -1,12 +1,12 @@
 package io.github.dajac.kaos;
 
-import io.github.dajac.kaos.internal.config.ConfigValidator;
-import io.github.dajac.kaos.internal.engine.SimulatorEngine;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+
+import io.github.dajac.kaos.internal.config.ConfigValidator;
+import io.github.dajac.kaos.internal.engine.SimulatorEngine;
 
 /**
  * The simulator harness. It holds topics and producers, which run against a Kafka cluster between

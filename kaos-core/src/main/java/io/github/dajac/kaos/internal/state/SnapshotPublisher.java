@@ -1,10 +1,5 @@
 package io.github.dajac.kaos.internal.state;
 
-import io.github.dajac.kaos.Registration;
-import io.github.dajac.kaos.SimulationException;
-import io.github.dajac.kaos.SimulatorSnapshot;
-import io.github.dajac.kaos.SnapshotListener;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -22,6 +17,10 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import io.github.dajac.kaos.Registration;
+import io.github.dajac.kaos.SimulationException;
+import io.github.dajac.kaos.SimulatorSnapshot;
+import io.github.dajac.kaos.SnapshotListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

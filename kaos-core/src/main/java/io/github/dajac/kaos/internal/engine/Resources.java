@@ -1,13 +1,12 @@
 package io.github.dajac.kaos.internal.engine;
 
-import io.github.dajac.kaos.SimulationException;
-
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 
+import io.github.dajac.kaos.SimulationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

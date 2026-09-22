@@ -5,14 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.awaitility.Awaitility.await;
 
-import io.github.dajac.kaos.Phase;
-import io.github.dajac.kaos.SimulationException;
-import io.github.dajac.kaos.SimulatorSnapshot;
-import io.github.dajac.kaos.TopicSpec;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -20,6 +12,13 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.LongStream;
+
+import io.github.dajac.kaos.Phase;
+import io.github.dajac.kaos.SimulationException;
+import io.github.dajac.kaos.SimulatorSnapshot;
+import io.github.dajac.kaos.TopicSpec;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 class SnapshotPublisherTest {
 
@@ -29,7 +28,8 @@ class SnapshotPublisherTest {
     private final AtomicReference<SimulatorSnapshot> state = new AtomicReference<>(snapshot(Phase.IDLE));
     private final List<SimulatorSnapshot> received = new CopyOnWriteArrayList<>();
     private final List<String> listenerThreads = new CopyOnWriteArrayList<>();
-    private final SnapshotPublisher publisher = new SnapshotPublisher(state::get, task -> new Thread(task, THREAD_NAME));
+    private final SnapshotPublisher publisher =
+        new SnapshotPublisher(state::get, task -> new Thread(task, THREAD_NAME));
 
     @AfterEach
     void stop() {
@@ -84,7 +84,8 @@ class SnapshotPublisherTest {
         state.set(snapshot(Phase.RUNNING));
         publisher.poke();
 
-        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(received).containsExactly(snapshot(Phase.RUNNING).withRevision(1)));
+        await().atMost(TIMEOUT)
+            .untilAsserted(() -> assertThat(received).containsExactly(snapshot(Phase.RUNNING).withRevision(1)));
     }
 
     @Test
@@ -252,7 +253,8 @@ class SnapshotPublisherTest {
 
         assertThat(publisher.onPublisherThread()).isFalse();
         assertThat(received).hasSize(1);
-        assertThat(failures).hasSize(3).allSatisfy(failure -> assertThat(failure).isInstanceOf(IllegalStateException.class));
+        assertThat(failures).hasSize(3)
+            .allSatisfy(failure -> assertThat(failure).isInstanceOf(IllegalStateException.class));
         // The publisher still runs, and stops from another thread.
         state.set(snapshot(Phase.STOPPING));
         publisher.stop();
@@ -269,7 +271,8 @@ class SnapshotPublisherTest {
     void awaitReturnsTheFirstSnapshotThatMatches() throws Exception {
         publisher.start();
         var result = new AtomicReference<SimulatorSnapshot>();
-        var waiter = new Thread(() -> result.set(publisher.await(s -> s.phase() == Phase.RUNNING, TIMEOUT)), "test-waiter");
+        var waiter =
+            new Thread(() -> result.set(publisher.await(s -> s.phase() == Phase.RUNNING, TIMEOUT)), "test-waiter");
         waiter.start();
 
         state.set(snapshot(Phase.STARTING));

@@ -2,9 +2,9 @@ package io.github.dajac.kaos.internal.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
+
+import org.junit.jupiter.api.Test;
 
 class ThreadsTest {
 

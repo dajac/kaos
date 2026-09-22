@@ -5,14 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import io.github.dajac.kaos.SimulationException;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import io.github.dajac.kaos.SimulationException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 class ResourcesTest {
 
@@ -84,7 +83,8 @@ class ResourcesTest {
 
         assertThat(undone).containsExactly("third", "child", "first");
         // The failure of the child is not nested in an exception of its own.
-        assertThat(thrown).isExactlyInstanceOf(SimulationException.class).hasMessageContaining("2 undo action(s) of test failed");
+        assertThat(thrown).isExactlyInstanceOf(SimulationException.class)
+            .hasMessageContaining("2 undo action(s) of test failed");
         assertThat(thrown.getSuppressed()).containsExactly(childFailure, firstFailure);
     }
 

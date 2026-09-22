@@ -1,5 +1,15 @@
 package io.github.dajac.kaos.internal.engine;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+
 import io.github.dajac.kaos.InvalidConfigException;
 import io.github.dajac.kaos.Phase;
 import io.github.dajac.kaos.ProducerHandle;
@@ -18,17 +28,6 @@ import io.github.dajac.kaos.internal.kafka.TopicManager;
 import io.github.dajac.kaos.internal.proxy.NetworkFaults;
 import io.github.dajac.kaos.internal.proxy.ProxyLauncher;
 import io.github.dajac.kaos.internal.state.SnapshotPublisher;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
-
 import org.apache.kafka.clients.producer.Producer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,10 +131,12 @@ public final class SimulatorEngine {
         try {
             var current = declarableState();
             var description = describe(current);
-            validate(new SimulatorSpec(append(description.topics(), spec), description.producers(), description.groups()));
+            validate(
+                new SimulatorSpec(append(description.topics(), spec), description.producers(), description.groups()));
 
             var topic = new TopicComponent(spec);
-            declare(new State(current.phase(), current.lastError(), append(current.topics(), topic), current.producers()));
+            declare(
+                new State(current.phase(), current.lastError(), append(current.topics(), topic), current.producers()));
             return topic;
         } finally {
             structureLock.unlock();
@@ -149,7 +150,8 @@ public final class SimulatorEngine {
         try {
             var current = declarableState();
             var description = describe(current);
-            validate(new SimulatorSpec(description.topics(), append(description.producers(), spec), description.groups()));
+            validate(
+                new SimulatorSpec(description.topics(), append(description.producers(), spec), description.groups()));
 
             var identified = spec.id().isEmpty()
                 ? new ProducerSpec(nextProducerId(current), spec.topics(), spec.ratePerPartition())
@@ -159,7 +161,8 @@ public final class SimulatorEngine {
                 .filter(topic -> identified.topics().contains(topic.name()))
                 .toList();
             var producer = new ProducerRunner(identified, targets, publisher::poke);
-            declare(new State(current.phase(), current.lastError(), current.topics(), append(current.producers(), producer)));
+            declare(new State(current.phase(), current.lastError(), current.topics(),
+                append(current.producers(), producer)));
             return producer;
         } finally {
             structureLock.unlock();
@@ -239,7 +242,8 @@ public final class SimulatorEngine {
         starting.register("admin client", () -> admin.close(ADMIN_CLOSE_TIMEOUT));
 
         try {
-            var proxy = new ProxyLauncher(bootstrapServers, proxyPort, PROXY_LAUNCH_TIMEOUT).launch(admin, new NetworkFaults());
+            var proxy =
+                new ProxyLauncher(bootstrapServers, proxyPort, PROXY_LAUNCH_TIMEOUT).launch(admin, new NetworkFaults());
             starting.register("proxy", proxy::close);
         } catch (IllegalStateException e) {
             throw new SimulationException("The proxy failed to start: " + e.getMessage(), e);
@@ -255,7 +259,8 @@ public final class SimulatorEngine {
 
         for (var producer : current.producers()) {
             var component = starting.child("producer " + producer.id());
-            Supplier<Producer<String, String>> client = () -> clients.createProducer(Threads.PREFIX + producer.threadName());
+            Supplier<Producer<String, String>> client =
+                () -> clients.createProducer(Threads.PREFIX + producer.threadName());
             producer.start(client, threads, component);
         }
     }

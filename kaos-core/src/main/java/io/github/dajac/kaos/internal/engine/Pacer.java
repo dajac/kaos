@@ -18,7 +18,8 @@ final class Pacer {
      */
     Pacer(double ticksPerSecond, long now) {
         if (!Double.isFinite(ticksPerSecond) || ticksPerSecond <= 0) {
-            throw new IllegalArgumentException("The rate must be a finite number greater than 0, got " + ticksPerSecond);
+            throw new IllegalArgumentException(
+                "The rate must be a finite number greater than 0, got " + ticksPerSecond);
         }
         this.periodNanos = Math.max(1, Math.round(NANOS_PER_SECOND / ticksPerSecond));
         this.nextTick = now;

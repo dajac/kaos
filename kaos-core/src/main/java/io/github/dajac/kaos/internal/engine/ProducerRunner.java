@@ -1,12 +1,5 @@
 package io.github.dajac.kaos.internal.engine;
 
-import io.github.dajac.kaos.ProducerHandle;
-import io.github.dajac.kaos.ProducerSnapshot;
-import io.github.dajac.kaos.ProducerSpec;
-import io.github.dajac.kaos.ProducerState;
-import io.github.dajac.kaos.SimulationException;
-import io.github.dajac.kaos.TopicSpec;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -14,6 +7,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 
+import io.github.dajac.kaos.ProducerHandle;
+import io.github.dajac.kaos.ProducerSnapshot;
+import io.github.dajac.kaos.ProducerSpec;
+import io.github.dajac.kaos.ProducerState;
+import io.github.dajac.kaos.SimulationException;
+import io.github.dajac.kaos.TopicSpec;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -139,7 +138,8 @@ public final class ProducerRunner implements ProducerHandle {
             // The loop is blocked in the Kafka producer, whose blocking calls are interruptible.
             started.interrupt();
             if (!started.join(STOP_TIMEOUT)) {
-                throw new SimulationException("The thread " + started.getName() + " did not stop within " + STOP_TIMEOUT);
+                throw new SimulationException(
+                    "The thread " + started.getName() + " did not stop within " + STOP_TIMEOUT);
             }
         }
     }

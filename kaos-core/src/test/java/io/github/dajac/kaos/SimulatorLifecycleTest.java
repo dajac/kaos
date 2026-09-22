@@ -5,18 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.awaitility.Awaitility.await;
 
-import io.github.dajac.kaos.test.IntegrationTest;
-import io.github.dajac.kaos.test.KafkaCluster;
-
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -29,6 +17,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+
+import io.github.dajac.kaos.test.IntegrationTest;
+import io.github.dajac.kaos.test.KafkaCluster;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /** The lifecycle of a simulator with topics and producers, against a real broker. */
 @IntegrationTest
@@ -62,7 +61,10 @@ class SimulatorLifecycleTest {
         var proxyPort = freePortBlock();
         var snapshots = new CopyOnWriteArrayList<SimulatorSnapshot>();
 
-        try (var simulator = new Simulator(cluster.bootstrapServers()).withProxyPort(proxyPort).withListener(snapshots::add)) {
+        try (
+            var simulator =
+                new Simulator(cluster.bootstrapServers()).withProxyPort(proxyPort).withListener(snapshots::add)
+        ) {
             simulator.addTopic(orders, 3);
             simulator.addTopic(payments, 2);
             var producer = simulator.addProducer(p -> p.topics(orders, payments).ratePerPartition(20));
@@ -71,9 +73,11 @@ class SimulatorLifecycleTest {
 
             assertThat(simulator.snapshot().phase()).isEqualTo(Phase.RUNNING);
             assertThat(simulator.snapshot().lastError()).isEmpty();
-            assertThat(simulator.snapshot().topics()).containsExactly(new TopicSpec(orders, 3), new TopicSpec(payments, 2));
+            assertThat(simulator.snapshot().topics()).containsExactly(new TopicSpec(orders, 3),
+                new TopicSpec(payments, 2));
             assertThat(simulator.snapshot().producers())
-                .containsExactly(new ProducerSnapshot("producer-0", List.of(orders, payments), ProducerState.RUNNING, 20));
+                .containsExactly(
+                    new ProducerSnapshot("producer-0", List.of(orders, payments), ProducerState.RUNNING, 20));
             assertThat(producer.state()).isEqualTo(ProducerState.RUNNING);
             assertThat(partitionCount(orders)).isEqualTo(3);
             assertThat(partitionCount(payments)).isEqualTo(2);
@@ -130,7 +134,10 @@ class SimulatorLifecycleTest {
         var proxyPort = freePortBlock();
         var snapshots = new CopyOnWriteArrayList<SimulatorSnapshot>();
 
-        try (var simulator = new Simulator(cluster.bootstrapServers()).withProxyPort(proxyPort).withListener(snapshots::add)) {
+        try (
+            var simulator =
+                new Simulator(cluster.bootstrapServers()).withProxyPort(proxyPort).withListener(snapshots::add)
+        ) {
             simulator.addTopic(created, 3);
             // The simulator only creates the topics it owns, so this one fails the start after the
             // proxy and the first topic succeeded.
@@ -139,7 +146,8 @@ class SimulatorLifecycleTest {
 
             var failure = catchThrowable(simulator::start);
 
-            assertThat(failure).isInstanceOf(SimulationException.class).hasMessageContaining(conflicting).hasMessageContaining("already exists");
+            assertThat(failure).isInstanceOf(SimulationException.class).hasMessageContaining(conflicting)
+                .hasMessageContaining("already exists");
             assertThat(failure.getSuppressed()).isEmpty();
             // No topic: the one that was created is deleted, the one that was not is left alone.
             assertThat(topicNames()).doesNotContain(created).contains(conflicting);
@@ -148,7 +156,8 @@ class SimulatorLifecycleTest {
             assertThat(isFree(proxyPort)).isTrue();
             assertThat(isFree(proxyPort + 1)).isTrue();
             // No thread: only the publisher of the simulator, which is still open.
-            await().atMost(THREADS_GONE).untilAsserted(() -> assertThat(simulatorThreads()).containsExactly("kaos-publisher"));
+            await().atMost(THREADS_GONE)
+                .untilAsserted(() -> assertThat(simulatorThreads()).containsExactly("kaos-publisher"));
 
             // The listener saw STARTING, then IDLE with the failure.
             var last = snapshots.get(snapshots.size() - 1);
@@ -204,7 +213,8 @@ class SimulatorLifecycleTest {
             assertThat(topicNames()).doesNotContain(orders, payments);
             assertThat(isFree(proxyPort)).isTrue();
             assertThat(isFree(proxyPort + 1)).isTrue();
-            await().atMost(THREADS_GONE).untilAsserted(() -> assertThat(simulatorThreads()).containsExactly("kaos-publisher"));
+            await().atMost(THREADS_GONE)
+                .untilAsserted(() -> assertThat(simulatorThreads()).containsExactly("kaos-publisher"));
             assertThat(snapshots).extracting(SimulatorSnapshot::phase).containsSubsequence(Phase.STARTING, Phase.IDLE);
             assertThat(snapshots).extracting(SimulatorSnapshot::phase).doesNotContain(Phase.RUNNING);
             assertThat(simulator.snapshot().lastError()).isEqualTo(failure.getMessage());
@@ -244,7 +254,8 @@ class SimulatorLifecycleTest {
                 .hasCauseInstanceOf(IllegalStateException.class);
 
             assertThat(isFree(proxyPort)).isTrue();
-            await().atMost(THREADS_GONE).untilAsserted(() -> assertThat(simulatorThreads()).containsExactly("kaos-publisher"));
+            await().atMost(THREADS_GONE)
+                .untilAsserted(() -> assertThat(simulatorThreads()).containsExactly("kaos-publisher"));
             assertThat(snapshots).extracting(SimulatorSnapshot::phase).containsSubsequence(Phase.STARTING, Phase.IDLE);
             assertThat(simulator.snapshot().lastError()).contains("The proxy failed to start");
         }
@@ -265,8 +276,10 @@ class SimulatorLifecycleTest {
             assertThatThrownBy(() -> simulator.withProxyPort(19092)).isInstanceOf(IllegalStateException.class);
             assertThatThrownBy(() -> simulator.withListener(snapshot -> {})).isInstanceOf(IllegalStateException.class);
             assertThatThrownBy(simulator::start).isInstanceOf(SimulationStateException.class);
-            assertThatThrownBy(() -> simulator.addTopic(cluster.uniqueName("late"), 1)).isInstanceOf(SimulationStateException.class);
-            assertThatThrownBy(() -> simulator.addProducer(p -> p.topics(topic))).isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(() -> simulator.addTopic(cluster.uniqueName("late"), 1))
+                .isInstanceOf(SimulationStateException.class);
+            assertThatThrownBy(() -> simulator.addProducer(p -> p.topics(topic)))
+                .isInstanceOf(SimulationStateException.class);
 
             // A listener can still be added, and removed, while the simulator runs.
             var snapshots = new CopyOnWriteArrayList<SimulatorSnapshot>();
@@ -341,7 +354,8 @@ class SimulatorLifecycleTest {
     }
 
     private int partitionCount(String topic) throws Exception {
-        return admin.describeTopics(List.of(topic)).allTopicNames().get(30, TimeUnit.SECONDS).get(topic).partitions().size();
+        return admin.describeTopics(List.of(topic)).allTopicNames().get(30, TimeUnit.SECONDS).get(topic).partitions()
+            .size();
     }
 
     private Set<String> topicNames() throws Exception {
@@ -380,7 +394,8 @@ class SimulatorLifecycleTest {
 
     /** Probes a port the way the proxy binds it, on the wildcard and the loopback addresses. */
     private static boolean isFree(int port) {
-        return canBind(new InetSocketAddress(port)) && canBind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+        return canBind(new InetSocketAddress(port))
+            && canBind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
     }
 
     private static boolean canBind(InetSocketAddress address) {

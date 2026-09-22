@@ -3,11 +3,10 @@ package io.github.dajac.kaos.internal.engine;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.dajac.kaos.ConfigMetadata;
-
-import org.junit.jupiter.api.Test;
-
 import java.util.concurrent.TimeUnit;
+
+import io.github.dajac.kaos.ConfigMetadata;
+import org.junit.jupiter.api.Test;
 
 class PacerTest {
 
