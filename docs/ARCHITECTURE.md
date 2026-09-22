@@ -93,7 +93,7 @@ build steps back one major.
 | Command line | picocli 4.7.x in server, through reflection (no annotation processor) |
 | Logging | `slf4j-api` only in core; logback-classic 1.5.x in server |
 | Packaging | `maven-shade-plugin` 3.6.x |
-| Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`), plus `config/CheckParentheses.java`; both checked in `verify` |
+| Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`), checked in `verify` |
 | Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration` |
 | Frontend | Node 24 LTS (pinned by frontend-maven-plugin + `.nvmrc`), Vite 8, React 19, TypeScript, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
 | Frontend tests | Vitest, React Testing Library. Playwright is deferred. |
@@ -128,14 +128,8 @@ Notes:
     files are not formatted.
   - The JDT formatter cannot keep `foo(new Bar(` ... `));` and still move
     a lone closing parenthesis of a call to its own line, so it leaves
-    the parentheses of calls and annotations where the author put them.
-    `config/CheckParentheses.java`, a single-file program that the root
-    build runs in `verify` with the Java source launcher, fails on a
-    line that closes more parentheses than it opens and does not start
-    with `)` or `}`. It checks every `src/main/java` and `src/test/java`
-    directory under the root, except below hidden directories, `target`
-    and `node_modules`, and it first tests itself on
-    `config/check-parentheses-fixture.txt`.
+    the parentheses of calls and annotations where the author put them;
+    that rule is guidance in `CLAUDE.md`.
   - Spotless's up-to-date index is off, because it does not see a change
     of the formatter profile.
 - **Version.** Maven filters `version.properties` in `kaos-server`, and
@@ -166,7 +160,7 @@ kaos/
   pom.xml                      parent: BOMs, pluginManagement, -DskipUi, -DskipITs
   README.md  LICENSE  .gitignore  run.sh  CLAUDE.md
   docs/ARCHITECTURE.md         living design doc, kept up to date in every PR
-  config/                      Spotless profile, CheckParentheses.java and its fixture
+  config/                      eclipse-formatter.xml, the Spotless profile
   .github/workflows/ci.yml     CI: ./mvnw verify on every PR and on push to main
   kaos-core/                   library: kafka-clients, kroxylicious-runtime, slf4j-api
     src/main/java/io/github/dajac/kaos/            PUBLIC API
@@ -1000,13 +994,13 @@ Mixed-protocol groups are supported.
 
 Status: planned, except that `./mvnw verify` already builds the modules,
 runs the unit tests, the integration-test harness below and the code
-format checks, and produces the shaded jar, that `-DskipITs` works, that
+format check, and produces the shaded jar, that `-DskipITs` works, that
 `./run.sh` builds and starts the server, and that the CI workflow runs
 the build.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
-  required), the code format checks and the UI build with Vitest.
+  required), the code format check and the UI build with Vitest.
 - `-DskipUi` and `-DskipITs` give fast local loops.
 
 **Continuous integration**

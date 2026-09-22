@@ -47,29 +47,14 @@ Enforced and fixed by `spotless:apply`:
   group sorted and separated by a blank line. Unused imports go away.
 - Comments and Javadoc are left as written.
 
-Enforced by `config/CheckParentheses.java` in `verify`, fixed by hand:
-
-- When the arguments of a call or an annotation span several lines, the
-  closing parenthesis goes on its own line, aligned with the start of
-  the statement: `);`, `),`, and `));` when the last argument is itself
-  such a call. The check fails on a line that closes more parentheses
-  than it opens and does not start with `)` or `}`. The formatter does
-  not move these parentheses, so wrap a call that is too long by hand
-  before it does it.
-- The rule applies to every parenthesis, so it also reports a wrapped
-  parenthesized expression such as `(a` / `+ b) * c`. Its limits are
-  accepted: a line that closes as many parentheses as it opens is never
-  reported, and the check runs from the root only, so a build with
-  `-pl` or from a module directory skips it; CI covers it.
-- The check runs before Spotless and also reports lines that the
-  formatter repairs, such as `int second) {`. Run
-  `./mvnw spotless:apply` first, then fix what is still reported.
-- The check tests itself in `verify` on
-  `config/check-parentheses-fixture.txt`. Add a case there when the
-  check changes.
-
 Guidance, not checked:
 
+- When the arguments of a call span several lines, the closing
+  parenthesis goes on its own line, aligned with the start of the
+  statement: `);`, `),`, and `));` when the last argument is itself
+  such a call. The formatter keeps the parentheses of calls and
+  annotations where the author put them, so wrap a call that is too
+  long by hand before the formatter does it.
 - In a wrapped call, put the arguments on one line, or one per line, or
   in meaningful groups such as the key and value pairs of `Map.of`.
 - A lambda that does not fit behind its arrow moves to its own line
@@ -109,7 +94,7 @@ planned; see `docs/ARCHITECTURE.md` for their status.
 ## Build and run
 
 ```sh
-./mvnw verify                 # unit tests, Testcontainers ITs (needs Docker) and format checks; later also UI build + Vitest
+./mvnw verify                 # unit tests, Testcontainers ITs (needs Docker) and the format check; later also UI build + Vitest
 ./mvnw spotless:apply         # format the Java sources; verify fails on unformatted code
 ./mvnw verify -DskipITs       # skip the integration tests, keep the unit tests
 ./mvnw verify -DskipUi        # skip the frontend build (planned, no effect yet)

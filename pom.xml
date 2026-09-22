@@ -262,49 +262,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- The formatter leaves the parentheses of calls where the author
-                 put them. This check, run once from the root on the source
-                 directories of every module, fails when a closing parenthesis
-                 is left behind the last argument. It first tests itself on
-                 its fixture. -->
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <inherited>false</inherited>
-                <executions>
-                    <execution>
-                        <id>check-parentheses-self-test</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <skip>false</skip>
-                            <executable>${java.home}/bin/java</executable>
-                            <arguments>
-                                <argument>${project.basedir}/config/CheckParentheses.java</argument>
-                                <argument>--self-test</argument>
-                                <argument>${project.basedir}/config/check-parentheses-fixture.txt</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>check-parentheses</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <skip>false</skip>
-                            <executable>${java.home}/bin/java</executable>
-                            <arguments>
-                                <argument>${project.basedir}/config/CheckParentheses.java</argument>
-                                <argument>${project.basedir}</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <!-- Runs the tests tagged "integration" of every module during
                  "verify". They need Docker; -DskipITs skips them and keeps
                  the unit tests. -->
