@@ -19,6 +19,7 @@ import java.util.function.IntConsumer;
 import io.github.dajac.kaos.internal.proxy.NetworkFaults.Mode;
 import io.github.dajac.kaos.test.IntegrationTest;
 import io.github.dajac.kaos.test.KafkaCluster;
+import io.github.dajac.kaos.test.TestThreads;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -33,6 +34,10 @@ import org.junit.jupiter.api.Test;
 /**
  * Drives real consumers through the proxy and injects network faults by client id. Producers and
  * the admin client connect to the broker directly, as they do in the simulator.
+ *
+ * <p>The proxies are launched from the port block of the JVM, never from the default proxy port,
+ * so they pass whatever a build running next to this one, or a simulator, has bound. They assert
+ * on the ports relative to the ones the launcher probed or chose, never on absolute ports.
  */
 @IntegrationTest
 class NetworkFaultInjectionTest {
@@ -71,7 +76,7 @@ class NetworkFaultInjectionTest {
 
     @Test
     void blackholeEvictsTheClientAndClearingLetsItRejoin() throws Exception {
-        var proxy = launch(ProxyLauncher.DEFAULT_PORT);
+        var proxy = launch();
         var consumer = consumer(proxy, group, "isolated", SHORT_REQUEST_TIMEOUT);
         awaitMembers(group, "isolated");
 
@@ -89,7 +94,7 @@ class NetworkFaultInjectionTest {
 
     @Test
     void isolatingOneClientLeavesTheOtherClientOfTheProxyUnaffected() throws Exception {
-        var proxy = launch(ProxyLauncher.DEFAULT_PORT);
+        var proxy = launch();
         var healthy = consumer(proxy, group, "healthy", SHORT_REQUEST_TIMEOUT);
         consumer(proxy, group, "isolated", SHORT_REQUEST_TIMEOUT);
         awaitMembers(group, "healthy", "isolated");
@@ -109,7 +114,7 @@ class NetworkFaultInjectionTest {
 
     @Test
     void resetDisconnectsTheClientAndClearingRecoversQuickly() throws Exception {
-        var proxy = launch(ProxyLauncher.DEFAULT_PORT);
+        var proxy = launch();
         // With the default request timeout, a client whose requests were dropped would be stuck
         // for 30 s. A client whose connections are closed notices at once.
         var consumer = consumer(proxy, group, "reset", DEFAULT_REQUEST_TIMEOUT);
@@ -133,8 +138,8 @@ class NetworkFaultInjectionTest {
 
     @Test
     void twoProxiesInOneJvmHaveIndependentFaults() throws Exception {
-        var first = launch(ProxyLauncher.DEFAULT_PORT);
-        var second = launch(ProxyLauncher.DEFAULT_PORT);
+        var first = launch();
+        var second = launch();
         assertThat(second.bootstrapServers()).isNotEqualTo(first.bootstrapServers());
         assertThat(second.faults()).isNotSameAs(first.faults());
 
@@ -199,7 +204,7 @@ class NetworkFaultInjectionTest {
         };
 
         var launcher = new ProxyLauncher(
-            cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, takeBrokerPortOnce
+            cluster.bootstrapServers(), cluster.proxyPort(), LAUNCH_TIMEOUT, takeBrokerPortOnce
         );
         var proxy = launcher.launch(admin, new NetworkFaults());
         resources.add(proxy);
@@ -232,7 +237,7 @@ class NetworkFaultInjectionTest {
             }
         });
         ProxyLauncher launcher = new ProxyLauncher(
-            cluster.bootstrapServers(), ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, alwaysTakeBootstrapPort
+            cluster.bootstrapServers(), cluster.proxyPort(), LAUNCH_TIMEOUT, alwaysTakeBootstrapPort
         );
 
         assertThatThrownBy(() -> launcher.launch(admin, new NetworkFaults()))
@@ -256,7 +261,7 @@ class NetworkFaultInjectionTest {
         var threadsBefore = Thread.getAllStackTraces().keySet();
         var probed = new ArrayList<Integer>();
         var launcher = new ProxyLauncher(
-            "not a bootstrap address", ProxyLauncher.DEFAULT_PORT, LAUNCH_TIMEOUT, probed::add
+            "not a bootstrap address", cluster.proxyPort(), LAUNCH_TIMEOUT, probed::add
         );
 
         assertThatThrownBy(() -> launcher.launch(admin, new NetworkFaults()))
@@ -284,7 +289,7 @@ class NetworkFaultInjectionTest {
     @Test
     void closeIsIdempotentBoundedAndReleasesPortsAndThreads() throws Exception {
         var threadsBefore = Thread.getAllStackTraces().keySet();
-        var proxy = launch(ProxyLauncher.DEFAULT_PORT);
+        var proxy = launch();
         var port = port(proxy);
         // The eviction proves that the proxy dropped requests of the client. With the default
         // request timeout the client still waits for them, so its connections are open, with
@@ -307,15 +312,16 @@ class NetworkFaultInjectionTest {
         await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(proxyThreads(threadsBefore)).isEmpty());
     }
 
-    /** The threads started since {@code before}, except the test's own Kafka clients and Awaitility. */
+    /** The threads started since {@code before}, except the test's own Kafka clients. */
     private static List<String> proxyThreads(Set<Thread> before) {
-        return Thread.getAllStackTraces().keySet().stream()
-            .filter(Thread::isAlive)
-            .filter(thread -> !before.contains(thread))
-            .map(Thread::getName)
-            .filter(name -> !name.startsWith("test-") && !name.startsWith("kafka-") && !name.startsWith("awaitility"))
-            .sorted()
+        return TestThreads.startedSince(before).stream()
+            .filter(name -> !name.startsWith("test-") && !name.startsWith("kafka-"))
             .toList();
+    }
+
+    /** Launches a proxy from the port block of the JVM; see {@link KafkaCluster#proxyPort()}. */
+    private NetworkProxy launch() {
+        return launch(cluster.proxyPort());
     }
 
     private NetworkProxy launch(int requestedPort) {
