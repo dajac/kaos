@@ -3,22 +3,18 @@ package io.github.dajac.kaos;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import io.github.dajac.kaos.test.IntegrationTest;
 import io.github.dajac.kaos.test.KafkaCluster;
+import io.github.dajac.kaos.test.TestThreads;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.GroupListing;
@@ -387,39 +383,9 @@ class ConsumerGroupLifecycleTest {
         }
     }
 
-    /** A simulator whose proxy takes a free port block away from the default one. */
+    /** A simulator whose proxy requests the port block of this test JVM, away from the default one. */
     private Simulator newSimulator() {
-        return new Simulator(cluster.bootstrapServers()).withProxyPort(freePortBlock());
-    }
-
-    /**
-     * A port from which two ports are free: the proxy takes one port plus one per broker. It is
-     * taken below the ephemeral ranges, away from the outgoing connections of the clients.
-     */
-    private static int freePortBlock() {
-        for (int attempt = 0; attempt < 100; attempt++) {
-            var port = ThreadLocalRandom.current().nextInt(20000, 30000);
-            if (isFree(port) && isFree(port + 1)) {
-                return port;
-            }
-        }
-        throw new IllegalStateException("No free port block found");
-    }
-
-    /** Probes a port the way the proxy binds it, on the wildcard and the loopback addresses. */
-    private static boolean isFree(int port) {
-        return canBind(new InetSocketAddress(port))
-            && canBind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
-    }
-
-    private static boolean canBind(InetSocketAddress address) {
-        try (var socket = new ServerSocket()) {
-            socket.setReuseAddress(true);
-            socket.bind(address);
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
+        return new Simulator(cluster.bootstrapServers()).withProxyPort(cluster.proxyPort());
     }
 
     /**
@@ -469,15 +435,14 @@ class ConsumerGroupLifecycleTest {
         return configs;
     }
 
-    /** The threads that the test started and that are still alive, without those of Awaitility. */
+    /**
+     * The threads started since the beginning of the test that belong to a simulator: its own
+     * threads, its Kafka clients and its proxy. The threads of the test are left out: its admin
+     * client, and the ones {@link TestThreads} ignores.
+     */
     private List<String> simulatorThreads() {
-        return Thread.getAllStackTraces().keySet().stream()
-            .filter(Thread::isAlive)
-            .filter(thread -> !threadsBefore.contains(thread))
-            .map(Thread::getName)
-            .filter(name -> !name.startsWith("awaitility"))
+        return TestThreads.startedSince(threadsBefore).stream()
             .filter(name -> !name.startsWith("kafka-") || name.contains("kaos-"))
-            .sorted()
             .toList();
     }
 }
