@@ -200,6 +200,7 @@ kaos/
   pom.xml                      parent: BOMs, pluginManagement, -DskipUi, -DskipITs
   README.md  LICENSE  .gitignore  run.sh  CLAUDE.md
   docs/ARCHITECTURE.md         living design doc, kept up to date in every PR
+  docs/images/                 the screenshot of the README
   config/                      eclipse-formatter.xml, the Spotless profile
   .github/workflows/ci.yml     CI: ./mvnw verify on every PR and on push to main
   kaos-core/                   library: kafka-clients, kroxylicious-runtime, slf4j-api
@@ -831,20 +832,20 @@ built with the runner, and so is the removal.
   exists fails the start: adopting it would mean deleting, at `stop()`,
   a topic the simulator did not create. (The prototype adopts and
   deletes it.) The message of the failure ends with "delete it or use
-  another topic name". Topics get the default replication factor of the cluster.
-  Creating a topic waits until the cluster reports it, as deleting one
-  waits until it no longer does: the controller acknowledges both before
-  the brokers that serve the metadata know. The creation, at `start()`
-  or in an `addTopic` while running, also waits until every partition
-  has a leader that answers a `ListOffsets` request, bounded like the
-  rest of the step: a broker lists a partition in its metadata before
-  it hosts its log, and a produce request sent in between gets
-  `NOT_LEADER_OR_FOLLOWER`. When the first batch of the idempotent
-  producer fails that way while a later batch of the same partition is
-  accepted, the producer retries the first one with
+  another topic name". Topics get the default replication factor of the
+  cluster. Creating a topic waits until the cluster reports it, as
+  deleting one waits until it no longer does: the controller
+  acknowledges both before the brokers that serve the metadata know. The
+  creation, at `start()` or in an `addTopic` while running, also waits
+  until every partition has a leader that answers a `ListOffsets`
+  request, bounded like the rest of the step: a broker lists a partition
+  in its metadata before it hosts its log, and a produce request sent in
+  between gets `NOT_LEADER_OR_FOLLOWER`. When the first batch of the
+  idempotent producer fails that way while a later batch of the same
+  partition is accepted, the producer retries the first one with
   `OUT_OF_ORDER_SEQUENCE_NUMBER` until its delivery timeout and the
-  partition gets little or no load. So the producers only start once
-  the topics are ready.
+  partition gets little or no load. So the producers only start once the
+  topics are ready.
 - Stopping a producer unparks its loop and joins it for 5 s, then
   interrupts it, since the blocking calls of the Kafka producer are
   interruptible, and joins again; its client is then closed with a 5 s
@@ -1688,7 +1689,8 @@ runs the unit tests, the integration-test harness below, the code
 format check and the UI build with Vitest, and produces the shaded jar
 with the UI, that `-DskipITs` and `-DskipUi` work, that
 `./run.sh` builds and starts the server, that the CI workflow runs
-the build, and the server tests and the scripted curl session below.
+the build, the server tests and the scripted curl session below, and
+that the README example compiles.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
@@ -1794,11 +1796,11 @@ the build, and the server tests and the scripted curl session below.
   group (static members, group configs, autopilot) leaves the other
   group's members and epoch untouched; every partition of a topic gets
   records right after `start()` and after an `addTopic` while running;
-  topics and producers are added
-  and removed while running, a topic in use refuses its removal, and a
-  removed topic is deleted; a failed `add…` of a topic, a producer or a
-  group leaves the simulator unchanged. Each test checks that `close()`
-  leaves no thread, topic or group behind.
+  topics and producers are added and removed while running, a topic in
+  use refuses its removal, and a removed topic is deleted; a failed
+  `add…` of a topic, a producer or a group leaves the simulator
+  unchanged. Each test checks that `close()` leaves no thread, topic or
+  group behind.
 - `TopicManagerTest` checks that every partition of a topic accepts a
   produce request without retries once `awaitReady` returns, and that a
   topic that does not exist is never ready.
@@ -1886,4 +1888,7 @@ the build, and the server tests and the scripted curl session below.
 **Java API**
 - The ITs drive `new Simulator(..)`, `add…` and `start()` without HTTP,
   including a two-group scenario.
-- The README example compiles as a test.
+- The README example compiles as a test: `ReadmeExampleTest` holds the
+  same code, compiled and not run since it needs a broker on
+  `localhost:9092`, and checks that the Java block of `README.md` is that
+  code, up to the indentation.
