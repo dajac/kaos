@@ -95,29 +95,25 @@ protocol.*
 
 ```mermaid
 flowchart LR
-    ui["kaos-ui<br/>React UI in the browser"]
+    ui["kaos-ui<br/>web UI in the browser"]
     other["curl, scripts,<br/>other frontends"]
-    app["Your Java code"]
+    app["your Java code"]
+    server["kaos-server<br/>HTTP API v1<br/>REST, SSE, OpenAPI"]
 
-    subgraph jar["java -jar kaos-server.jar"]
-        server["kaos-server<br/>HTTP API v1: REST, SSE, OpenAPI"]
-        subgraph core["kaos-core: Simulator"]
-            producers["producers"]
-            consumers["consumers"]
-            poller["admin client<br/>and poller"]
-            proxy["proxy<br/>network faults"]
-        end
+    subgraph core["kaos-core"]
+        sim["Simulator<br/>producers, consumers,<br/>admin client, poller"]
+        proxy["proxy<br/>network faults"]
     end
 
     broker[("Kafka cluster 4.x")]
 
     ui -- "REST + SSE" --> server
     other -- "REST + SSE" --> server
-    server --> core
-    app -. embeds .-> core
-    consumers --> proxy --> broker
-    producers --> broker
-    poller --> broker
+    server --> sim
+    app -- "embeds" --> sim
+    sim -- "consumers" --> proxy
+    proxy --> broker
+    sim -- "producers, admin" --> broker
 ```
 
 - **`kaos-core`** is the library. A `Simulator` holds topics, producers
