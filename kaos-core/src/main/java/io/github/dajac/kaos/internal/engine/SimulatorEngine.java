@@ -638,11 +638,14 @@ public final class SimulatorEngine {
         return new Running(starting, topics, producers, groups, clients, topicManager, services);
     }
 
-    /** Creates a topic and waits until the cluster reports it. Its undo deletes it. */
+    /**
+     * Creates a topic and waits until the leader of every partition serves it, so that the
+     * producers started after it write to every partition. Its undo deletes it.
+     */
     private static void startTopic(TopicManager topicManager, TopicComponent topic, Resources resources) {
         topicManager.create(topic.spec());
         resources.register("topic " + topic.name(), () -> topicManager.delete(topic.name()));
-        topicManager.awaitCreated(topic.name());
+        topicManager.awaitReady(topic.name());
     }
 
     private void startProducer(ClientFactory clients, ProducerRunner producer, Resources resources) {

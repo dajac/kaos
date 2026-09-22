@@ -52,6 +52,8 @@ class DynamicComponentsTest {
     /** Netty's global executor thread outlives the proxy's event loops by about a second. */
     private static final Duration THREADS_GONE = Duration.ofSeconds(15);
     private static final Duration QUIET = Duration.ofSeconds(1);
+    /** The time a producer at 20 records per second per partition gets to write 20 to each. */
+    private static final Duration ADVANCE = Duration.ofSeconds(10);
 
     private KafkaCluster cluster;
     private Admin admin;
@@ -235,6 +237,32 @@ class DynamicComponentsTest {
     }
 
     @Test
+    void everyPartitionGetsRecordsRightAfterStartAndAfterATopicIsAddedWhileRunning() throws Exception {
+        var started = cluster.uniqueName("started");
+        var added = cluster.uniqueName("added");
+
+        try (var simulator = newSimulator()) {
+            simulator.addTopic(started, 8);
+            simulator.addProducer(p -> p.topics(started).ratePerPartition(20));
+            simulator.start();
+
+            // The producer starts once the leader of every partition serves the topic, so no
+            // partition is left without records.
+            await().atMost(ADVANCE)
+                .untilAsserted(() -> assertThat(endOffsets(started, 8)).allMatch(offset -> offset >= 20));
+
+            var topic = simulator.addTopic(added, 8);
+            simulator.addProducer(p -> p.topics(topic).ratePerPartition(20));
+
+            await().atMost(ADVANCE)
+                .untilAsserted(() -> assertThat(endOffsets(added, 8)).allMatch(offset -> offset >= 20));
+        }
+
+        assertThat(topicNames()).doesNotContain(started, added);
+        await().atMost(THREADS_GONE).untilAsserted(() -> assertThat(simulatorThreads()).isEmpty());
+    }
+
+    @Test
     void addsAndRemovesTopicsAndProducersWhileRunning() throws Exception {
         var first = cluster.uniqueName("first");
         var second = cluster.uniqueName("second");
@@ -246,7 +274,7 @@ class DynamicComponentsTest {
 
             var added = simulator.addTopic(second, 2);
 
-            // The call returns once the cluster reports the topic.
+            // The call returns once the leader of every partition serves the topic.
             assertThat(topicNames()).contains(second);
             assertThat(simulator.describe().topics()).containsExactly(new TopicSpec(first, 1),
                 new TopicSpec(second, 2));

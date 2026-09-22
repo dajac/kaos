@@ -834,7 +834,17 @@ built with the runner, and so is the removal.
   another topic name". Topics get the default replication factor of the cluster.
   Creating a topic waits until the cluster reports it, as deleting one
   waits until it no longer does: the controller acknowledges both before
-  the brokers that serve the metadata know.
+  the brokers that serve the metadata know. The creation, at `start()`
+  or in an `addTopic` while running, also waits until every partition
+  has a leader that answers a `ListOffsets` request, bounded like the
+  rest of the step: a broker lists a partition in its metadata before
+  it hosts its log, and a produce request sent in between gets
+  `NOT_LEADER_OR_FOLLOWER`. When the first batch of the idempotent
+  producer fails that way while a later batch of the same partition is
+  accepted, the producer retries the first one with
+  `OUT_OF_ORDER_SEQUENCE_NUMBER` until its delivery timeout and the
+  partition gets little or no load. So the producers only start once
+  the topics are ready.
 - Stopping a producer unparks its loop and joins it for 5 s, then
   interrupts it, since the blocking calls of the Kafka producer are
   interruptible, and joins again; its client is then closed with a 5 s
@@ -1782,11 +1792,16 @@ the build, and the server tests and the scripted curl session below.
   adding or removing a consumer triggers a rebalance that the snapshot
   shows, and a removed consumer's id is not assigned again; removing a
   group (static members, group configs, autopilot) leaves the other
-  group's members and epoch untouched; topics and producers are added
+  group's members and epoch untouched; every partition of a topic gets
+  records right after `start()` and after an `addTopic` while running;
+  topics and producers are added
   and removed while running, a topic in use refuses its removal, and a
   removed topic is deleted; a failed `add…` of a topic, a producer or a
   group leaves the simulator unchanged. Each test checks that `close()`
   leaves no thread, topic or group behind.
+- `TopicManagerTest` checks that every partition of a topic accepts a
+  produce request without retries once `awaitReady` returns, and that a
+  topic that does not exist is never ready.
 - `kaos-core` publishes its test sources as a `test-jar`, which
   `kaos-server` consumes in test scope for the harness.
 
