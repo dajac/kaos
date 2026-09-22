@@ -71,23 +71,38 @@ export function ConsumerSection({ meta, groupIndex, group, consumer, index }: Co
       className={consumer.expanded ? 'config-section expanded' : 'config-section'}
       id={`section-consumer-${consumer.key}`}
     >
-      <button className="section-toggle" onClick={() => toggle(groupIndex, consumer.key)} type="button">
+      {/* A div with the role of a button, so that the × inside it can be a real button. */}
+      <div
+        className="section-toggle"
+        role="button"
+        tabIndex={0}
+        aria-expanded={consumer.expanded}
+        onClick={() => toggle(groupIndex, consumer.key)}
+        onKeyDown={(event) => {
+          if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            toggle(groupIndex, consumer.key);
+          }
+        }}
+      >
         <span className="section-chevron">&#9654;</span>
         <span className="section-title">{consumerName(index)}</span>
         <span className={effective.protocol === 'consumer' ? 'section-tag tag-consumer' : 'section-tag tag-classic'}>
           {effective.protocol}
         </span>
-        <span
+        <button
+          type="button"
           className="section-remove"
           onClick={(event) => {
             event.stopPropagation();
             editGroup(groupIndex, (g) => removeConsumer(g, consumer.key));
           }}
           title="Remove consumer"
+          aria-label={`Remove ${consumerName(index)}`}
         >
           &times;
-        </span>
-      </button>
+        </button>
+      </div>
 
       {consumer.expanded || chips.length === 0 ? null : (
         <div className="consumer-chips">

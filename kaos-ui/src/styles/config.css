@@ -430,3 +430,9 @@
   opacity: 0.7;
 }
 .config-banner-close:hover { opacity: 1; background: var(--red-dim); }
+
+/* -- Keyboard access, not in the prototype: a consumer header is a div with
+      the role of a button, so that its × can be a real button; it keeps
+      the metrics of the <button> header, and the × shows while focused. -- */
+div.section-toggle { line-height: normal; }
+.section-remove:focus-visible { opacity: 1; }

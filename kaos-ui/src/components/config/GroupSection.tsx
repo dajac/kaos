@@ -113,7 +113,7 @@ export function GroupSection({ meta, groupIndex, group }: GroupSectionProps) {
         </div>
 
         <div className="field field-inline">
-          <label className="field-label">Subscribed Topics</label>
+          <label className="field-label">{numTopics.label}</label>
           <NumberInput
             value={group.numTopics}
             min={numTopics.min}
@@ -123,7 +123,7 @@ export function GroupSection({ meta, groupIndex, group }: GroupSectionProps) {
           <FieldError message={error('numTopics')} />
         </div>
         <div className="field field-inline">
-          <label className="field-label">Partitions per Topic</label>
+          <label className="field-label">{partitions.label}</label>
           <NumberInput
             value={group.partitions}
             min={partitions.min}

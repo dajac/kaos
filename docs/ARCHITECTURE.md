@@ -1369,7 +1369,10 @@ planned.
   panel shows the running config; in any other phase the form is the
   initial one. `configFromSimulator` applies this rule. It rebuilds the
   form from the `spec`, overrides included; an optional setting is
-  added when it differs from its default.
+  added when it differs from its default. The spec holds a value for
+  every setting and not which ones were set, so a setting that was
+  added at its default value is not restored by a reload, as in the
+  prototype.
 - `assignors.ts`: the presets of a protocol are the names of `/meta`,
   then "custom" when the protocol accepts a custom name (the consumer
   protocol). A new group starts on the first preset of its protocol
@@ -1406,9 +1409,10 @@ planned.
 - `configStore` (a vanilla Zustand store, `useConfigStore(selector)` in
   components; `createConfigStore({client, pollIntervalMs})` for tests)
   holds `/meta`, the form (`groups[]`), the phase, the inline errors by
-  field and the banner. `main.tsx` loads it before the first render:
-  `/meta` and `GET /simulator` together, with `configFromSimulator` for
-  the form.
+  field and the banner. `main.tsx` starts loading it before the first
+  render, without waiting: `/meta` and `GET /simulator` together, with
+  `configFromSimulator` for the form. Until they answer, the panel shows
+  the sidebar header and a disabled Start.
 - Edits go through `editGroup(index, update, field)`, where `update` is
   a function of `model/configModel.ts`; they are ignored while the panel
   is locked (any phase but `IDLE`), and clear the error of `field`.
@@ -1487,6 +1491,9 @@ removing components at runtime.
   `FieldError`), with Start and Stop, inline validation errors and the
   error banner. The Auto-Pilot button of the footer is there but stays
   disabled until the Rows view.
+- Keyboard: a dropdown closes on Escape and when the focus leaves it,
+  and its button carries `aria-expanded`; the × of a consumer is a
+  button of its own, inside a header that has the role of a button.
 
 **Lifecycle**
 - Start: create the topics, apply the group configs, start the proxy,

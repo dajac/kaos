@@ -18,7 +18,8 @@ import { useEffect, useRef, useState } from 'react';
 
 // The dropdown of the prototype (`.dd`): a button that shows the selected
 // label and opens a menu of options, each with an optional hint. Opening a
-// dropdown closes the others, and a click outside closes it.
+// dropdown closes the others, and a click outside, Escape or moving the
+// focus out of it closes it.
 
 export interface DropdownOption {
   readonly value: string;
@@ -59,9 +60,34 @@ export function Dropdown({ options, value, buttonLabel, addVariant = false, onCh
   const selected = options.find((option) => option.value === value);
   const label = buttonLabel ?? selected?.label ?? value ?? '';
 
+  const button = useRef<HTMLButtonElement>(null);
+
   return (
-    <div className={open ? 'dd open' : 'dd'} ref={root}>
-      <button type="button" className={addVariant ? 'dd-btn dd-btn-add' : 'dd-btn'} onClick={() => setOpen(!open)}>
+    <div
+      className={open ? 'dd open' : 'dd'}
+      ref={root}
+      onKeyDown={(event) => {
+        if (open && event.key === 'Escape') {
+          event.stopPropagation();
+          setOpen(false);
+          button.current?.focus();
+        }
+      }}
+      onBlur={(event) => {
+        // Focus left the dropdown, as with Tab out of its last item.
+        if (!(event.relatedTarget instanceof Node) || !root.current?.contains(event.relatedTarget)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        ref={button}
+        className={addVariant ? 'dd-btn dd-btn-add' : 'dd-btn'}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
         <span className="dd-value">{label}</span>
         <span className="dd-chevron">&#9662;</span>
       </button>
@@ -71,6 +97,9 @@ export function Dropdown({ options, value, buttonLabel, addVariant = false, onCh
             key={option.value}
             type="button"
             className={option.value === value ? 'dd-item selected' : 'dd-item'}
+            // Keeps the focus on the dropdown, so that a click on an item
+            // does not blur it and close the menu before the click lands.
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
               setOpen(false);
               onChange(option.value);

@@ -32,8 +32,8 @@ const int = (
 export const META: components['schemas']['Meta'] = {
   version: 'test',
   fields: [
-    int('numTopics', 'Topics', 'SIMULATOR', 1, 1, 20),
-    int('partitions', 'Partitions', 'TOPIC', 36, 1, 100),
+    int('numTopics', 'Subscribed Topics', 'SIMULATOR', 1, 1, 20),
+    int('partitions', 'Partitions per Topic', 'TOPIC', 36, 1, 100),
     {
       key: 'ratePerPartition',
       label: 'Rate per Partition (records/s)',

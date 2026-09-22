@@ -37,7 +37,8 @@ describe('Dropdown', () => {
     );
 
     expect(html).toBe(
-      '<div class="dd"><button type="button" class="dd-btn"><span class="dd-value">classic</span>' +
+      '<div class="dd"><button type="button" class="dd-btn" aria-haspopup="true" aria-expanded="false">' +
+        '<span class="dd-value">classic</span>' +
         '<span class="dd-chevron">▾</span></button><div class="dd-menu">' +
         '<button type="button" class="dd-item"><span>consumer</span></button>' +
         '<button type="button" class="dd-item selected"><span>classic</span>' +
@@ -50,7 +51,7 @@ describe('Dropdown', () => {
       <Dropdown options={[{ value: 'a', label: 'A' }]} buttonLabel="+ Add setting" addVariant onChange={noop} />,
     );
 
-    expect(html).toContain('<button type="button" class="dd-btn dd-btn-add"><span class="dd-value">+ Add setting</span>');
+    expect(html).toContain('class="dd-btn dd-btn-add" aria-haspopup="true" aria-expanded="false"><span class="dd-value">+ Add setting</span>');
     expect(html).not.toContain('selected');
   });
 });
