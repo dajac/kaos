@@ -39,11 +39,11 @@ public record ConfigMetadata(
 ) {
     /** The number of topics a frontend creates by default. The maximum applies to every spec. */
     public static final Field NUM_TOPICS =
-        Field.ofInt("numTopics", "Topics", Scope.SIMULATOR, 1, 1, 20);
+        Field.ofInt("numTopics", "Subscribed Topics", Scope.SIMULATOR, 1, 1, 20);
 
     /** {@link TopicSpec#partitions()}. */
     public static final Field PARTITIONS =
-        Field.ofInt("partitions", "Partitions", Scope.TOPIC, 36, 1, 100);
+        Field.ofInt("partitions", "Partitions per Topic", Scope.TOPIC, 36, 1, 100);
 
     /** {@link ProducerSpec#ratePerPartition()}: one record per partition every 500 ms. */
     public static final Field RATE_PER_PARTITION = new Field(

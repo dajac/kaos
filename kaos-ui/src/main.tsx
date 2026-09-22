@@ -18,16 +18,21 @@ import '@fontsource-variable/dm-sans';
 import '@fontsource-variable/jetbrains-mono';
 import './styles/tokens.css';
 import './styles/base.css';
+import './styles/controls.css';
+import './styles/config.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
+import { configStore } from './state/configStore';
 
 const root = document.getElementById('root');
 if (root === null) {
   throw new Error('The page has no #root element');
 }
+
+void configStore.getState().load();
 
 createRoot(root).render(
   <StrictMode>

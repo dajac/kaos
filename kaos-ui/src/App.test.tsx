@@ -20,12 +20,14 @@ import { describe, expect, it } from 'vitest';
 import { App } from './App';
 
 describe('App', () => {
-  it('renders the brand of the shell with the design tokens', () => {
+  it('renders the sidebar of the prototype with the config panel', () => {
     const html = renderToStaticMarkup(<App />);
 
-    expect(html).toContain('>Kaos</div>');
+    expect(html).toContain('<div class="app"><aside class="sidebar">');
+    expect(html).toContain('<div class="sidebar-brand">Kaos</div>');
     expect(html).toContain('Kafka Consumer Group Simulator');
-    expect(html).toContain('var(--sidebar-w)');
-    expect(html).toContain('var(--accent)');
+    expect(html).toContain('<div id="config-mode">');
+    // Nothing is loaded yet: Start waits for /meta.
+    expect(html).toContain('<button class="btn btn-start" id="btn-start-sim" disabled="">Start</button>');
   });
 });
