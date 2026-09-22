@@ -163,8 +163,10 @@ class SimulatorLifecycleTest {
 
             var failure = catchThrowable(simulator::start);
 
+            // The message names the topic and how to recover.
             assertThat(failure).isInstanceOf(SimulationException.class).hasMessageContaining(conflicting)
-                .hasMessageContaining("already exists");
+                .hasMessageContaining("already exists")
+                .hasMessageEndingWith("delete it or use another topic name");
             assertThat(failure.getSuppressed()).isEmpty();
             // No topic: the one that was created is deleted, the one that was not is left alone.
             assertThat(topicNames()).doesNotContain(created).contains(conflicting);

@@ -517,13 +517,23 @@ export function buildStartRequest(meta: Meta, config: ConfigForm): SimulatorRequ
   };
 }
 
+/**
+ * The assignor of the panel for a name of the spec. The empty name, the
+ * default of the protocol, only comes from a spec started through the API:
+ * it shows as the first preset of the protocol, as on a new group, and as
+ * the prototype did.
+ */
+function rehydratedAssignor(meta: Meta, protocol: Protocol, name: string): string {
+  return name === '' ? firstPreset(meta, protocol) : adaptAssignor(meta, protocol, name);
+}
+
 function fromConsumerOverrides(meta: Meta, defaultProtocol: Protocol, overrides: ConsumerOverrides): Overrides {
   const protocol = overrides.protocol ?? defaultProtocol;
   const result: Record<string, unknown> = {};
   for (const key of OVERRIDE_KEYS) {
     const value = overrides[key];
     if (value !== undefined) {
-      result[key] = key === 'assignor' ? adaptAssignor(meta, protocol, value as string) : value;
+      result[key] = key === 'assignor' ? rehydratedAssignor(meta, protocol, value as string) : value;
     }
   }
   return result as Overrides;
@@ -565,7 +575,7 @@ export function configFromSimulator(meta: Meta, simulator: Simulator): ConfigFor
       numTopics: g.subscribedTopics.length,
       partitions: partitions ?? intDefault(meta, 'TOPIC', 'partitions'),
       protocol: defaults.protocol,
-      assignor: adaptAssignor(meta, defaults.protocol, defaults.assignor),
+      assignor: rehydratedAssignor(meta, defaults.protocol, defaults.assignor),
       staticMember: defaults.staticMember,
       rackId: defaults.rackId,
       settings,

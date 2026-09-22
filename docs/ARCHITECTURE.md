@@ -830,7 +830,8 @@ built with the runner, and so is the removal.
 - The simulator only creates the topics it owns. A topic that already
   exists fails the start: adopting it would mean deleting, at `stop()`,
   a topic the simulator did not create. (The prototype adopts and
-  deletes it.) Topics get the default replication factor of the cluster.
+  deletes it.) The message of the failure ends with "delete it or use
+  another topic name". Topics get the default replication factor of the cluster.
   Creating a topic waits until the cluster reports it, as deleting one
   waits until it no longer does: the controller acknowledges both before
   the brokers that serve the metadata know.
@@ -1384,8 +1385,9 @@ their styles.
   falls back to the first preset of that protocol (`range` for
   classic). On the consumer protocol, a name outside the presets, the
   empty one included, is a custom name; a custom name left empty sends
-  the empty name, the default of the protocol. A spec's empty name on
-  the classic protocol shows as the first preset.
+  the empty name, the default of the protocol. A spec's empty name,
+  which only a start through the API gives, shows as the first preset
+  of its protocol, as on a new group and as in the prototype.
 - `violations.ts`: the key of each field of the panel that can show an
   error, and the mapping of the violations of a refused start (`field`
   is a path of the start request, such as
@@ -1552,7 +1554,11 @@ their styles.
 
 ## Features
 
-Status: planned.
+Status: built, and checked side by side against the prototype: every
+field of the config panel, every action in every state, classic,
+consumer and mixed groups, the Auto-Pilot, a reload during a run, the
+failed starts, the tooltip, the lag gauge and the S/M/L strip height.
+The differences that remain are intended and listed below.
 
 The UI is at parity with the prototype: one group, one producer, the
 same screen. Behind the UI, the core and HTTP APIs additionally support
@@ -1644,7 +1650,26 @@ Mixed-protocol groups are supported.
   failure as its title; the prototype had no such state.
 - Before the first commit of a partition, its lag is unknown (`-1`) and
   its gauge is empty; the prototype counted a missing commit as 0, so
-  the gauge showed the whole log-end offset.
+  the gauge showed the whole log-end offset. Each gauge stays empty
+  until its partition's first commit; the steady-state lag is the same.
+- A reload during a run restores the overrides of each consumer; the
+  prototype restored only their number.
+- A start is validated first: out-of-range fields (topics above 20,
+  partitions above 100, a negative setting) and an empty group id show
+  inline, where the prototype started anyway or showed the error of the
+  broker.
+- A start refuses a topic that already exists, since the simulator
+  deletes the topics it creates; the prototype reused it. The error
+  ends with the way out: "delete it or use another topic name" (in the
+  UI, the topics are named after the group id).
+- A start against an unreachable cluster fails once the proxy cannot
+  describe it, in about 30 s; the prototype failed after 60 s on the
+  creation of the topics.
+- Stop deletes the consumer group, so a new run of the same group id
+  starts from epoch 1; the prototype kept the group and showed its
+  stale state at the start of the next run.
+- The title of a consumer's name is its client id, `<group>-<consumer>`,
+  unique across groups; the prototype's client id was the consumer id.
 
 ## Verification
 

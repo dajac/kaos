@@ -706,9 +706,9 @@ describe('rehydration', () => {
   });
 
   // An empty assignor name, the default of the protocol, only comes from a
-  // spec started through the API. It shows as a custom name on the consumer
-  // protocol and as the first preset on the classic protocol.
-  it('shows an empty assignor name of the spec by the rules of the picker', () => {
+  // spec started through the API. It shows as the first preset of the
+  // protocol, as on a new group, like simulator.html on initial-setup.
+  it('shows an empty assignor name of the spec as the first preset of its protocol', () => {
     const spec = specOf({ ratePerPartition: 2, groups: [addConsumer(addConsumer(emptyGroup()))] });
     const group = spec.groups[0]!;
     const withEmpty: SimulatorSpec = {
@@ -726,8 +726,11 @@ describe('rehydration', () => {
     };
     const g = configFromSimulator(META, running(withEmpty)).groups[0]!;
 
-    expect(g.assignor).toBe('');
-    expect(g.consumers.map((c) => c.overrides)).toEqual([{ assignor: '' }, { protocol: 'classic', assignor: 'range' }]);
+    expect(g.assignor).toBe('uniform');
+    expect(g.consumers.map((c) => c.overrides)).toEqual([
+      { assignor: 'uniform' },
+      { protocol: 'classic', assignor: 'range' },
+    ]);
 
     const classic: SimulatorSpec = {
       ...spec,
