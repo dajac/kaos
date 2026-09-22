@@ -42,7 +42,7 @@ export const META: components['schemas']['Meta'] = {
       defaultValue: 2.0,
     },
     { key: 'id', label: 'Group ID', scope: 'GROUP', type: 'STRING', defaultValue: 'kaos' },
-    { key: 'numConsumers', label: 'Consumers', scope: 'GROUP', type: 'INT', defaultValue: 4 },
+    { key: 'numConsumers', label: 'Consumers', scope: 'GROUP', type: 'INT', defaultValue: 3 },
     int('sessionTimeoutMs', 'Session Timeout (ms)', 'GROUP', 45000, 1000, 300000),
     int('heartbeatIntervalMs', 'Heartbeat Interval (ms)', 'GROUP', 5000, 500, 60000),
     int('assignmentIntervalMs', 'Assignment Interval (ms)', 'GROUP', 1000, 0, 60000),

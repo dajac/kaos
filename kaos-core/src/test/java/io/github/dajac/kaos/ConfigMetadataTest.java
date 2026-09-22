@@ -40,7 +40,7 @@ class ConfigMetadataTest {
             Arguments.of(Scope.TOPIC, "partitions", Type.INT, 36, new Range(1, 100)),
             Arguments.of(Scope.PRODUCER, "ratePerPartition", Type.DOUBLE, 2.0, null),
             Arguments.of(Scope.GROUP, "id", Type.STRING, "kaos", null),
-            Arguments.of(Scope.GROUP, "numConsumers", Type.INT, 4, null),
+            Arguments.of(Scope.GROUP, "numConsumers", Type.INT, 3, null),
             Arguments.of(Scope.GROUP, "sessionTimeoutMs", Type.INT, 45_000, new Range(1_000, 300_000)),
             Arguments.of(Scope.GROUP, "heartbeatIntervalMs", Type.INT, 5_000, new Range(500, 60_000)),
             Arguments.of(Scope.GROUP, "assignmentIntervalMs", Type.INT, 1_000, new Range(0, 60_000)),

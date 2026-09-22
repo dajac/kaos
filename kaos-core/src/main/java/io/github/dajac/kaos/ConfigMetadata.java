@@ -56,7 +56,7 @@ public record ConfigMetadata(
 
     /** The number of consumers a frontend puts in a new group by default. */
     public static final Field NUM_CONSUMERS =
-        new Field("numConsumers", "Consumers", Scope.GROUP, Type.INT, 4, Optional.empty());
+        new Field("numConsumers", "Consumers", Scope.GROUP, Type.INT, 3, Optional.empty());
 
     /** {@link GroupSpec#sessionTimeoutMs()}. */
     public static final Field SESSION_TIMEOUT_MS =

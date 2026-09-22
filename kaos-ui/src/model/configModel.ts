@@ -15,14 +15,7 @@
  */
 
 import type { components } from '../api/schema';
-import {
-  adaptAssignor,
-  assignorChoice,
-  assignorLabel,
-  customAssignor,
-  pickAssignorOption,
-  type AssignorChoice,
-} from './assignors';
+import { adaptAssignor, firstPreset, pickAssignorOption } from './assignors';
 
 // The state of the config panel and the functions that change it. Every
 // function is pure: it returns a new state and leaves its arguments alone.
@@ -44,16 +37,8 @@ type ConsumerSettings = components['schemas']['ConsumerSettings'];
 
 export type Scope = ConfigField['scope'];
 
-/** The settings of a consumer as the form holds them. */
-export interface ConsumerSettingsForm {
-  readonly protocol: Protocol;
-  readonly assignor: AssignorChoice;
-  readonly staticMember: boolean;
-  readonly rackId: string;
-  readonly pollTimeoutMs: number;
-  readonly pollDelayMs: number;
-  readonly maxPollIntervalMs: number;
-}
+/** The settings of a consumer, all set. */
+export type ConsumerSettingsForm = Readonly<ConsumerSettings>;
 
 export type OverrideKey = keyof ConsumerSettingsForm;
 
@@ -134,7 +119,7 @@ export interface GroupForm {
   readonly numTopics: number;
   readonly partitions: number;
   readonly protocol: Protocol;
-  readonly assignor: AssignorChoice;
+  readonly assignor: string;
   readonly staticMember: boolean;
   /** The rack id the consumers inherit. The panel does not edit it; a rehydrated spec keeps it. */
   readonly rackId: string;
@@ -214,14 +199,18 @@ export function parseIntInput(text: string): number {
 
 // -- Creation --------------------------------------------------------------
 
-/** A group with the defaults of `/api/v1/meta` and `numConsumers` consumers that inherit everything. */
+/**
+ * A group with the defaults of `/api/v1/meta` and `numConsumers` consumers
+ * that inherit everything. Its assignor is the first preset of its protocol.
+ */
 export function newGroup(meta: Meta, id: string = stringDefault(meta, 'GROUP', 'id')): GroupForm {
+  const protocol = stringDefault(meta, 'CONSUMER', 'protocol') as Protocol;
   let group: GroupForm = {
     id,
     numTopics: intDefault(meta, 'SIMULATOR', 'numTopics'),
     partitions: intDefault(meta, 'TOPIC', 'partitions'),
-    protocol: stringDefault(meta, 'CONSUMER', 'protocol') as Protocol,
-    assignor: { name: stringDefault(meta, 'CONSUMER', 'assignor'), custom: false },
+    protocol,
+    assignor: firstPreset(meta, protocol),
     staticMember: Boolean(metaField(meta, 'CONSUMER', 'staticMember').defaultValue),
     rackId: stringDefault(meta, 'CONSUMER', 'rackId'),
     settings: {},
@@ -262,7 +251,7 @@ export function setPartitions(group: GroupForm, partitions: number): GroupForm {
   return { ...group, partitions };
 }
 
-/** The group with `protocol`; its assignor falls back to the default when the protocol does not accept it. */
+/** The group with `protocol`; its assignor falls back to the first preset when the protocol refuses it. */
 export function setGroupProtocol(meta: Meta, group: GroupForm, protocol: Protocol): GroupForm {
   return { ...group, protocol, assignor: adaptAssignor(meta, protocol, group.assignor) };
 }
@@ -274,7 +263,7 @@ export function pickGroupAssignor(meta: Meta, group: GroupForm, option: string):
 
 /** The group with the custom assignor `name`, typed in the text input. */
 export function setGroupCustomAssignor(group: GroupForm, name: string): GroupForm {
-  return { ...group, assignor: customAssignor(name) };
+  return { ...group, assignor: name };
 }
 
 export function setGroupStatic(group: GroupForm, staticMember: boolean): GroupForm {
@@ -390,15 +379,12 @@ export function toggleConsumer(group: GroupForm, key: number): GroupForm {
 // -- Overrides -------------------------------------------------------------
 
 // After a change of the protocol override, the assignor that the consumer
-// ends up with must suit the protocol: an assignor override is adapted, and
-// an inherited assignor that does not suit it is overridden by the default.
+// ends up with must suit the protocol: when it does not, the consumer
+// overrides it with the first preset of the protocol.
 function adaptOverriddenProtocol(meta: Meta, group: GroupForm, overrides: Overrides): Overrides {
   const effective = { ...consumerDefaults(meta, group), ...overrides };
   const adapted = adaptAssignor(meta, effective.protocol, effective.assignor);
-  if (overrides.assignor !== undefined || adapted.name !== effective.assignor.name) {
-    return { ...overrides, assignor: adapted };
-  }
-  return overrides;
+  return adapted === effective.assignor ? overrides : { ...overrides, assignor: adapted };
 }
 
 /** The group with the override `key` added to the consumer `key`, at the value it inherits. */
@@ -462,9 +448,6 @@ export function formatSetting<K extends OverrideKey>(key: K, value: ConsumerSett
   if (key === 'staticMember') {
     return value ? 'on' : 'off';
   }
-  if (key === 'assignor') {
-    return assignorLabel((value as AssignorChoice).name);
-  }
   return String(value);
 }
 
@@ -488,19 +471,27 @@ export function addOverrideOptions(meta: Meta, group: GroupForm, consumer: Consu
 
 // -- Start payload and rehydration -----------------------------------------
 
-function toConsumerSettings(settings: ConsumerSettingsForm): ConsumerSettings {
-  return { ...settings, assignor: settings.assignor.name };
-}
-
 function toConsumerOverrides(overrides: Overrides): ConsumerOverrides {
   const result: Record<string, unknown> = {};
   for (const key of OVERRIDE_KEYS) {
-    const value = overrides[key];
-    if (value !== undefined) {
-      result[key] = key === 'assignor' ? (value as AssignorChoice).name : value;
+    if (overrides[key] !== undefined) {
+      result[key] = overrides[key];
     }
   }
   return result as ConsumerOverrides;
+}
+
+/** A reason why the panel refuses to start, and the index of the group it is about. */
+export interface StartProblem {
+  readonly group: number;
+  readonly message: string;
+}
+
+/** The reasons why the panel refuses to start `config`; empty when it can start. */
+export function startProblems(config: ConfigForm): StartProblem[] {
+  return config.groups.flatMap((group, index) =>
+    group.consumers.length === 0 ? [{ group: index, message: 'Add at least one consumer before starting.' }] : [],
+  );
 }
 
 /**
@@ -520,32 +511,34 @@ export function buildStartRequest(meta: Meta, config: ConfigForm): SimulatorRequ
       id: group.id,
       subscribedTopics: topicNames(group),
       ...coordinationSettings(meta, group),
-      consumerDefaults: toConsumerSettings(consumerDefaults(meta, group)),
+      consumerDefaults: consumerDefaults(meta, group),
       consumers: group.consumers.map((consumer) => ({ overrides: toConsumerOverrides(consumer.overrides) })),
     })),
   };
 }
 
 function fromConsumerOverrides(meta: Meta, defaultProtocol: Protocol, overrides: ConsumerOverrides): Overrides {
+  const protocol = overrides.protocol ?? defaultProtocol;
   const result: Record<string, unknown> = {};
   for (const key of OVERRIDE_KEYS) {
     const value = overrides[key];
     if (value !== undefined) {
-      result[key] =
-        key === 'assignor' ? assignorChoice(meta, overrides.protocol ?? defaultProtocol, value as string) : value;
+      result[key] = key === 'assignor' ? adaptAssignor(meta, protocol, value as string) : value;
     }
   }
   return result as Overrides;
 }
 
 /**
- * The config that shows the spec of `GET /api/v1/simulator`, overrides
- * included: an optional setting is added when it differs from its default.
- * A spec without groups gives the initial config.
+ * The config of the panel on load, from `GET /api/v1/simulator`. As in the
+ * prototype, a running simulation is shown as it was started, so that the
+ * locked panel describes it: the spec, overrides included, where an
+ * optional setting is added when it differs from its default. In any other
+ * phase, or without groups, the panel starts from the initial config.
  */
 export function configFromSimulator(meta: Meta, simulator: Simulator): ConfigForm {
   const { spec } = simulator;
-  if (spec.groups.length === 0) {
+  if (simulator.phase !== 'RUNNING' || spec.groups.length === 0) {
     return initialConfig(meta);
   }
   const partitionsOf = new Map(spec.topics.map((t) => [t.name, t.partitions]));
@@ -572,7 +565,7 @@ export function configFromSimulator(meta: Meta, simulator: Simulator): ConfigFor
       numTopics: g.subscribedTopics.length,
       partitions: partitions ?? intDefault(meta, 'TOPIC', 'partitions'),
       protocol: defaults.protocol,
-      assignor: assignorChoice(meta, defaults.protocol, defaults.assignor),
+      assignor: adaptAssignor(meta, defaults.protocol, defaults.assignor),
       staticMember: defaults.staticMember,
       rackId: defaults.rackId,
       settings,

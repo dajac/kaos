@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { components } from '../api/schema';
-import { CUSTOM_OPTION, customAssignor, DEFAULT_CHOICE, type AssignorChoice } from './assignors';
+import { CUSTOM_OPTION } from './assignors';
 import {
   addConsumer,
   addGroupSetting,
@@ -55,6 +55,7 @@ import {
   setNumTopics,
   setOverride,
   setPartitions,
+  startProblems,
   toggleConsumer,
   topicNames,
   updateGroup,
@@ -65,8 +66,6 @@ import { META } from './meta.fixture';
 
 type Simulator = components['schemas']['Simulator'];
 type SimulatorSpec = components['schemas']['SimulatorSpec'];
-
-const preset = (name: string): AssignorChoice => ({ name, custom: false });
 
 // The prototype starts from a group without consumers in these scenarios.
 const emptyGroup = (): GroupForm => ({ ...newGroup(META), consumers: [], nextConsumerKey: 0 });
@@ -130,10 +129,9 @@ describe('metadata', () => {
 describe('initial config', () => {
   // Parity with the form of simulator.html on initial-setup (group id `kaos`,
   // 1 topic, 36 partitions) and with `getDefaults()` and
-  // `getCoordinationDefaults()` before any change. The defaults come from
-  // `/api/v1/meta`: the assignor is the default of the protocol (the
-  // prototype preselected `uniform`) and the group has 4 consumers (the
-  // prototype seeded 3).
+  // `getCoordinationDefaults()` before any change: the assignor `uniform`
+  // and 3 consumers that inherit everything. The values come from
+  // `/api/v1/meta`.
   it('has one group with the defaults of /api/v1/meta', () => {
     const config = initialConfig(META);
 
@@ -145,16 +143,16 @@ describe('initial config', () => {
       numTopics: 1,
       partitions: 36,
       protocol: 'consumer',
-      assignor: DEFAULT_CHOICE,
+      assignor: 'uniform',
       staticMember: false,
       rackId: '',
       settings: {},
-      nextConsumerKey: 4,
+      nextConsumerKey: 3,
     });
-    expect(group.consumers).toEqual([0, 1, 2, 3].map((key) => ({ key, expanded: false, overrides: {} })));
+    expect(group.consumers).toEqual([0, 1, 2].map((key) => ({ key, expanded: false, overrides: {} })));
     expect(consumerDefaults(META, group)).toEqual({
       protocol: 'consumer',
-      assignor: DEFAULT_CHOICE,
+      assignor: 'uniform',
       staticMember: false,
       rackId: '',
       pollTimeoutMs: 0,
@@ -204,7 +202,7 @@ describe('optional group settings', () => {
     expect(group.settings).toEqual({ pollDelayMs: 250, sessionTimeoutMs: 0 });
     expect(consumerDefaults(META, group)).toEqual({
       protocol: 'consumer',
-      assignor: DEFAULT_CHOICE,
+      assignor: 'uniform',
       staticMember: false,
       rackId: '',
       pollTimeoutMs: 0,
@@ -258,35 +256,34 @@ describe('group protocol and assignor', () => {
   // Parity with `setGroupProtocol(value)`, `setGroupAssignor(value)`,
   // `setGroupCustomAssignor(value)` and `setGroupStatic(value)` of
   // simulator.html on initial-setup, run in this sequence from a group on
-  // `uniform`. The fallback of an assignor the protocol refuses is the
-  // default of the protocol (the prototype took `range`).
+  // `uniform`.
   it('keeps the assignor valid for the protocol', () => {
     let group = pickGroupAssignor(META, emptyGroup(), 'uniform');
-    expect(group.assignor).toEqual(preset('uniform'));
+    expect(group.assignor).toEqual('uniform');
 
     group = setGroupProtocol(META, group, 'classic');
-    expect(group).toMatchObject({ protocol: 'classic', assignor: DEFAULT_CHOICE });
+    expect(group).toMatchObject({ protocol: 'classic', assignor: 'range' });
 
     group = pickGroupAssignor(META, group, 'sticky');
     group = setGroupProtocol(META, group, 'consumer');
-    expect(group).toMatchObject({ protocol: 'consumer', assignor: preset('sticky') });
+    expect(group).toMatchObject({ protocol: 'consumer', assignor: 'sticky' });
 
     group = pickGroupAssignor(META, group, CUSTOM_OPTION);
-    expect(group.assignor).toEqual(customAssignor('sticky'));
+    expect(group.assignor).toEqual('sticky');
 
     group = setGroupCustomAssignor(group, 'my-assignor');
     group = pickGroupAssignor(META, group, CUSTOM_OPTION);
-    expect(group.assignor).toEqual(customAssignor('my-assignor'));
+    expect(group.assignor).toEqual('my-assignor');
 
     group = pickGroupAssignor(META, group, 'range');
-    expect(group.assignor).toEqual(preset('range'));
+    expect(group.assignor).toEqual('range');
 
     group = setGroupStatic(group, true);
-    expect(group).toMatchObject({ protocol: 'consumer', assignor: preset('range'), staticMember: true });
+    expect(group).toMatchObject({ protocol: 'consumer', assignor: 'range', staticMember: true });
   });
 
   it('starts an empty custom name when leaving a preset', () => {
-    expect(pickGroupAssignor(META, emptyGroup(), CUSTOM_OPTION).assignor).toEqual(customAssignor(''));
+    expect(pickGroupAssignor(META, emptyGroup(), CUSTOM_OPTION).assignor).toEqual('');
   });
 });
 
@@ -321,7 +318,7 @@ describe('consumers', () => {
     const first = group.consumers[0]!;
     expect(effectiveSettings(META, group, first)).toEqual({
       protocol: 'consumer',
-      assignor: DEFAULT_CHOICE,
+      assignor: 'uniform',
       staticMember: true,
       rackId: '',
       pollTimeoutMs: 0,
@@ -349,7 +346,7 @@ describe('consumers', () => {
         maxPollIntervalMs: 2000,
         pollTimeoutMs: 5,
         rackId: 'r1',
-        assignor: DEFAULT_CHOICE,
+        assignor: 'uniform',
         protocol: 'classic' as const,
         pollDelayMs: 0,
         staticMember: false,
@@ -357,7 +354,7 @@ describe('consumers', () => {
     };
     expect(consumerChips(consumer).map((c) => `${c.label}=${c.value}`)).toEqual([
       'protocol=classic',
-      'assignor=default',
+      'assignor=uniform',
       'static=off',
       'rack=r1',
       'pollTimeout=5',
@@ -384,15 +381,15 @@ describe('consumers', () => {
   });
 
   // Parity with `chipValue(key, value)` of simulator.html on initial-setup,
-  // run on these inputs; the empty assignor name is the default.
+  // run on these inputs.
   it.each([
     ['staticMember', true, 'on'],
     ['staticMember', false, 'off'],
     ['pollDelayMs', 10, '10'],
     ['protocol', 'classic', 'classic'],
-    ['assignor', preset('range'), 'range'],
-    ['assignor', DEFAULT_CHOICE, 'default'],
-    ['assignor', customAssignor('mine'), 'mine'],
+    ['assignor', 'range', 'range'],
+    ['assignor', '', ''],
+    ['assignor', 'mine', 'mine'],
     ['rackId', '', ''],
   ] as const)('formats %s %o as %j', (key, value, text) => {
     expect(formatSetting(key, value)).toBe(text);
@@ -402,8 +399,7 @@ describe('consumers', () => {
 describe('overrides', () => {
   // Parity with `addOverride(id, key)`, `setOverride(id, key, value)` and
   // `removeOverride(id, key)` of simulator.html on initial-setup, run in this
-  // sequence. The fallback of an assignor the protocol refuses is the default
-  // of the protocol (the prototype took `range`).
+  // sequence.
   it('overrides the protocol and keeps the assignor valid for it', () => {
     let group = addConsumer(emptyGroup());
     group = addOverride(META, group, 0, 'protocol');
@@ -411,47 +407,47 @@ describe('overrides', () => {
 
     group = pickGroupAssignor(META, group, 'uniform');
     group = setOverride(META, group, 0, 'protocol', 'classic');
-    expect(overridesOf(group)).toEqual({ protocol: 'classic', assignor: DEFAULT_CHOICE });
+    expect(overridesOf(group)).toEqual({ protocol: 'classic', assignor: 'range' });
 
     group = setOverride(META, group, 0, 'protocol', 'consumer');
-    expect(overridesOf(group)).toEqual({ protocol: 'consumer', assignor: DEFAULT_CHOICE });
+    expect(overridesOf(group)).toEqual({ protocol: 'consumer', assignor: 'range' });
 
     group = pickOverrideAssignor(META, group, 0, CUSTOM_OPTION);
-    expect(overridesOf(group)).toEqual({ protocol: 'consumer', assignor: customAssignor('') });
+    expect(overridesOf(group)).toEqual({ protocol: 'consumer', assignor: '' });
 
-    group = setOverride(META, group, 0, 'assignor', customAssignor('x'));
+    group = setOverride(META, group, 0, 'assignor', 'x');
     group = pickOverrideAssignor(META, group, 0, CUSTOM_OPTION);
-    expect(overridesOf(group)).toEqual({ protocol: 'consumer', assignor: customAssignor('x') });
+    expect(overridesOf(group)).toEqual({ protocol: 'consumer', assignor: 'x' });
 
     group = removeOverride(group, 0, 'protocol');
-    expect(overridesOf(group)).toEqual({ assignor: customAssignor('x') });
+    expect(overridesOf(group)).toEqual({ assignor: 'x' });
   });
 
   it('adds an assignor override at the inherited value and keeps it across a protocol switch', () => {
     let group = pickGroupAssignor(META, setGroupProtocol(META, emptyGroup(), 'classic'), 'range');
     group = addConsumer(group);
     group = addOverride(META, group, 0, 'assignor');
-    expect(overridesOf(group)).toEqual({ assignor: preset('range') });
+    expect(overridesOf(group)).toEqual({ assignor: 'range' });
 
     group = setOverride(META, group, 0, 'protocol', 'consumer');
-    expect(overridesOf(group)).toEqual({ assignor: preset('range'), protocol: 'consumer' });
+    expect(overridesOf(group)).toEqual({ assignor: 'range', protocol: 'consumer' });
   });
 
   it('replaces a custom assignor that the classic protocol refuses', () => {
     let group = addConsumer(emptyGroup());
     group = addOverride(META, group, 0, 'assignor');
     group = pickOverrideAssignor(META, group, 0, CUSTOM_OPTION);
-    group = setOverride(META, group, 0, 'assignor', customAssignor('mine'));
+    group = setOverride(META, group, 0, 'assignor', 'mine');
     group = addOverride(META, group, 0, 'protocol');
     group = setOverride(META, group, 0, 'protocol', 'classic');
-    expect(overridesOf(group)).toEqual({ assignor: DEFAULT_CHOICE, protocol: 'classic' });
+    expect(overridesOf(group)).toEqual({ assignor: 'range', protocol: 'classic' });
   });
 
   it('overrides an inherited assignor that the new protocol refuses, and leaves one it accepts', () => {
     let group = addConsumer(pickGroupAssignor(META, emptyGroup(), 'uniform'));
     group = addOverride(META, group, 0, 'protocol');
     group = setOverride(META, group, 0, 'protocol', 'classic');
-    expect(overridesOf(group)).toEqual({ protocol: 'classic', assignor: DEFAULT_CHOICE });
+    expect(overridesOf(group)).toEqual({ protocol: 'classic', assignor: 'range' });
 
     let classic = addConsumer(pickGroupAssignor(META, setGroupProtocol(META, emptyGroup(), 'classic'), 'sticky'));
     classic = setOverride(META, classic, 0, 'protocol', 'consumer');
@@ -473,7 +469,7 @@ describe('overrides', () => {
     group = setOverride(META, group, 0, 'rackId', 'r1');
     expect(addOverrideOptions(META, group, group.consumers[0]!)).toEqual([
       { key: 'protocol', label: 'Protocol', hint: 'consumer' },
-      { key: 'assignor', label: 'Assignor', hint: 'default' },
+      { key: 'assignor', label: 'Assignor', hint: 'uniform' },
       { key: 'staticMember', label: 'Static Membership', hint: 'on' },
       { key: 'pollTimeoutMs', label: 'Poll Timeout (ms)', hint: '0' },
       { key: 'pollDelayMs', label: 'Poll Delay (ms)', hint: '1000' },
@@ -506,7 +502,7 @@ describe('start request', () => {
     expect(group.consumers.map((c) => effectiveSettings(META, group, c))).toEqual([
       {
         protocol: 'classic',
-        assignor: preset('range'),
+        assignor: 'range',
         rackId: '',
         pollTimeoutMs: 0,
         pollDelayMs: 1000,
@@ -515,7 +511,7 @@ describe('start request', () => {
       },
       {
         protocol: 'consumer',
-        assignor: preset('range'),
+        assignor: 'range',
         rackId: 'r1',
         pollTimeoutMs: 7,
         pollDelayMs: 1000,
@@ -562,7 +558,7 @@ describe('start request', () => {
   it('sends the name of an assignor override, and a custom name', () => {
     let group = pickGroupAssignor(META, addConsumer(emptyGroup()), CUSTOM_OPTION);
     group = setGroupCustomAssignor(group, 'mine');
-    group = setOverride(META, group, 0, 'assignor', preset('uniform'));
+    group = setOverride(META, group, 0, 'assignor', 'uniform');
     const request = buildStartRequest(META, { ratePerPartition: 2, groups: [group] });
 
     expect(request.groups?.[0]?.consumerDefaults?.assignor).toBe('mine');
@@ -583,8 +579,8 @@ describe('start request', () => {
     ]);
     expect(request.producers).toEqual([{ topics: ['a-1', 'b-1', 'b-2'], ratePerPartition: 5 }]);
     expect(request.groups?.map((g) => [g.id, g.subscribedTopics, g.consumers?.length])).toEqual([
-      ['a', ['a-1'], 4],
-      ['b', ['b-1', 'b-2'], 4],
+      ['a', ['a-1'], 3],
+      ['b', ['b-1', 'b-2'], 3],
     ]);
   });
 
@@ -622,7 +618,7 @@ function specOf(config: ConfigForm): SimulatorSpec {
           return {
             id: consumerName(i),
             overrides: r.consumers![i]!.overrides!,
-            effective: { ...effective, assignor: effective.assignor.name },
+            effective,
           };
         }),
       };
@@ -640,7 +636,7 @@ describe('rehydration', () => {
     group = removeGroupSetting(group, 'maxPollIntervalMs');
     group = addGroupSetting(META, group, 'maxPollIntervalMs');
     group = setGroupSetting(group, 'maxPollIntervalMs', 90000);
-    group = setOverride(META, group, 0, 'assignor', preset('sticky'));
+    group = setOverride(META, group, 0, 'assignor', 'sticky');
     group = setOverride(META, group, 0, 'maxPollIntervalMs', 5000);
     group = toggleConsumer(group, 0);
     const config: ConfigForm = { ratePerPartition: 4, groups: [group] };
@@ -654,7 +650,7 @@ describe('rehydration', () => {
       numTopics: 3,
       partitions: 12,
       protocol: 'classic',
-      assignor: preset('range'),
+      assignor: 'range',
       staticMember: true,
       rackId: '',
       nextConsumerKey: 2,
@@ -666,7 +662,7 @@ describe('rehydration', () => {
     // The prototype restored the number of consumers only; the spec has
     // their overrides, which come back in menu order.
     expect(g.consumers).toEqual([
-      { key: 0, expanded: false, overrides: { assignor: preset('sticky'), maxPollIntervalMs: 5000 } },
+      { key: 0, expanded: false, overrides: { assignor: 'sticky', maxPollIntervalMs: 5000 } },
       { key: 1, expanded: false, overrides: { protocol: 'consumer', rackId: 'r1', pollTimeoutMs: 7 } },
     ]);
     expect(buildStartRequest(META, rehydrated)).toEqual(buildStartRequest(META, config));
@@ -675,11 +671,11 @@ describe('rehydration', () => {
   it('shows a custom assignor name as custom', () => {
     let group = setGroupCustomAssignor(addConsumer(emptyGroup()), 'mine');
     group = setOverride(META, group, 0, 'protocol', 'classic');
-    group = setOverride(META, group, 0, 'assignor', preset('cooperative-sticky'));
+    group = setOverride(META, group, 0, 'assignor', 'cooperative-sticky');
     const g = configFromSimulator(META, running(specOf({ ratePerPartition: 2, groups: [group] }))).groups[0]!;
 
-    expect(g.assignor).toEqual(preset('mine'));
-    expect(g.consumers[0]?.overrides).toEqual({ protocol: 'classic', assignor: preset('cooperative-sticky') });
+    expect(g.assignor).toEqual('mine');
+    expect(g.consumers[0]?.overrides).toEqual({ protocol: 'classic', assignor: 'cooperative-sticky' });
   });
 
   it('reads each group of the spec, and the default partitions without topics', () => {
@@ -687,8 +683,8 @@ describe('rehydration', () => {
     const config = configFromSimulator(META, running(spec));
 
     expect(config.groups.map((g) => [g.id, g.numTopics, g.partitions, g.consumers.length])).toEqual([
-      ['a', 1, 36, 4],
-      ['b', 0, 36, 4],
+      ['a', 1, 36, 3],
+      ['b', 0, 36, 3],
     ]);
   });
 
@@ -698,12 +694,60 @@ describe('rehydration', () => {
   });
 
   it('gives the initial config for a spec without groups', () => {
-    const idle: Simulator = {
-      phase: 'IDLE',
-      spec: { topics: [], producers: [], groups: [] },
-      lastError: '',
-      warnings: [],
+    const empty = running({ topics: [], producers: [], groups: [] });
+    expect(configFromSimulator(META, empty)).toEqual(initialConfig(META));
+  });
+
+  // Parity with the start-up of simulator.html on initial-setup, which
+  // rehydrated the form only when the phase was RUNNING.
+  it.each(['IDLE', 'STARTING', 'STOPPING'] as const)('gives the initial config in the phase %s', (phase) => {
+    const spec = specOf({ ratePerPartition: 2, groups: [setGroupId(mixedGroup(), 'orders')] });
+    expect(configFromSimulator(META, { ...running(spec), phase })).toEqual(initialConfig(META));
+  });
+
+  // An empty assignor name, the default of the protocol, only comes from a
+  // spec started through the API. It shows as a custom name on the consumer
+  // protocol and as the first preset on the classic protocol.
+  it('shows an empty assignor name of the spec by the rules of the picker', () => {
+    const spec = specOf({ ratePerPartition: 2, groups: [addConsumer(addConsumer(emptyGroup()))] });
+    const group = spec.groups[0]!;
+    const withEmpty: SimulatorSpec = {
+      ...spec,
+      groups: [
+        {
+          ...group,
+          consumerDefaults: { ...group.consumerDefaults, assignor: '' },
+          consumers: [
+            { ...group.consumers[0]!, overrides: { assignor: '' } },
+            { ...group.consumers[1]!, overrides: { protocol: 'classic', assignor: '' } },
+          ],
+        },
+      ],
     };
-    expect(configFromSimulator(META, idle)).toEqual(initialConfig(META));
+    const g = configFromSimulator(META, running(withEmpty)).groups[0]!;
+
+    expect(g.assignor).toBe('');
+    expect(g.consumers.map((c) => c.overrides)).toEqual([{ assignor: '' }, { protocol: 'classic', assignor: 'range' }]);
+
+    const classic: SimulatorSpec = {
+      ...spec,
+      groups: [{ ...group, consumerDefaults: { ...group.consumerDefaults, protocol: 'classic', assignor: '' } }],
+    };
+    expect(configFromSimulator(META, running(classic)).groups[0]?.assignor).toBe('range');
+  });
+});
+
+describe('startProblems', () => {
+  // Parity with the guard of `startSimulation()` of simulator.html on
+  // initial-setup, which refused to start a group without consumers.
+  it('refuses to start a group without consumers', () => {
+    const empty = removeConsumer(addConsumer(emptyGroup()), 0);
+    const config: ConfigForm = { ratePerPartition: 2, groups: [newGroup(META, 'a'), setGroupId(empty, 'b')] };
+
+    expect(startProblems(config)).toEqual([{ group: 1, message: 'Add at least one consumer before starting.' }]);
+  });
+
+  it('accepts groups that all have consumers', () => {
+    expect(startProblems(initialConfig(META))).toEqual([]);
   });
 });

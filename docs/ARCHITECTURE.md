@@ -566,7 +566,7 @@ try (Simulator simulator = new Simulator("localhost:9092")
 | topic | `partitions` | 36 | 1–100 |
 | producer | `ratePerPartition` | 2.0 (1 record every 500 ms) | > 0 |
 | group | `id` | `kaos` | the name rule |
-| group | `numConsumers` | 4 | |
+| group | `numConsumers` | 3 | |
 | group | `sessionTimeoutMs` | 45000 | 1000–300000 |
 | group | `heartbeatIntervalMs` | 5000 | 500–60000 |
 | group | `assignmentIntervalMs` | 1000 | 0–60000 |
@@ -1357,14 +1357,24 @@ under `model/`. The state, the heatmap and the other styles are planned.
   of every group, one producer that writes to all of them at the rate
   of `/meta`, and each group with its `consumerDefaults` and the
   overrides of its consumers, whose ids the group assigns
-  (`consumer-0..N-1`). `configFromSimulator` rebuilds the form from the
-  `spec` of `GET /simulator`, overrides included; an optional setting is
+  (`consumer-0..N-1`). `startProblems` refuses a start while a group
+  has no consumer ("Add at least one consumer before starting."), as
+  the prototype did; the core accepts such a group.
+- Rehydration follows the prototype: on load, the form is rebuilt from
+  `GET /simulator` only when its phase is `RUNNING`, so that the locked
+  panel shows the running config; in any other phase the form is the
+  initial one. `configFromSimulator` applies this rule. It rebuilds the
+  form from the `spec`, overrides included; an optional setting is
   added when it differs from its default.
-- `assignors.ts`: the presets of a protocol are the empty name, shown
-  as "default", then the names of `/meta`, then "custom" when the
-  protocol accepts a custom name (the consumer protocol). A switch of
-  protocol keeps an assignor the new protocol accepts and falls back to
-  the default otherwise.
+- `assignors.ts`: the presets of a protocol are the names of `/meta`,
+  then "custom" when the protocol accepts a custom name (the consumer
+  protocol). A new group starts on the first preset of its protocol
+  (`uniform`), and a switch to a protocol that refuses the assignor
+  falls back to the first preset of that protocol (`range` for
+  classic). On the consumer protocol, a name outside the presets, the
+  empty one included, is a custom name; a custom name left empty sends
+  the empty name, the default of the protocol. A spec's empty name on
+  the classic protocol shows as the first preset.
 - `lag.ts`: the gauge rounds a lag up to a multiple of 5 and scales it
   to 100; `-1`, an unknown lag, fills nothing.
 - `axis.ts`: the tick stride, 20 from 100 partitions, 10 from 40, 5
@@ -1416,9 +1426,8 @@ removing components at runtime.
 **Config panel**
 - Fields: group id, protocol (consumer or classic), static membership,
   number of topics (1–20) and number of partitions (1–100).
-- Assignor. The presets depend on the protocol. The first one,
-  "default", is the empty name: the default of the protocol. A custom
-  free-text name is accepted for the consumer protocol.
+- Assignor. The presets depend on the protocol. A custom free-text name
+  is accepted for the consumer protocol.
 - Optional group settings, added with "+ Add setting":
   - session timeout, heartbeat interval, assignment interval;
   - poll timeout, poll delay, max poll interval.
@@ -1479,11 +1488,6 @@ Mixed-protocol groups are supported.
   prototype always shows "—".)
 - The eager mid-rebalance blanking uses the per-consumer assignor.
 - Errors show inline or as a banner instead of `alert()`.
-- The assignor starts on "default", the empty name, and a switch to a
-  protocol that refuses the assignor falls back to it. (The prototype
-  started on `uniform` and fell back to the first preset.)
-- A new group has the `numConsumers` of `/meta`, 4, consumers. (The
-  prototype seeded 3.)
 - A "disconnected" banner appears when SSE drops.
 
 ## Verification
