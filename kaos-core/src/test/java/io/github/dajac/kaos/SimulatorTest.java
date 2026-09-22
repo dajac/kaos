@@ -371,7 +371,9 @@ class SimulatorTest {
                 assertThat(consumer.effective().rackId()).isEqualTo("b");
             });
             assertThat(simulator.describe().groups()).containsExactly(group.describe());
-            simulator.awaitSnapshot(s -> s.groups().get(0).consumers().size() == 1, TIMEOUT);
+            // The group is published asynchronously; its own awaitSnapshot skips the snapshots
+            // taken before it appears.
+            group.awaitSnapshot(s -> s.consumers().size() == 1, TIMEOUT);
         }
     }
 

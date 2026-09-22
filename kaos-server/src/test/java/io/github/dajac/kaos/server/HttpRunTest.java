@@ -82,7 +82,7 @@ class HttpRunTest {
                          "consumers": [{}, {}]}]}
             """.formatted(topic, topic, groupId, topic));
         assertThat(start.statusCode()).as(start.body()).isEqualTo(202);
-        assertThat(ApiClient.json(start).get("phase").asText()).isIn("STARTING", "RUNNING");
+        assertThat(ApiClient.json(start).get("phase").asText()).isEqualTo("STARTING");
 
         awaitSnapshot(s -> phase(s).equals("RUNNING") && allAssigned(consumers(s, groupId), 4, 2));
         var described = api.getJson("/api/v1/simulator");

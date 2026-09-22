@@ -107,6 +107,10 @@ class DynamicComponentsTest {
                 "kaos-" + legacyId + "-consumer-0"
             );
 
+            // The lag of a partition is unknown (-1) until the group commits an offset for it, so
+            // both groups commit before the legacy consumers leave.
+            next.awaitSnapshot(s -> s.lag().get(topic).stream().allMatch(lag -> lag >= 0), TIMEOUT);
+            legacy.awaitSnapshot(s -> s.lag().get(topic).stream().allMatch(lag -> lag >= 0), TIMEOUT);
             legacy.consumer(0).leave();
             legacy.consumer(1).leave();
 
@@ -153,7 +157,8 @@ class DynamicComponentsTest {
             var before = kept.awaitSnapshot(allAssigned(4, "consumer-0", "consumer-1"), TIMEOUT);
             removed.awaitSnapshot(allAssigned(4, "consumer-0", "consumer-1"), TIMEOUT);
             removed.autopilot().start(Duration.ofSeconds(30), Duration.ofSeconds(60));
-            assertThat(dynamicGroupConfigs(removedId)).containsKey("consumer.session.timeout.ms");
+            await().atMost(TIMEOUT).untilAsserted(
+                () -> assertThat(dynamicGroupConfigs(removedId)).containsKey("consumer.session.timeout.ms"));
             assertThat(simulatorThreads()).contains("kaos-" + removedId + "-autopilot");
             var removedConsumer = removed.consumer(0);
 
@@ -162,7 +167,7 @@ class DynamicComponentsTest {
             assertThat(simulator.groups()).containsExactly(kept);
             assertThat(simulator.describe().groups()).containsExactly(kept.describe());
             assertThat(groupIds()).contains(keptId).doesNotContain(removedId);
-            assertThat(dynamicGroupConfigs(removedId)).isEmpty();
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(removedId)).isEmpty());
             assertThat(simulatorThreads()).noneMatch(name -> name.startsWith("kaos-" + removedId));
             simulator.awaitSnapshot(s -> s.groups().size() == 1, TIMEOUT);
             assertThatThrownBy(removed::remove).isInstanceOf(SimulationStateException.class);
@@ -340,7 +345,7 @@ class DynamicComponentsTest {
                 .hasMessageContaining("Could not start group " + groupId)
                 .hasMessageContaining("isolation.level");
             // The group configs that the start set are reverted.
-            assertThat(dynamicGroupConfigs(groupId)).isEmpty();
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId)).isEmpty());
 
             assertThatThrownBy(() -> simulator.addTopic(topic, 1)).isInstanceOf(InvalidConfigException.class);
 
@@ -378,8 +383,12 @@ class DynamicComponentsTest {
                 return false;
             }
             var assigned = 0;
+            var holders = 0;
             for (var consumer : snapshot.consumers()) {
                 var owns = expected.contains(consumer.id());
+                if (owns) {
+                    holders++;
+                }
                 if (owns != !consumer.partitions().isEmpty()) {
                     return false;
                 }
@@ -391,7 +400,8 @@ class DynamicComponentsTest {
                 }
                 assigned += consumer.partitions().size();
             }
-            return assigned == partitions;
+            // A snapshot published before a consumer was added does not list it yet.
+            return holders == expected.size() && assigned == partitions;
         };
     }
 
@@ -443,6 +453,10 @@ class DynamicComponentsTest {
             .collect(Collectors.toSet());
     }
 
+    /**
+     * The dynamic configs of the group as the broker reports them. The broker applies a config change
+     * to its metadata cache after the alter call returns, so a check on them is awaited.
+     */
     private Map<String, String> dynamicGroupConfigs(String groupId) throws Exception {
         var resource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
         var configs = new HashMap<String, String>();
