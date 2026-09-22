@@ -23,6 +23,14 @@
 // work on it (the `PerformedWork` flag). A subtree whose fibers were not
 // cloned in the commit, because React bailed out above it, did not render and
 // is not walked.
+//
+// The tracker reads React internals: the fiber tags, the `PerformedWork` flag
+// and the identity of `child` against `alternate.child`. These values were
+// read from react-dom 19.3.0 (`react-dom-client.development.js`). Check them
+// again on every React upgrade: a tracker that sees too few renders would let
+// the tests that expect no render pass without proving anything. Only the
+// tests that expect renders, such as the mount and "every lag changes" tests
+// of `rerender.test.tsx`, would catch it.
 
 /** A component that rendered: its name, and the keys of it and its ancestors, the closest first. */
 export interface RenderedComponent {
