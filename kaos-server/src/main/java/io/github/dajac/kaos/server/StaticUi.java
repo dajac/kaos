@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 The Kaos Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.github.dajac.kaos.server;
 
 import java.io.IOException;
@@ -19,8 +34,9 @@ import io.javalin.http.staticfiles.Location;
  *       ({@code immutable}).</li>
  *   <li>Every other file, {@code index.html} included, is revalidated on every use
  *       ({@code no-cache}), so that a new build is picked up at once.</li>
- *   <li>Any other {@code GET} that accepts HTML, outside {@code /api}, answers {@code index.html}, so
- *       that the UI can use its own paths (SPA fallback).</li>
+ *   <li>Any other {@code GET} that accepts HTML, outside {@code /api} and {@code /assets}, answers
+ *       {@code index.html}, so that the UI can use its own paths (SPA fallback). A missing asset,
+ *       such as a chunk of a previous build, is a 404.</li>
  * </ul>
  *
  * <p>A build with {@code -DskipUi} has no UI: then nothing is served, and {@code /} is a 404.
@@ -28,6 +44,7 @@ import io.javalin.http.staticfiles.Location;
 final class StaticUi {
 
     static final String DIRECTORY = "/ui";
+    static final String ASSETS = "/assets";
     static final String IMMUTABLE = "public, max-age=31536000, immutable";
     static final String NO_CACHE = "no-cache";
 
@@ -56,8 +73,8 @@ final class StaticUi {
         }
         // The first location that has the file serves it, so the assets get their own headers.
         config.staticFiles.add(files -> {
-            files.hostedPath = "/assets";
-            files.directory = directory + "/assets";
+            files.hostedPath = ASSETS;
+            files.directory = directory + ASSETS;
             files.location = Location.CLASSPATH;
             files.headers = Map.of(Header.CACHE_CONTROL, IMMUTABLE);
         });
@@ -71,7 +88,7 @@ final class StaticUi {
     }
 
     private void fallback(Context ctx) {
-        if (ctx.path().equals("/api") || ctx.path().startsWith("/api/")) {
+        if (under(ctx.path(), "/api") || under(ctx.path(), ASSETS)) {
             throw new NotFoundResponse("No resource at " + ctx.path());
         }
         try (var in = StaticUi.class.getResourceAsStream(index())) {
@@ -84,6 +101,10 @@ final class StaticUi {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private static boolean under(String path, String prefix) {
+        return path.equals(prefix) || path.startsWith(prefix + "/");
     }
 
     private String index() {

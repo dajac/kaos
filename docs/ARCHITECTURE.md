@@ -1327,8 +1327,9 @@ failed.
     `Cache-Control: public, max-age=31536000, immutable`;
   - every other file, `index.html` included, is `no-cache`;
   - the SPA fallback answers `index.html` (`no-cache`) to any other
-    `GET` that accepts HTML, except under `/api`, which keeps its 404
-    problem details.
+    `GET` that accepts HTML, except under `/api` and `/assets`, which
+    answer a 404 problem detail, so that a missing asset, such as a
+    chunk of a previous build, is not answered with HTML.
 - Without the UI on the classpath, a build with `-DskipUi`, `StaticUi`
   registers nothing and `/` is a 404.
 
