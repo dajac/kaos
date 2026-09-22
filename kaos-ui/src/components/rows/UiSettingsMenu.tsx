@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import { memo } from 'react';
+
 import { STRIP_HEIGHT_PRESETS, useUiSettings, type StripHeightPreset } from '../../state/uiSettingsStore';
 import { useDropdown } from '../config/Dropdown';
 
@@ -22,7 +24,9 @@ import { useDropdown } from '../config/Dropdown';
 
 const PRESETS = Object.keys(STRIP_HEIGHT_PRESETS) as StripHeightPreset[];
 
-export function UiSettingsMenu() {
+// Memoized: it takes no props, and the header renders again with every change
+// of the group.
+export const UiSettingsMenu = memo(function UiSettingsMenu() {
   const { open, setOpen, buttonRef, rootProps } = useDropdown('ui-settings-dd');
   const preset = useUiSettings((s) => s.stripHeightPreset);
   const setPreset = useUiSettings((s) => s.setStripHeightPreset);
@@ -66,4 +70,4 @@ export function UiSettingsMenu() {
       </div>
     </div>
   );
-}
+});

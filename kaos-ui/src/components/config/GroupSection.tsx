@@ -68,7 +68,7 @@ export function GroupSection({ meta, groupIndex, group }: GroupSectionProps) {
   return (
     <div className={expanded ? 'config-section expanded' : 'config-section'} id="section-group">
       <button className="section-toggle" onClick={() => setExpanded(!expanded)} type="button">
-        <span className="section-chevron">&#9654;</span>
+        <span className="section-chevron" aria-hidden="true">&#9654;</span>
         <span className="section-title">Group</span>
       </button>
       <div className="section-body">

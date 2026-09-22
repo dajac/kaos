@@ -71,25 +71,22 @@ export function ConsumerSection({ meta, groupIndex, group, consumer, index }: Co
       className={consumer.expanded ? 'config-section expanded' : 'config-section'}
       id={`section-consumer-${consumer.key}`}
     >
-      {/* A div with the role of a button, so that the × inside it can be a real button. */}
-      <div
-        className="section-toggle"
-        role="button"
-        tabIndex={0}
-        aria-expanded={consumer.expanded}
-        onClick={() => toggle(groupIndex, consumer.key)}
-        onKeyDown={(event) => {
-          if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
-            event.preventDefault();
-            toggle(groupIndex, consumer.key);
-          }
-        }}
-      >
-        <span className="section-chevron">&#9654;</span>
-        <span className="section-title">{consumerName(index)}</span>
-        <span className={effective.protocol === 'consumer' ? 'section-tag tag-consumer' : 'section-tag tag-classic'}>
-          {effective.protocol}
-        </span>
+      {/* The header toggles on a click anywhere in it, as in the prototype.
+          The toggle and the × are two sibling buttons: a button inside an
+          element with the role of a button is hidden from assistive
+          technologies. The click of the toggle bubbles to the header, and
+          the white space between the spans renders nothing in a flex box
+          but separates the words of the accessible name. */}
+      <div className="section-toggle" onClick={() => toggle(groupIndex, consumer.key)}>
+        <button type="button" className="section-toggle-btn" aria-expanded={consumer.expanded}>
+          <span className="section-chevron" aria-hidden="true">
+            &#9654;
+          </span>{' '}
+          <span className="section-title">{consumerName(index)}</span>{' '}
+          <span className={effective.protocol === 'consumer' ? 'section-tag tag-consumer' : 'section-tag tag-classic'}>
+            {effective.protocol}
+          </span>
+        </button>
         <button
           type="button"
           className="section-remove"

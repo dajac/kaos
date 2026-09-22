@@ -135,6 +135,21 @@ export function stripCells(
   return cells;
 }
 
+/**
+ * Whether `prev` and `next` give the same lag to each of `partitions`, the
+ * partitions of a consumer: its row renders the lag of no other partition.
+ */
+export function sameLagOf(
+  partitions: readonly PartitionView[],
+  prev: Readonly<Record<string, readonly number[]>>,
+  next: Readonly<Record<string, readonly number[]>>,
+): boolean {
+  return (
+    prev === next ||
+    partitions.every((view) => lagOf(prev, view.topic, view.partition) === lagOf(next, view.topic, view.partition))
+  );
+}
+
 /** A string that changes whenever a cell of the strip changes, for `React.memo`. */
 export function stripSignature(cells: readonly Cell[]): string {
   return cells.map((cell) => (cell.state === 'EMPTY' ? 'E' : `${cell.state[0]}${cell.tip}`)).join('|');

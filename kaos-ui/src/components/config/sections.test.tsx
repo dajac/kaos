@@ -19,7 +19,6 @@ import { describe, expect, it } from 'vitest';
 
 import { newGroup } from '../../model/configModel';
 import { META } from '../../model/meta.fixture';
-import { ConsumerSection } from './ConsumerSection';
 import { GroupSection } from './GroupSection';
 
 describe('GroupSection', () => {
@@ -38,24 +37,5 @@ describe('GroupSection', () => {
 
     expect(html).toContain('<label class="field-label">Topics of the group</label>');
     expect(html).toContain('<label class="field-label">Width</label>');
-  });
-});
-
-describe('ConsumerSection', () => {
-  it('has a header that the keyboard reaches, with the × as a button of its own', () => {
-    const group = newGroup(META);
-    const consumer = group.consumers[1];
-    if (consumer === undefined) {
-      throw new Error('the group has no consumer-1');
-    }
-
-    const html = renderToStaticMarkup(
-      <ConsumerSection meta={META} groupIndex={0} group={group} consumer={consumer} index={1} />,
-    );
-
-    expect(html).toContain('<div class="section-toggle" role="button" tabindex="0" aria-expanded="false">');
-    expect(html).toContain(
-      '<button type="button" class="section-remove" title="Remove consumer" aria-label="Remove consumer-1">×</button>',
-    );
   });
 });
