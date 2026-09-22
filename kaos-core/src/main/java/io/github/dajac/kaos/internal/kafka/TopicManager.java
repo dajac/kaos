@@ -16,6 +16,7 @@
 package io.github.dajac.kaos.internal.kafka;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -27,8 +28,13 @@ import java.util.concurrent.locks.LockSupport;
 import io.github.dajac.kaos.SimulationException;
 import io.github.dajac.kaos.TopicSpec;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 
@@ -54,7 +60,7 @@ public final class TopicManager {
 
     /**
      * Creates a topic with the default replication factor of the cluster. The topic exists when
-     * the call returns, so its deletion is the undo of this step; {@link #awaitCreated} is the
+     * the call returns, so its deletion is the undo of this step; {@link #awaitReady} is the
      * step that follows.
      *
      * @throws SimulationException if the topic cannot be created. A topic that already exists is
@@ -82,16 +88,31 @@ public final class TopicManager {
     }
 
     /**
-     * Waits until the cluster reports a topic that was created. The controller acknowledges the
-     * creation before the brokers that serve the metadata requests know the topic.
+     * Waits until a topic that was created is ready for the producers: the cluster reports it and
+     * the leader of every partition serves it.
      *
-     * @throws SimulationException if the topic is still not reported at the timeout
+     * <p>The controller acknowledges the creation before the brokers that serve the metadata
+     * requests know the topic, and a broker lists a partition in its metadata before it hosts the
+     * log of the partition: a produce request sent in between gets {@code NOT_LEADER_OR_FOLLOWER}.
+     * When the first batch of an idempotent producer fails that way while a later batch of the same
+     * partition is accepted, the producer retries the first one with
+     * {@code OUT_OF_ORDER_SEQUENCE_NUMBER} until its delivery timeout, and the partition gets
+     * little or no load. The topic is ready once every partition answers a {@code ListOffsets}
+     * request, which a leader serves only from a log it hosts.
+     *
+     * @throws SimulationException if the topic is still not ready at the timeout
      */
-    public void awaitCreated(String name) {
+    public void awaitReady(String name) {
+        var deadline = System.nanoTime() + timeout.toNanos();
         try {
-            awaitExistence(name, true, System.nanoTime() + timeout.toNanos());
+            while (!isReady(name, deadline)) {
+                LockSupport.parkNanos(this, POLL_INTERVAL.toNanos());
+                if (Thread.interrupted()) {
+                    throw new InterruptedException();
+                }
+            }
         } catch (TimeoutException e) {
-            throw new SimulationException("The topic '" + name + "' is still not reported after " + timeout, e);
+            throw new SimulationException("The topic '" + name + "' is still not ready after " + timeout, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new SimulationException("Interrupted while waiting for the topic '" + name + "'", e);
@@ -124,6 +145,41 @@ public final class TopicManager {
         }
     }
 
+    /**
+     * Whether the cluster reports the topic, every partition has a leader and every leader serves
+     * the latest offset of its partition.
+     */
+    private boolean isReady(String name, long deadline) throws InterruptedException, TimeoutException {
+        TopicDescription description;
+        try {
+            description = get(admin.describeTopics(List.of(name)).allTopicNames(), remaining(deadline)).get(name);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof UnknownTopicOrPartitionException) {
+                return false;
+            }
+            throw new SimulationException("Could not describe the topic '" + name + "': " + e.getCause(), e.getCause());
+        }
+        var latest = new HashMap<TopicPartition, OffsetSpec>();
+        for (var partition : description.partitions()) {
+            if (partition.leader() == null || partition.leader().isEmpty()) {
+                return false;
+            }
+            latest.put(new TopicPartition(name, partition.partition()), OffsetSpec.latest());
+        }
+        var remaining = remaining(deadline);
+        var options = new ListOffsetsOptions().timeoutMs((int) Math.min(remaining.toMillis(), Integer.MAX_VALUE));
+        try {
+            get(admin.listOffsets(latest, options).all(), remaining);
+            return true;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof RetriableException) {
+                return false;
+            }
+            throw new SimulationException("Could not list the offsets of the topic '" + name + "': " + e.getCause(),
+                e.getCause());
+        }
+    }
+
     /** Polls the cluster until it reports the topic, or no longer does. */
     private void awaitExistence(String name, boolean expected, long deadline)
         throws InterruptedException, TimeoutException {
@@ -136,12 +192,8 @@ public final class TopicManager {
     }
 
     private boolean exists(String name, long deadline) throws InterruptedException, TimeoutException {
-        var remaining = Duration.ofNanos(deadline - System.nanoTime());
-        if (remaining.isNegative() || remaining.isZero()) {
-            throw new TimeoutException();
-        }
         try {
-            get(admin.describeTopics(List.of(name)).allTopicNames(), remaining);
+            get(admin.describeTopics(List.of(name)).allTopicNames(), remaining(deadline));
             return true;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof UnknownTopicOrPartitionException) {
@@ -149,6 +201,15 @@ public final class TopicManager {
             }
             throw new SimulationException("Could not describe the topic '" + name + "': " + e.getCause(), e.getCause());
         }
+    }
+
+    /** The time left until the deadline. */
+    private static Duration remaining(long deadline) throws TimeoutException {
+        var remaining = Duration.ofNanos(deadline - System.nanoTime());
+        if (remaining.isNegative() || remaining.isZero()) {
+            throw new TimeoutException();
+        }
+        return remaining;
     }
 
     private static <T> T get(KafkaFuture<T> future, Duration bound)
