@@ -35,6 +35,14 @@ public final class ProducerOptions {
         return this;
     }
 
+    /** Adds topics to write to. */
+    public ProducerOptions topics(Topic... topics) {
+        for (var topic : topics) {
+            this.topics.add(Objects.requireNonNull(topic, "topic").name());
+        }
+        return this;
+    }
+
     /** The records written per second to each partition. */
     public ProducerOptions ratePerPartition(double recordsPerSecond) {
         this.ratePerPartition = recordsPerSecond;

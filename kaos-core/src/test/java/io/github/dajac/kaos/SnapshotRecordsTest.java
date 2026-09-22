@@ -29,7 +29,7 @@ class SnapshotRecordsTest {
         var topics = new ArrayList<>(List.of(new TopicSpec("t", 3)));
         var producers = new ArrayList<>(List.of(producer()));
         var groups = new ArrayList<>(List.of(group(Map.of(), List.of())));
-        var snapshot = new SimulatorSnapshot(1, Phase.RUNNING, false, topics, producers, groups);
+        var snapshot = new SimulatorSnapshot(1, Phase.RUNNING, false, "", topics, producers, groups);
 
         topics.clear();
         producers.clear();
@@ -43,10 +43,10 @@ class SnapshotRecordsTest {
 
     @Test
     void withRevisionChangesOnlyTheRevision() {
-        var snapshot = new SimulatorSnapshot(1, Phase.RUNNING, true, List.of(), List.of(producer()), List.of());
+        var snapshot = new SimulatorSnapshot(1, Phase.IDLE, true, "boom", List.of(), List.of(producer()), List.of());
 
         assertThat(snapshot.withRevision(2))
-            .isEqualTo(new SimulatorSnapshot(2, Phase.RUNNING, true, List.of(), List.of(producer()), List.of()));
+            .isEqualTo(new SimulatorSnapshot(2, Phase.IDLE, true, "boom", List.of(), List.of(producer()), List.of()));
         assertThat(snapshot.withRevision(1)).isEqualTo(snapshot);
     }
 

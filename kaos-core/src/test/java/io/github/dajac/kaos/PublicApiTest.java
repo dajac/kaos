@@ -12,6 +12,10 @@ import org.junit.jupiter.api.Test;
 class PublicApiTest {
     private static final List<Class<?>> PUBLIC_TYPES = List.of(
         Simulator.class,
+        Topic.class,
+        ProducerHandle.class,
+        SnapshotListener.class,
+        Registration.class,
         SimulatorSpec.class,
         TopicSpec.class,
         ProducerSpec.class,
@@ -32,6 +36,7 @@ class PublicApiTest {
         Violation.class,
         SimulationException.class,
         InvalidConfigException.class,
+        SimulationStateException.class,
         SimulatorSnapshot.class,
         ProducerSnapshot.class,
         GroupSnapshot.class,
