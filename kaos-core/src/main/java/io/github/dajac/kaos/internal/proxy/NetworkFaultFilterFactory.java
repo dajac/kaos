@@ -77,11 +77,11 @@ public final class NetworkFaultFilterFactory implements FilterFactory<Void, Void
 
         @Override
         public CompletionStage<RequestFilterResult> onRequest(
-                ApiKeys apiKey,
-                short apiVersion,
-                RequestHeaderData header,
-                ApiMessage request,
-                FilterContext context
+            ApiKeys apiKey,
+            short apiVersion,
+            RequestHeaderData header,
+            ApiMessage request,
+            FilterContext context
         ) {
             var mode = faults.modeOf(header.clientId());
             if (mode == null) {

@@ -29,19 +29,21 @@ before changing anything.
 
 ## Code style
 
-- An empty body is `{}` on one line: `private Assignors() {}`,
-  `g -> {}`.
-- When the arguments of a call or a declaration span several lines, the
-  closing parenthesis goes on its own line, aligned with the start of
-  the statement: `);`, `) {`, `),`. This applies to main and test code.
-- Prefer `var` for local variables, enhanced-`for` variables included,
-  when the type is evident from the right-hand side or irrelevant to
-  the reader. With a diamond, move the type arguments to the right:
-  `var ids = new HashSet<String>()`.
-- Prefer modern Java 21 idioms when they make the code clearer: records,
-  sealed types with pattern `switch`, pattern matching for `instanceof`,
-  switch expressions, `List.of`, `Stream.toList()`, text blocks. Do not
-  force them where they hurt readability.
+The Java code style is defined by the Eclipse JDT formatter profile
+`config/eclipse-formatter.xml` (4 spaces, 120 columns, the line breaks
+of the author kept, comments untouched). Spotless applies it to the
+main and test sources of every module: `./mvnw verify` fails on
+unformatted code and `./mvnw spotless:apply` formats it.
+
+The build orders the imports too: static imports first, then `java` and
+`javax`, then everything else, each group sorted and separated by a
+blank line, unused imports removed. `spotless:check` enforces this
+order and `spotless:apply` fixes it.
+
+One coding preference, separate from the formatter: prefer `var` for
+local variables when the type is evident from the right-hand side,
+enhanced-`for` variables included. With a diamond, move the type
+arguments to the right: `var ids = new HashSet<String>()`.
 
 ## Module map
 
@@ -57,7 +59,8 @@ planned; see `docs/ARCHITECTURE.md` for their status.
 ## Build and run
 
 ```sh
-./mvnw verify                 # unit tests and Testcontainers ITs (needs Docker); later also UI build + Vitest
+./mvnw verify                 # unit tests, Testcontainers ITs (needs Docker) and the format check; later also UI build + Vitest
+./mvnw spotless:apply         # format the Java sources; verify fails on unformatted code
 ./mvnw verify -DskipITs       # skip the integration tests, keep the unit tests
 ./mvnw verify -DskipUi        # skip the frontend build (planned, no effect yet)
 ./run.sh [options]            # build and run; all options go to the app, see ./run.sh --help

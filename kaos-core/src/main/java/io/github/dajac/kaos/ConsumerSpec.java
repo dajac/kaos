@@ -1,9 +1,9 @@
 package io.github.dajac.kaos;
 
-import io.github.dajac.kaos.internal.config.EffectiveConfigResolver;
-
 import java.util.Objects;
 import java.util.function.Consumer;
+
+import io.github.dajac.kaos.internal.config.EffectiveConfigResolver;
 
 /**
  * The description of one consumer of a group.

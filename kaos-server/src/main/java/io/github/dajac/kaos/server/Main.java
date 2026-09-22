@@ -1,6 +1,7 @@
 package io.github.dajac.kaos.server;
 
 import java.util.concurrent.Callable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -22,7 +23,8 @@ import picocli.CommandLine.Spec;
     description = "Interactive Kafka consumer group (KIP-848) simulator.",
     mixinStandardHelpOptions = true,
     versionProvider = Version.class,
-    sortOptions = false)
+    sortOptions = false
+)
 public final class Main implements Callable<Integer> {
 
     static final int EXIT_OK = CommandLine.ExitCode.OK;
@@ -39,8 +41,7 @@ public final class Main implements Callable<Integer> {
 
     private Server server;
 
-    Main() {
-    }
+    Main() {}
 
     public static void main(String[] args) {
         Main command = new Main();
@@ -71,8 +72,10 @@ public final class Main implements Callable<Integer> {
         }
         server = candidate;
 
-        LOG.info("Kaos {} listening on http://localhost:{} (bootstrap: {})",
-            Version.read(), candidate.port(), options.bootstrapServer());
+        LOG.info(
+            "Kaos {} listening on http://localhost:{} (bootstrap: {})",
+            Version.read(), candidate.port(), options.bootstrapServer()
+        );
         return EXIT_OK;
     }
 

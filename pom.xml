@@ -53,6 +53,7 @@
         <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
         <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
         <exec-maven-plugin.version>3.6.4</exec-maven-plugin.version>
+        <spotless-maven-plugin.version>3.10.2</spotless-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -196,6 +197,33 @@
                         <mainClass>none</mainClass>
                     </configuration>
                 </plugin>
+                <plugin>
+                    <groupId>com.diffplug.spotless</groupId>
+                    <artifactId>spotless-maven-plugin</artifactId>
+                    <version>${spotless-maven-plugin.version}</version>
+                    <!-- Formats the main and test Java sources of every module
+                         with the Eclipse JDT formatter. "spotless:check" runs in
+                         "verify"; "./mvnw spotless:apply" fixes the sources. -->
+                    <configuration>
+                        <!-- The up-to-date index does not see a change of
+                             the formatter profile, and it saves a fraction
+                             of a second. -->
+                        <upToDateChecking>
+                            <enabled>false</enabled>
+                        </upToDateChecking>
+                        <java>
+                            <importOrder>
+                                <order>\#,java|javax,</order>
+                            </importOrder>
+                            <removeUnusedImports/>
+                            <eclipse>
+                                <file>${maven.multiModuleProjectDirectory}/config/eclipse-formatter.xml</file>
+                            </eclipse>
+                            <trimTrailingWhitespace/>
+                            <endWithNewline/>
+                        </java>
+                    </configuration>
+                </plugin>
             </plugins>
         </pluginManagement>
 
@@ -219,6 +247,18 @@
                                 </requireMavenVersion>
                             </rules>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>check-format</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

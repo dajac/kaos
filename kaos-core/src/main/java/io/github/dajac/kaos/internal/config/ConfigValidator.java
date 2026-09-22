@@ -1,5 +1,10 @@
 package io.github.dajac.kaos.internal.config;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.ConfigMetadata.Field;
 import io.github.dajac.kaos.ConsumerSettings;
@@ -10,11 +15,6 @@ import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.SimulatorSpec;
 import io.github.dajac.kaos.TopicSpec;
 import io.github.dajac.kaos.Violation;
-
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 /**
  * Checks specs against {@link ConfigMetadata}. Every method is a pure function that returns all the

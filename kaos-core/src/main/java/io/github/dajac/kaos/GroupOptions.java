@@ -1,12 +1,12 @@
 package io.github.dajac.kaos;
 
-import io.github.dajac.kaos.internal.config.EffectiveConfigResolver;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+
+import io.github.dajac.kaos.internal.config.EffectiveConfigResolver;
 
 /**
  * The options of a consumer group, set from a lambda. The order of the calls does not matter: the

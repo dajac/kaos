@@ -4,14 +4,6 @@ import static io.github.dajac.kaos.internal.state.StatusDeriverTest.refs;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.dajac.kaos.GroupState;
-import io.github.dajac.kaos.GroupType;
-import io.github.dajac.kaos.PartitionRef;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -19,6 +11,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import io.github.dajac.kaos.GroupState;
+import io.github.dajac.kaos.GroupType;
+import io.github.dajac.kaos.PartitionRef;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class AdminViewTest {
 

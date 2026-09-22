@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
@@ -61,8 +62,8 @@ class MainTest {
         assertThat(execute("--bootstrap-server", "x", "--port", "0")).isEqualTo(Main.EXIT_OK);
 
         assertThat(command.server()).isNotNull();
-        HttpRequest request = HttpRequest.newBuilder(
-            URI.create("http://localhost:" + command.server().port() + "/api/v1/meta")).build();
+        var uri = URI.create("http://localhost:" + command.server().port() + "/api/v1/meta");
+        HttpRequest request = HttpRequest.newBuilder(uri).build();
         HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
     }

@@ -1,14 +1,14 @@
 package io.github.dajac.kaos.internal.state;
 
-import io.github.dajac.kaos.GroupState;
-import io.github.dajac.kaos.GroupType;
-import io.github.dajac.kaos.PartitionRef;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
+import io.github.dajac.kaos.GroupState;
+import io.github.dajac.kaos.GroupType;
+import io.github.dajac.kaos.PartitionRef;
 
 /**
  * What the group coordinator and the offsets say about one group at one poll. It is immutable and

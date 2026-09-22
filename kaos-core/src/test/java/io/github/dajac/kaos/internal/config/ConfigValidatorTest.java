@@ -2,9 +2,17 @@ package io.github.dajac.kaos.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Set;
+import java.util.function.IntFunction;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.ConfigMetadata.Field;
-import io.github.dajac.kaos.ConfigMetadata.Range;
 import io.github.dajac.kaos.ConsumerOverrides;
 import io.github.dajac.kaos.ConsumerSettings;
 import io.github.dajac.kaos.ConsumerSpec;
@@ -14,21 +22,11 @@ import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.SimulatorSpec;
 import io.github.dajac.kaos.TopicSpec;
 import io.github.dajac.kaos.Violation;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import java.time.Duration;
-import java.util.List;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.Set;
-import java.util.function.IntFunction;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 class ConfigValidatorTest {
     private static final ConsumerSettings DEFAULTS = ConsumerSettings.defaults();
@@ -90,35 +88,47 @@ class ConfigValidatorTest {
      */
     static Stream<Arguments> rangedFields() {
         return Stream.of(
-            rangedField(ConfigMetadata.PARTITIONS, "topics[0].partitions", value ->
-                new SimulatorSpec(List.of(new TopicSpec("orders", value)), List.of(), List.of())
+            rangedField(ConfigMetadata.PARTITIONS, "topics[0].partitions",
+                value -> new SimulatorSpec(List.of(new TopicSpec("orders", value)), List.of(), List.of())
             ),
-            rangedField(ConfigMetadata.SESSION_TIMEOUT_MS, "groups[0].sessionTimeoutMs", value ->
-                withGroup(new GroupSpec("g", List.of("orders"), value, 5_000, 1_000, DEFAULTS, List.of()))
+            rangedField(ConfigMetadata.SESSION_TIMEOUT_MS, "groups[0].sessionTimeoutMs",
+                value -> withGroup(new GroupSpec("g", List.of("orders"), value, 5_000, 1_000, DEFAULTS, List.of()))
             ),
-            rangedField(ConfigMetadata.HEARTBEAT_INTERVAL_MS, "groups[0].heartbeatIntervalMs", value ->
-                withGroup(new GroupSpec("g", List.of("orders"), 45_000, value, 1_000, DEFAULTS, List.of()))
+            rangedField(ConfigMetadata.HEARTBEAT_INTERVAL_MS, "groups[0].heartbeatIntervalMs",
+                value -> withGroup(new GroupSpec("g", List.of("orders"), 45_000, value, 1_000, DEFAULTS, List.of()))
             ),
-            rangedField(ConfigMetadata.ASSIGNMENT_INTERVAL_MS, "groups[0].assignmentIntervalMs", value ->
-                withGroup(new GroupSpec("g", List.of("orders"), 45_000, 5_000, value, DEFAULTS, List.of()))
+            rangedField(ConfigMetadata.ASSIGNMENT_INTERVAL_MS, "groups[0].assignmentIntervalMs",
+                value -> withGroup(new GroupSpec("g", List.of("orders"), 45_000, 5_000, value, DEFAULTS, List.of()))
             ),
-            rangedField(ConfigMetadata.POLL_TIMEOUT_MS, "groups[0].consumerDefaults.pollTimeoutMs", value ->
-                withGroup(group("g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", value, 1_000, 300_000)))
+            rangedField(ConfigMetadata.POLL_TIMEOUT_MS, "groups[0].consumerDefaults.pollTimeoutMs",
+                value -> withGroup(group(
+                    "g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", value, 1_000, 300_000)
+                ))
             ),
-            rangedField(ConfigMetadata.POLL_DELAY_MS, "groups[0].consumerDefaults.pollDelayMs", value ->
-                withGroup(group("g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", 0, value, 300_000)))
+            rangedField(ConfigMetadata.POLL_DELAY_MS, "groups[0].consumerDefaults.pollDelayMs",
+                value -> withGroup(group(
+                    "g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", 0, value, 300_000)
+                ))
             ),
-            rangedField(ConfigMetadata.MAX_POLL_INTERVAL_MS, "groups[0].consumerDefaults.maxPollIntervalMs", value ->
-                withGroup(group("g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", 0, 1_000, value)))
+            rangedField(ConfigMetadata.MAX_POLL_INTERVAL_MS, "groups[0].consumerDefaults.maxPollIntervalMs",
+                value -> withGroup(group(
+                    "g", new ConsumerSettings(Protocol.CONSUMER, "", false, "", 0, 1_000, value)
+                ))
             ),
-            rangedField(ConfigMetadata.POLL_TIMEOUT_MS, "groups[0].consumers[0].overrides.pollTimeoutMs", value ->
-                withGroup(group("g", DEFAULTS, intOverrides(OptionalInt.of(value), OptionalInt.empty(), OptionalInt.empty())))
+            rangedField(ConfigMetadata.POLL_TIMEOUT_MS, "groups[0].consumers[0].overrides.pollTimeoutMs",
+                value -> withGroup(group(
+                    "g", DEFAULTS, intOverrides(OptionalInt.of(value), OptionalInt.empty(), OptionalInt.empty())
+                ))
             ),
-            rangedField(ConfigMetadata.POLL_DELAY_MS, "groups[0].consumers[0].overrides.pollDelayMs", value ->
-                withGroup(group("g", DEFAULTS, intOverrides(OptionalInt.empty(), OptionalInt.of(value), OptionalInt.empty())))
+            rangedField(ConfigMetadata.POLL_DELAY_MS, "groups[0].consumers[0].overrides.pollDelayMs",
+                value -> withGroup(group(
+                    "g", DEFAULTS, intOverrides(OptionalInt.empty(), OptionalInt.of(value), OptionalInt.empty())
+                ))
             ),
-            rangedField(ConfigMetadata.MAX_POLL_INTERVAL_MS, "groups[0].consumers[0].overrides.maxPollIntervalMs", value ->
-                withGroup(group("g", DEFAULTS, intOverrides(OptionalInt.empty(), OptionalInt.empty(), OptionalInt.of(value))))
+            rangedField(ConfigMetadata.MAX_POLL_INTERVAL_MS, "groups[0].consumers[0].overrides.maxPollIntervalMs",
+                value -> withGroup(group(
+                    "g", DEFAULTS, intOverrides(OptionalInt.empty(), OptionalInt.empty(), OptionalInt.of(value))
+                ))
             )
         );
     }
@@ -127,7 +137,11 @@ class ConfigValidatorTest {
         return Arguments.of(path, field, spec);
     }
 
-    private static ConsumerSpec intOverrides(OptionalInt pollTimeoutMs, OptionalInt pollDelayMs, OptionalInt maxPollIntervalMs) {
+    private static ConsumerSpec intOverrides(
+        OptionalInt pollTimeoutMs,
+        OptionalInt pollDelayMs,
+        OptionalInt maxPollIntervalMs
+    ) {
         return ConsumerSpec.of(new ConsumerOverrides(
             Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
             pollTimeoutMs, pollDelayMs, maxPollIntervalMs
@@ -207,7 +221,9 @@ class ConfigValidatorTest {
     @Test
     void reportsAnOverriddenAssignorOnTheAssignorEvenWhenTheProtocolIsOverriddenToo() {
         var spec = withGroup(group(
-            "g", settings(Protocol.CONSUMER, "uniform"), overriding(Optional.of(Protocol.CLASSIC), Optional.of("uniform"))
+            "g",
+            settings(Protocol.CONSUMER, "uniform"),
+            overriding(Optional.of(Protocol.CLASSIC), Optional.of("uniform"))
         ));
 
         assertThat(ConfigValidator.validate(spec)).extracting(Violation::field)
@@ -230,7 +246,9 @@ class ConfigValidatorTest {
     @Test
     void acceptsAClassicOverrideWithItsOwnAssignor() {
         var spec = withGroup(group(
-            "g", settings(Protocol.CONSUMER, "uniform"), overriding(Optional.of(Protocol.CLASSIC), Optional.of("sticky"))
+            "g",
+            settings(Protocol.CONSUMER, "uniform"),
+            overriding(Optional.of(Protocol.CLASSIC), Optional.of("sticky"))
         ));
 
         assertThat(ConfigValidator.validate(spec)).isEmpty();

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.Protocol;
-
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

@@ -1,16 +1,16 @@
 package io.github.dajac.kaos.internal.state;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+
 import io.github.dajac.kaos.GroupState;
 import io.github.dajac.kaos.PartitionRef;
 import io.github.dajac.kaos.PartitionState;
 import io.github.dajac.kaos.PartitionView;
 import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.internal.config.Assignors;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
 
 /**
  * Derives the state of each partition for one consumer from three sets: the current and the target

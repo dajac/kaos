@@ -3,16 +3,15 @@ package io.github.dajac.kaos.internal.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
+
 import io.github.dajac.kaos.ConsumerOverrides;
 import io.github.dajac.kaos.ConsumerSettings;
 import io.github.dajac.kaos.ConsumerSpec;
 import io.github.dajac.kaos.Protocol;
-
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.OptionalInt;
 
 class EffectiveConfigResolverTest {
     private static final ConsumerSettings DEFAULTS =
