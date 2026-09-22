@@ -93,7 +93,7 @@ build steps back one major.
 | Command line | picocli 4.7.x in server, through reflection (no annotation processor) |
 | Logging | `slf4j-api` only in core; logback-classic 1.5.x in server |
 | Packaging | `maven-shade-plugin` 3.6.x |
-| Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`), checked in `verify` |
+| Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`) and import ordering, checked in `verify` |
 | Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration` |
 | Frontend | Node 24 LTS (pinned by frontend-maven-plugin + `.nvmrc`), Vite 8, React 19, TypeScript, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
 | Frontend tests | Vitest, React Testing Library. Playwright is deferred. |
@@ -117,19 +117,14 @@ Notes:
     `kaos-server/target/kaos-server-<version>.jar`. The unshaded one is
     kept as `original-kaos-server-<version>.jar`.
 - **Code format.**
-  - Spotless formats the main and test Java sources of every module:
-    the Eclipse JDT formatter with the committed profile (4 spaces, 120
-    columns, the author's line breaks kept, `{}` for empty bodies, the
-    closing parenthesis of a wrapped declaration or control statement on
-    its own line, comments untouched), the import order (static, then
-    `java`/`javax`, then the rest) and the removal of unused imports.
+  - The Java code style is the Eclipse JDT formatter profile
+    `config/eclipse-formatter.xml`. Spotless applies it to the main and
+    test sources of every module, orders the imports (static, then
+    `java`/`javax`, then the rest, groups separated by a blank line) and
+    removes the unused ones.
   - `spotless:check` runs in `verify` in every module, and
     `./mvnw spotless:apply` fixes the sources. `pom.xml` and Markdown
     files are not formatted.
-  - The JDT formatter cannot keep `foo(new Bar(` ... `));` and still move
-    a lone closing parenthesis of a call to its own line, so it leaves
-    the parentheses of calls and annotations where the author put them;
-    that rule is guidance in `CLAUDE.md`.
   - Spotless's up-to-date index is off, because it does not see a change
     of the formatter profile.
 - **Version.** Maven filters `version.properties` in `kaos-server`, and

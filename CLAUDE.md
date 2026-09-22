@@ -29,56 +29,21 @@ before changing anything.
 
 ## Code style
 
-The build enforces the layout: `./mvnw verify` fails on unformatted
-code, and `./mvnw spotless:apply` fixes it. Run it before every commit.
-Spotless applies the Eclipse JDT profile `config/eclipse-formatter.xml`
-to the main and test sources of every module.
+The Java code style is defined by the Eclipse JDT formatter profile
+`config/eclipse-formatter.xml` (4 spaces, 120 columns, the line breaks
+of the author kept, comments untouched). Spotless applies it to the
+main and test sources of every module: `./mvnw verify` fails on
+unformatted code and `./mvnw spotless:apply` formats it.
 
-Enforced and fixed by `spotless:apply`:
+The build orders the imports too: static imports first, then `java` and
+`javax`, then everything else, each group sorted and separated by a
+blank line, unused imports removed. `spotless:check` enforces this
+order and `spotless:apply` fixes it.
 
-- 4 spaces, 120 columns. The formatter keeps the line breaks of the
-  author and only wraps what is too long.
-- An empty body is `{}` on one line: `private Assignors() {}`,
-  `g -> {}`.
-- When a declaration (method, constructor, record) or the condition of
-  an `if`, `while`, `for`, `switch`, `try` or `catch` spans several
-  lines, the closing parenthesis goes on its own line: `) {`.
-- Imports: static imports, then `java` and `javax`, then the rest, each
-  group sorted and separated by a blank line. Unused imports go away.
-- Comments and Javadoc are left as written.
-
-Guidance, not checked:
-
-- When the arguments of a call span several lines, the closing
-  parenthesis goes on its own line, aligned with the start of the
-  statement: `);`, `),`, and `));` when the last argument is itself
-  such a call. The formatter keeps the parentheses of calls and
-  annotations where the author put them, so wrap a call that is too
-  long by hand before the formatter does it.
-- In a wrapped call, put the arguments on one line, or one per line, or
-  in meaningful groups such as the key and value pairs of `Map.of`.
-- A lambda that does not fit behind its arrow moves to its own line
-  whole (`value -> body`): the formatter never breaks after `->` unless
-  the body is a block.
-- Prefer `var` for local variables, enhanced-`for` variables included,
-  when the type is evident from the right-hand side or irrelevant to
-  the reader. With a diamond, move the type arguments to the right:
-  `var ids = new HashSet<String>()`.
-- Prefer modern Java 21 idioms when they make the code clearer: records,
-  sealed types with pattern `switch`, pattern matching for `instanceof`,
-  switch expressions, `List.of`, `Stream.toList()`, text blocks. Do not
-  force them where they hurt readability.
-- OpenRewrite can propose the `var` changes on demand. It is not part of
-  the build, and its output must be reviewed: it also rewrites loop
-  counters and can produce code that does not compile, such as `var`
-  for a lambda. Run the `dryRun` goal to get a patch in
-  `target/rewrite/`, or `run` to change the sources:
-
-  ```sh
-  ./mvnw org.openrewrite.maven:rewrite-maven-plugin:6.46.1:dryRun \
-      -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-migrate-java:3.42.1 \
-      -Drewrite.activeRecipes=org.openrewrite.java.migrate.lang.UseVar
-  ```
+One coding preference, separate from the formatter: prefer `var` for
+local variables when the type is evident from the right-hand side,
+enhanced-`for` variables included. With a diamond, move the type
+arguments to the right: `var ids = new HashSet<String>()`.
 
 ## Module map
 
