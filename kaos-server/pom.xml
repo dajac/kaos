@@ -66,6 +66,18 @@
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- The contract test validates the JSON of the API against the
+             schemas of the OpenAPI 3.1 document. -->
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.github.dajac</groupId>
             <artifactId>kaos-core</artifactId>

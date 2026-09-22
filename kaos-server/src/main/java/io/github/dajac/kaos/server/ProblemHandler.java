@@ -56,7 +56,7 @@ final class ProblemHandler {
         routes.exception(HttpResponseException.class, (e, ctx) -> write(ctx, e.getStatus(), e.getMessage(), List.of()));
         routes.exception(Exception.class, (e, ctx) -> {
             LOG.error("Request {} {} failed", ctx.method(), ctx.path(), e);
-            write(ctx, 500, e.getMessage(), List.of());
+            write(ctx, 500, e.getMessage() == null ? e.toString() : e.getMessage(), List.of());
         });
         // Javalin answers a route that does not exist without an exception.
         routes.error(404, ctx -> {
@@ -108,7 +108,9 @@ final class ProblemHandler {
 
     private void write(Context ctx, int status, String detail, List<Violation> violations) {
         var httpStatus = HttpStatus.forStatus(status);
-        var problem = new Problem("about:blank", httpStatus.getMessage(), status, detail, violations);
+        // The detail is always present: an exception without a message falls back to the title.
+        var problem = new Problem("about:blank", httpStatus.getMessage(), status,
+            detail == null ? httpStatus.getMessage() : detail, violations);
         String body;
         try {
             body = mapper.writeValueAsString(problem);

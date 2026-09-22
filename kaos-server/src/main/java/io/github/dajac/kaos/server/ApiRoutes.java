@@ -1,6 +1,7 @@
 package io.github.dajac.kaos.server;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,6 +28,9 @@ import io.javalin.http.Context;
 final class ApiRoutes {
 
     static final String API_V1 = "/api/v1";
+    /** The classpath location of the OpenAPI document served at {@code /api/v1/openapi.yaml}. */
+    static final String OPENAPI_RESOURCE = "/openapi/kaos-v1.yaml";
+    static final String YAML_CONTENT_TYPE = "application/yaml";
     private static final String SIMULATOR = API_V1 + "/simulator";
     private static final String GROUP = SIMULATOR + "/groups/{groupId}";
     private static final String CONSUMER = GROUP + "/consumers/{id}";
@@ -35,17 +39,20 @@ final class ApiRoutes {
     private final SimulationService service;
     private final SseHub hub;
     private final MetaResponse meta;
+    private final byte[] openApi;
 
     ApiRoutes(ObjectMapper mapper, SimulationService service, SseHub hub, String version) {
         this.mapper = mapper;
         this.service = service;
         this.hub = hub;
         this.meta = MetaResponse.of(version, ConfigMetadata.get());
+        this.openApi = openApi();
     }
 
     /** Registers the routes. */
     void register(RoutesConfig routes) {
         routes.get(API_V1 + "/meta", ctx -> ctx.json(meta));
+        routes.get(API_V1 + "/openapi.yaml", ctx -> ctx.contentType(YAML_CONTENT_TYPE).result(openApi));
 
         routes.get(SIMULATOR, ctx -> ctx.json(service.describe()));
         routes.post(SIMULATOR, ctx -> accepted(ctx, service.start(body(ctx, SimulatorRequest.class).toSpec())));
@@ -145,6 +152,18 @@ final class ApiRoutes {
                 accepted(ctx);
             }
             default -> throw ApiException.badRequest("type", "must be join, leave or switch-protocol");
+        }
+    }
+
+    private static byte[] openApi() {
+        try (var in = ApiRoutes.class.getResourceAsStream(OPENAPI_RESOURCE)) {
+            if (in == null) {
+                throw new IllegalStateException(
+                    "The OpenAPI document " + OPENAPI_RESOURCE + " is not on the classpath");
+            }
+            return in.readAllBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

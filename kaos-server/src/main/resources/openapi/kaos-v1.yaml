@@ -1,0 +1,1266 @@
+openapi: 3.1.0
+info:
+  title: Kaos HTTP API
+  version: "1"
+  summary: Drive a Kafka consumer group (KIP-848) simulator over HTTP.
+  description: |
+    The server holds one simulator. `POST /api/v1/simulator` declares and
+    starts a whole simulation; while it runs, topics, producers, groups and
+    consumers can be added and removed, and faults and actions applied to
+    the consumers. `GET /api/v1/simulator/events` streams its snapshots.
+
+    Conventions:
+
+    - An operation that runs on the lifecycle thread (start, stop, every
+      add and remove, `switch-protocol`) answers 202 with the `Status`.
+      An operation that only flips a flag answers 204.
+    - The dynamic routes under `/api/v1/simulator/` need a `RUNNING`
+      simulator and answer 409 otherwise, also while a start or a stop is
+      pending.
+    - Every error is an RFC 9457 problem detail
+      (`application/problem+json`). An unknown route, or a known route
+      with another method, is a 404.
+    - A request body binds exactly: an unknown property, a `null` element
+      of a list, a number for an enum, a fraction for an integer and
+      trailing content are a 400. A property that is left out takes the
+      default of `/api/v1/meta`.
+    - A protocol is written as `consumer` or `classic` and read in any
+      case. A fault is its id. The other enums are upper case.
+    - Unknown values in a snapshot are `-1` for a number and the empty
+      string for a string.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+
+servers:
+  - url: /
+    description: The server that serves this document.
+
+# The API has no authentication.
+security: []
+
+paths:
+  /api/v1/meta:
+    get:
+      operationId: getMeta
+      summary: The defaults, ranges, assignors and faults, with the build version
+      responses:
+        "200":
+          description: The metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meta"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/openapi.yaml:
+    get:
+      operationId: getOpenApi
+      summary: This document
+      responses:
+        "200":
+          description: The OpenAPI document of the API.
+          content:
+            application/yaml:
+              schema:
+                type: string
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator:
+    get:
+      operationId: getSimulator
+      summary: The status and the spec of the simulation
+      responses:
+        "200":
+          description: The status, with the spec as declared and the assigned ids.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Simulator"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      operationId: startSimulator
+      summary: Declare and start a whole simulation
+      description: |
+        The spec is validated synchronously, then its components are
+        declared and started on the lifecycle thread. A start that fails
+        removes them again, and its message becomes `lastError`. The `spec`
+        of `GET /api/v1/simulator` can be sent back as it is.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulatorRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      operationId: stopSimulator
+      summary: Stop the simulation and remove everything
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "204":
+          description: There is nothing to stop. `lastError` is kept.
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/snapshot:
+    get:
+      operationId: getSnapshot
+      summary: The latest snapshot
+      responses:
+        "200":
+          description: The full snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulatorSnapshot"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/events:
+    get:
+      operationId: streamEvents
+      summary: The server-sent events of the simulation
+      description: |
+        A `text/event-stream` with two events, each carrying one JSON
+        document as `data`:
+
+        - `status`: a `Status`, sent whenever it changes;
+        - `snapshot`: a `SimulatorSnapshot`, with `id` set to its
+          `revision`.
+
+        Both are sent on connect. A `: ping` comment is sent after 15 s
+        without an event. A slow client is coalesced to the latest
+        snapshot. `x-sse-events` maps each event name to the schema of its
+        data.
+      x-sse-events:
+        status:
+          $ref: "#/components/schemas/Status"
+        snapshot:
+          $ref: "#/components/schemas/SimulatorSnapshot"
+      responses:
+        "200":
+          description: The event stream, until the client or the server goes away.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/v1/simulator/topics:
+    post:
+      operationId: addTopic
+      summary: Add a topic to the running simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TopicRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/topics/{name}:
+    parameters:
+      - $ref: "#/components/parameters/TopicName"
+    delete:
+      operationId: removeTopic
+      summary: Remove and delete a topic
+      description: A topic that a producer or a group uses is a 409.
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/producers:
+    post:
+      operationId: addProducer
+      summary: Add a producer to the running simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProducerRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/producers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ProducerId"
+    delete:
+      operationId: removeProducer
+      summary: Remove a producer
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/producers/{id}/state:
+    parameters:
+      - $ref: "#/components/parameters/ProducerId"
+    put:
+      operationId: setProducerState
+      summary: Pause or resume a producer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProducerStateRequest"
+      responses:
+        "204":
+          description: The producer is paused or resumed.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/groups:
+    post:
+      operationId: addGroup
+      summary: Add a consumer group to the running simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/groups/{groupId}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    delete:
+      operationId: removeGroup
+      summary: Remove a consumer group
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/groups/{groupId}/autopilot:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    put:
+      operationId: setAutopilot
+      summary: Turn the autopilot of a group on or off
+      description: |
+        A missing interval keeps the current one. A `minIntervalMs` below 1
+        or a `maxIntervalMs` below `minIntervalMs` is a 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutopilotRequest"
+      responses:
+        "204":
+          description: The autopilot is on or off.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/groups/{groupId}/consumers:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    post:
+      operationId: addConsumer
+      summary: Add a consumer to a group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsumerRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/groups/{groupId}/consumers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/ConsumerId"
+    delete:
+      operationId: removeConsumer
+      summary: Remove a consumer from its group
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/groups/{groupId}/consumers/{id}/faults:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/ConsumerId"
+    delete:
+      operationId: clearFaults
+      summary: Clear every fault of a consumer
+      responses:
+        "204":
+          description: The consumer has no fault.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/groups/{groupId}/consumers/{id}/faults/{fault}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/ConsumerId"
+      - $ref: "#/components/parameters/Fault"
+    put:
+      operationId: injectFault
+      summary: Inject a fault into a consumer
+      responses:
+        "204":
+          description: The fault is active.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      operationId: clearFault
+      summary: Clear a fault of a consumer
+      responses:
+        "204":
+          description: The fault is not active.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/simulator/groups/{groupId}/consumers/{id}/actions:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/ConsumerId"
+    post:
+      operationId: runAction
+      summary: Make a consumer join or leave its group, or switch its protocol
+      description: |
+        `join` and `leave` answer 204. `switch-protocol` runs on the
+        lifecycle thread and answers 202.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "204":
+          description: The consumer is asked to join or to leave.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+components:
+  parameters:
+    TopicName:
+      name: name
+      in: path
+      required: true
+      description: The name of the topic.
+      schema:
+        type: string
+    ProducerId:
+      name: id
+      in: path
+      required: true
+      description: The id of the producer.
+      schema:
+        type: string
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      description: The id of the group.
+      schema:
+        type: string
+    ConsumerId:
+      name: id
+      in: path
+      required: true
+      description: The id of the consumer within its group.
+      schema:
+        type: string
+    Fault:
+      name: fault
+      in: path
+      required: true
+      description: The id of the fault. An unknown fault is a 404.
+      schema:
+        $ref: "#/components/schemas/FaultId"
+
+  responses:
+    Accepted:
+      description: The operation is accepted and runs on the lifecycle thread.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Status"
+    BadRequest:
+      description: |
+        The body does not bind, or the spec has violations. A body that is
+        not JSON, or is missing, has no `violations`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: A topic, producer, group, consumer or fault of the path does not exist.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: |
+        The simulator is in the wrong phase (not idle for a start, not
+        `RUNNING` for a dynamic route), or the topic is in use.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ServerError:
+      description: An unexpected failure, which the server logs.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    # Enums
+
+    Protocol:
+      description: The group protocol. Read in any case.
+      type: string
+      enum: [consumer, classic]
+    FaultId:
+      description: |
+        `freeze` stops the polls; `network-isolation` drops the requests
+        of the consumer; `connection-reset` closes its connections.
+      type: string
+      enum: [freeze, network-isolation, connection-reset]
+    Phase:
+      type: string
+      enum: [IDLE, STARTING, RUNNING, STOPPING]
+    GroupType:
+      type: string
+      enum: [UNKNOWN, CONSUMER, CLASSIC]
+    GroupState:
+      type: string
+      enum: [UNKNOWN, EMPTY, ASSIGNING, RECONCILING, STABLE, PREPARING_REBALANCE, COMPLETING_REBALANCE, DEAD]
+    PartitionState:
+      type: string
+      enum: [ASSIGNED, PENDING, REVOKING, EMPTY]
+    ConsumerStatus:
+      type: string
+      enum: [FAILED, STOPPED, FROZEN, ISOLATED, STOPPING, JOINING, RECONCILING, STABLE]
+    ProducerState:
+      type: string
+      enum: [STOPPED, RUNNING, PAUSED]
+
+    # Names
+
+    Name:
+      description: |
+        A topic name, a group id, or a producer or consumer id: ASCII
+        letters, digits, `.`, `_` and `-`, at most 249 characters, and
+        neither `.` nor `..`. It follows `nameRule` of `/api/v1/meta`.
+      type: string
+      minLength: 1
+      maxLength: 249
+      pattern: "^[a-zA-Z0-9._-]+$"
+    OptionalName:
+      description: A `Name`, or the empty string to have an id assigned.
+      type: string
+      maxLength: 249
+      pattern: "^[a-zA-Z0-9._-]*$"
+
+    # Status
+
+    Status:
+      description: The status of the simulation, the body of the 202 answers and the data of the `status` event.
+      type: object
+      additionalProperties: false
+      required: [phase, lastError, warnings]
+      properties:
+        phase:
+          $ref: "#/components/schemas/Phase"
+          description: The phase of the simulator; `STARTING` or `STOPPING` as soon as a start or a stop is accepted.
+        lastError:
+          type: string
+          description: The message of the last failed operation of the lifecycle thread, empty otherwise.
+        warnings:
+          type: array
+          description: What the groups could not apply at their start and went on without.
+          items:
+            type: string
+    Simulator:
+      description: The status, with the spec of the simulation.
+      type: object
+      additionalProperties: false
+      required: [phase, spec, lastError, warnings]
+      properties:
+        phase:
+          $ref: "#/components/schemas/Phase"
+        spec:
+          $ref: "#/components/schemas/SimulatorSpec"
+        lastError:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
+
+    # Specs, as the server describes them
+
+    SimulatorSpec:
+      type: object
+      additionalProperties: false
+      required: [topics, producers, groups]
+      properties:
+        topics:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopicSpec"
+        producers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProducerSpec"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupSpec"
+    TopicSpec:
+      type: object
+      additionalProperties: false
+      required: [name, partitions]
+      properties:
+        name:
+          type: string
+        partitions:
+          type: integer
+          format: int32
+    ProducerSpec:
+      type: object
+      additionalProperties: false
+      required: [id, topics, ratePerPartition]
+      properties:
+        id:
+          type: string
+        topics:
+          type: array
+          items:
+            type: string
+        ratePerPartition:
+          type: number
+          format: double
+    GroupSpec:
+      type: object
+      additionalProperties: false
+      required:
+        [id, subscribedTopics, sessionTimeoutMs, heartbeatIntervalMs, assignmentIntervalMs, consumerDefaults, consumers]
+      properties:
+        id:
+          type: string
+        subscribedTopics:
+          type: array
+          items:
+            type: string
+        sessionTimeoutMs:
+          type: integer
+          format: int32
+        heartbeatIntervalMs:
+          type: integer
+          format: int32
+        assignmentIntervalMs:
+          type: integer
+          format: int32
+        consumerDefaults:
+          $ref: "#/components/schemas/ConsumerSettings"
+        consumers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsumerSpec"
+    ConsumerSpec:
+      description: A consumer with its overrides and the settings they resolve to.
+      type: object
+      additionalProperties: false
+      required: [id, overrides, effective]
+      properties:
+        id:
+          type: string
+        overrides:
+          $ref: "#/components/schemas/ConsumerOverrides"
+        effective:
+          $ref: "#/components/schemas/ConsumerSettings"
+    ConsumerSettings:
+      description: The settings of a consumer, all set.
+      type: object
+      additionalProperties: false
+      required: [protocol, assignor, staticMember, rackId, pollTimeoutMs, pollDelayMs, maxPollIntervalMs]
+      properties:
+        protocol:
+          $ref: "#/components/schemas/Protocol"
+        assignor:
+          type: string
+          description: The assignor name; empty for the default of the protocol.
+        staticMember:
+          type: boolean
+        rackId:
+          type: string
+          description: The rack id; empty for no rack.
+        pollTimeoutMs:
+          type: integer
+          format: int32
+        pollDelayMs:
+          type: integer
+          format: int32
+        maxPollIntervalMs:
+          type: integer
+          format: int32
+    ConsumerOverrides:
+      description: |
+        The settings a consumer sets itself; the others are inherited from
+        the `consumerDefaults` of its group. A setting that is not
+        overridden is left out.
+      type: object
+      additionalProperties: false
+      properties:
+        protocol:
+          $ref: "#/components/schemas/Protocol"
+        assignor:
+          type: string
+        staticMember:
+          type: boolean
+        rackId:
+          type: string
+        pollTimeoutMs:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 60000
+        pollDelayMs:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 120000
+        maxPollIntervalMs:
+          type: integer
+          format: int32
+          minimum: 1000
+          maximum: 600000
+
+    # Request bodies
+
+    SimulatorRequest:
+      description: |
+        The whole simulation. A missing list is empty. It has the shape of
+        the `spec` of `GET /api/v1/simulator`, which can be sent back.
+      type: object
+      additionalProperties: false
+      properties:
+        topics:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/TopicRequest"
+        producers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProducerRequest"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupRequest"
+    TopicRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          $ref: "#/components/schemas/Name"
+        partitions:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          default: 36
+    ProducerRequest:
+      type: object
+      additionalProperties: false
+      required: [topics]
+      properties:
+        id:
+          $ref: "#/components/schemas/OptionalName"
+        topics:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+          description: The names of the topics it writes to, which the simulation declares.
+        ratePerPartition:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          default: 2.0
+          description: The records written per second to each partition.
+    GroupRequest:
+      type: object
+      additionalProperties: false
+      required: [id, subscribedTopics]
+      properties:
+        id:
+          $ref: "#/components/schemas/Name"
+        subscribedTopics:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+          description: The names of the topics the consumers subscribe to, which the simulation declares.
+        sessionTimeoutMs:
+          type: integer
+          format: int32
+          minimum: 1000
+          maximum: 300000
+          default: 45000
+        heartbeatIntervalMs:
+          type: integer
+          format: int32
+          minimum: 500
+          maximum: 60000
+          default: 5000
+        assignmentIntervalMs:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 60000
+          default: 1000
+        consumerDefaults:
+          $ref: "#/components/schemas/ConsumerSettingsRequest"
+        consumers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsumerRequest"
+    ConsumerSettingsRequest:
+      description: |
+        The settings the consumers of a group inherit. A missing value
+        takes the default of `/api/v1/meta`. The assignor must be known
+        for the protocol, see `assignors` of `/api/v1/meta`.
+      type: object
+      additionalProperties: false
+      properties:
+        protocol:
+          $ref: "#/components/schemas/Protocol"
+          default: consumer
+        assignor:
+          type: string
+          default: ""
+        staticMember:
+          type: boolean
+          default: false
+        rackId:
+          type: string
+          default: ""
+        pollTimeoutMs:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 60000
+          default: 0
+        pollDelayMs:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 120000
+          default: 1000
+        maxPollIntervalMs:
+          type: integer
+          format: int32
+          minimum: 1000
+          maximum: 600000
+          default: 300000
+    ConsumerRequest:
+      description: |
+        A consumer. `effective` is accepted and ignored, since the group
+        resolves it again, so a `ConsumerSpec` can be sent back as it is.
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          $ref: "#/components/schemas/OptionalName"
+        overrides:
+          $ref: "#/components/schemas/ConsumerOverrides"
+        effective:
+          $ref: "#/components/schemas/ConsumerSettingsRequest"
+    ProducerStateRequest:
+      type: object
+      additionalProperties: false
+      required: [paused]
+      properties:
+        paused:
+          type: boolean
+    AutopilotRequest:
+      description: It has the shape of the `autopilot` of a group snapshot.
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+        minIntervalMs:
+          type: integer
+          format: int32
+          minimum: 1
+          description: The shortest pause between two flips; the current one when left out.
+        maxIntervalMs:
+          type: integer
+          format: int32
+          minimum: 1
+          description: The longest pause between two flips, at least `minIntervalMs`; the current one when left out.
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [join, leave, switch-protocol]
+        protocol:
+          $ref: "#/components/schemas/Protocol"
+          description: The protocol to switch to; required by `switch-protocol` only.
+      if:
+        properties:
+          type:
+            const: switch-protocol
+      then:
+        required: [protocol]
+
+    # Snapshot
+
+    SimulatorSnapshot:
+      description: The state of the simulation, the body of `/snapshot` and the data of the `snapshot` event.
+      type: object
+      additionalProperties: false
+      required: [revision, phase, stale, lastError, topics, producers, groups]
+      properties:
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Grows every time the content of the snapshot changes.
+        phase:
+          $ref: "#/components/schemas/Phase"
+        stale:
+          type: boolean
+          description: Whether the coordinator-side data is older than the last poll, because that poll failed.
+        lastError:
+          type: string
+          description: The message of the last failed start or stop, empty otherwise.
+        topics:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopicSpec"
+        producers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProducerSnapshot"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupSnapshot"
+    ProducerSnapshot:
+      type: object
+      additionalProperties: false
+      required: [id, topics, state, ratePerPartition]
+      properties:
+        id:
+          type: string
+        topics:
+          type: array
+          items:
+            type: string
+        state:
+          $ref: "#/components/schemas/ProducerState"
+        ratePerPartition:
+          type: number
+          format: double
+    GroupSnapshot:
+      type: object
+      additionalProperties: false
+      required: [id, type, state, epoch, targetAssignmentEpoch, generation, subscribedTopics, autopilot, lag, consumers]
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/GroupType"
+        state:
+          $ref: "#/components/schemas/GroupState"
+        epoch:
+          type: integer
+          format: int32
+          minimum: -1
+          description: The group epoch of a consumer group.
+        targetAssignmentEpoch:
+          type: integer
+          format: int32
+          minimum: -1
+        generation:
+          type: integer
+          format: int32
+          minimum: -1
+          description: The highest generation reported by the consumers; the classic counterpart of the epoch.
+        subscribedTopics:
+          type: array
+          items:
+            type: string
+        autopilot:
+          $ref: "#/components/schemas/AutopilotSnapshot"
+        lag:
+          description: |
+            The lag of each subscribed topic, in the order of
+            `subscribedTopics`: one entry per partition, indexed by
+            partition number.
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: integer
+              format: int64
+              minimum: -1
+        consumers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsumerSnapshot"
+    AutopilotSnapshot:
+      description: The intervals are the last ones given, kept while the autopilot is off.
+      type: object
+      additionalProperties: false
+      required: [enabled, minIntervalMs, maxIntervalMs]
+      properties:
+        enabled:
+          type: boolean
+        minIntervalMs:
+          type: integer
+          format: int32
+        maxIntervalMs:
+          type: integer
+          format: int32
+    ConsumerSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - clientId
+        - protocol
+        - subscribed
+        - faults
+        - memberId
+        - instanceId
+        - memberEpoch
+        - generation
+        - coordinatorState
+        - status
+        - failure
+        - partitions
+        - raw
+      properties:
+        id:
+          type: string
+          description: Unique within the group.
+        clientId:
+          type: string
+          description: The `client.id`, unique across groups.
+        protocol:
+          $ref: "#/components/schemas/Protocol"
+          description: The protocol the consumer speaks at the moment.
+        subscribed:
+          type: boolean
+          description: Whether the consumer is asked to be in the group (`join`) or out of it (`leave`).
+        faults:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/FaultId"
+        memberId:
+          type: string
+        instanceId:
+          type: string
+          description: The `group.instance.id` of a static member.
+        memberEpoch:
+          type: integer
+          format: int32
+          minimum: -1
+        generation:
+          type: integer
+          format: int32
+          minimum: -1
+        coordinatorState:
+          $ref: "#/components/schemas/ConsumerStatus"
+          description: The membership as the coordinator sees it.
+        status:
+          $ref: "#/components/schemas/ConsumerStatus"
+          description: The single state to show, which also accounts for the faults and the local assignment.
+        failure:
+          type: string
+          description: The message of the error behind the `FAILED` status, empty otherwise.
+        partitions:
+          type: array
+          description: Sorted by topic and partition, without the `EMPTY` ones.
+          items:
+            $ref: "#/components/schemas/PartitionView"
+        raw:
+          $ref: "#/components/schemas/ConsumerRaw"
+    ConsumerRaw:
+      description: The assignments the partition states are derived from, each sorted.
+      type: object
+      additionalProperties: false
+      required: [assignment, targetAssignment, localAssignment]
+      properties:
+        assignment:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartitionRef"
+        targetAssignment:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartitionRef"
+        localAssignment:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartitionRef"
+    PartitionView:
+      type: object
+      additionalProperties: false
+      required: [topic, partition, state]
+      properties:
+        topic:
+          type: string
+        partition:
+          type: integer
+          format: int32
+          minimum: 0
+        state:
+          $ref: "#/components/schemas/PartitionState"
+    PartitionRef:
+      type: object
+      additionalProperties: false
+      required: [topic, partition]
+      properties:
+        topic:
+          type: string
+        partition:
+          type: integer
+          format: int32
+          minimum: 0
+
+    # Metadata
+
+    Meta:
+      type: object
+      additionalProperties: false
+      required: [version, fields, nameRule, assignors, faults]
+      properties:
+        version:
+          type: string
+          description: The version of the running build.
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConfigField"
+        nameRule:
+          $ref: "#/components/schemas/NameRule"
+        assignors:
+          type: object
+          additionalProperties: false
+          required: [consumer, classic]
+          properties:
+            consumer:
+              $ref: "#/components/schemas/AssignorOptions"
+            classic:
+              $ref: "#/components/schemas/AssignorOptions"
+        faults:
+          type: array
+          items:
+            $ref: "#/components/schemas/FaultId"
+    ConfigField:
+      type: object
+      additionalProperties: false
+      required: [key, label, scope, type, defaultValue]
+      properties:
+        key:
+          type: string
+          description: The name of the field in the specs and in the violations.
+        label:
+          type: string
+        scope:
+          type: string
+          enum: [SIMULATOR, TOPIC, PRODUCER, GROUP, CONSUMER]
+        type:
+          type: string
+          enum: [INT, DOUBLE, BOOLEAN, STRING, PROTOCOL]
+        defaultValue:
+          description: A value of `type`; a protocol is its id.
+          type: [integer, number, boolean, string]
+        range:
+          $ref: "#/components/schemas/Range"
+          description: The accepted values of a bounded `INT` field.
+    Range:
+      type: object
+      additionalProperties: false
+      required: [min, max]
+      properties:
+        min:
+          type: integer
+          format: int32
+        max:
+          type: integer
+          format: int32
+    NameRule:
+      type: object
+      additionalProperties: false
+      required: [pattern, maxLength]
+      properties:
+        pattern:
+          type: string
+          description: The regular expression the whole name matches.
+        maxLength:
+          type: integer
+          format: int32
+    AssignorOptions:
+      type: object
+      additionalProperties: false
+      required: [names, customAllowed]
+      properties:
+        names:
+          type: array
+          items:
+            type: string
+        customAllowed:
+          type: boolean
+          description: Whether a name outside `names` is accepted.
+
+    # Errors
+
+    Problem:
+      description: An RFC 9457 problem detail.
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: Always `about:blank`; the status says what kind of problem it is.
+        title:
+          type: string
+          description: The reason phrase of the status.
+        status:
+          type: integer
+          format: int32
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: What went wrong in this occurrence.
+        violations:
+          type: array
+          minItems: 1
+          description: The invalid fields of a 400; left out when there are none.
+          items:
+            $ref: "#/components/schemas/Violation"
+    Violation:
+      type: object
+      additionalProperties: false
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          description: The path of the field, as in `groups[0].consumers[1].overrides.pollDelayMs`.
+        message:
+          type: string

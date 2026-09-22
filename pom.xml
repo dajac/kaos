@@ -44,6 +44,8 @@
         <testcontainers.version>2.0.5</testcontainers.version>
         <assertj.version>3.27.7</assertj.version>
         <awaitility.version>4.3.0</awaitility.version>
+        <!-- The 2.x line uses Jackson 2; 3.x moved to Jackson 3. -->
+        <json-schema-validator.version>2.0.7</json-schema-validator.version>
 
         <!-- Plugins -->
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
@@ -143,6 +145,11 @@
                 <groupId>org.awaitility</groupId>
                 <artifactId>awaitility</artifactId>
                 <version>${awaitility.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>${json-schema-validator.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
