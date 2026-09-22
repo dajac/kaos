@@ -82,11 +82,6 @@ class ServerTest {
     }
 
     @Test
-    void theRootIsNotServed() {
-        assertThat(api.get("/").statusCode()).isEqualTo(404);
-    }
-
-    @Test
     void startOnABusyPortFailsAndReleasesTheServer() {
         Set<Thread> before = liveNonDaemonThreads();
 

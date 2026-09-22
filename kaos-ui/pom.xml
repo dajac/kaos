@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.dajac</groupId>
+        <artifactId>kaos-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>kaos-ui</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Kaos :: UI</name>
+    <description>React + TypeScript UI, built by Vite into the classpath directory /ui</description>
+
+    <build>
+        <plugins>
+            <!-- Installs the pinned Node and npm into kaos-ui/node, then runs
+                 the npm scripts of package.json: the install from the lockfile,
+                 the check of the generated API types, the type check, the Vite
+                 build into target/classes/ui and the Vitest tests.
+                 -DskipUi skips every step. -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <configuration>
+                    <nodeVersion>${node.version}</nodeVersion>
+                    <skip>${skipUi}</skip>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install-node-and-npm</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>npm-ci</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>ci --no-audit --no-fund</arguments>
+                        </configuration>
+                    </execution>
+                    <!-- Fails when src/api/schema.d.ts differs from a fresh
+                         generation from the OpenAPI document of kaos-server.
+                         "npm run gen:api" regenerates it. -->
+                    <execution>
+                        <id>check-api-types</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run check:api</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>typecheck</id>
+                        <phase>process-sources</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run typecheck</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>vite-build</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run build</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>vitest</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>test</arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Puts the license header on top of the TypeScript and CSS
+                 sources and of vite.config.ts. The generated schema.d.ts
+                 is left alone. The header ends at the first line that is
+                 neither "/*" nor inside a block comment, usually the blank
+                 line after it, so that a file starting with a JSDoc comment
+                 or with a one-line CSS comment keeps it. -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <configuration>
+                    <formats combine.self="override">
+                        <format>
+                            <includes>
+                                <include>src/**/*.ts</include>
+                                <include>src/**/*.tsx</include>
+                                <include>src/**/*.css</include>
+                                <include>*.ts</include>
+                            </includes>
+                            <excludes>
+                                <exclude>src/api/schema.d.ts</exclude>
+                            </excludes>
+                            <licenseHeader>
+                                <content>${license.header}</content>
+                                <delimiter>^(?!/\*$| \*)</delimiter>
+                            </licenseHeader>
+                            <trimTrailingWhitespace/>
+                            <endWithNewline/>
+                        </format>
+                    </formats>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
