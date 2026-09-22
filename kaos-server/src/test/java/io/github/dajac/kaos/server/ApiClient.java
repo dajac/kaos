@@ -38,7 +38,12 @@ final class ApiClient {
     private final String base;
 
     ApiClient(Server server) {
-        this.base = "http://localhost:" + server.port();
+        this("http://localhost:" + server.port());
+    }
+
+    /** A client for the server at a base URL such as {@code http://localhost:8081}. */
+    ApiClient(String base) {
+        this.base = base;
     }
 
     HttpResponse<String> get(String path) {

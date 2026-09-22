@@ -1631,6 +1631,17 @@ the build, and the server tests and the scripted curl session below.
   producer paused and resumed, a topic, a producer and a group added and
   removed, a failed add as `lastError`, and the stop, which deletes the
   topics and leaves no `kaos-` thread.
+- `ShadedJarTest` (`@IntegrationTest`) runs the shaded jar with
+  `java -jar` as a separate process, on a free HTTP port and against the
+  broker, starts a simulator with a topic, a producer and a group over
+  HTTP, waits for it to run with its consumer stable, stops it and kills
+  the process. A class missing from the runtime classpath of the jar,
+  which the other tests do not see because they run on the test
+  classpath, thus fails `./mvnw verify`. Failsafe runs after `package`,
+  so the jar exists, and passes its path in the system property
+  `kaos.test.jar`. The command line has no proxy port option, so this
+  test's proxy requests the default proxy port and moves up from there
+  when it is busy.
 - `kaos-server/src/test/scripts/curl-session.sh [base-url]` is the
   scripted curl session: against a running server, it creates and
   starts a simulator, watches the SSE stream, injects and clears a
