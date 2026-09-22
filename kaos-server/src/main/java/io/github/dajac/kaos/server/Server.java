@@ -1,21 +1,39 @@
 package io.github.dajac.kaos.server;
 
-import io.github.dajac.kaos.server.dto.MetaResponse;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import io.github.dajac.kaos.Simulator;
 import io.javalin.Javalin;
+import io.javalin.json.JavalinJackson;
 
 /**
- * The HTTP server. It owns the Javalin instance and registers the routes of the HTTP API v1.
+ * The HTTP server. It owns the Javalin instance, the {@link SimulationService} with its
+ * {@link Simulator}, and the {@link SseHub}, and registers the routes of the HTTP API v1.
  *
- * <p>Usage: construct, {@link #start(int)}, then {@link #close()}.
+ * <p>Usage: construct, {@link #start(int)}, then {@link #close()}, which also closes the simulator.
  */
 public final class Server implements AutoCloseable {
 
-    static final String API_V1 = "/api/v1";
-
     private final Javalin app;
+    private final SimulationService service;
+    private final SseHub hub;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
-    public Server() {
-        MetaResponse meta = new MetaResponse(Version.read());
+    /**
+     * Creates a server for the given simulator, which it owns from now on.
+     */
+    public Server(Simulator simulator) {
+        this(simulator, SseHub.PING_INTERVAL);
+    }
+
+    Server(Simulator simulator, Duration pingInterval) {
+        var mapper = Json.mapper();
+        this.service = new SimulationService(simulator);
+        this.hub = new SseHub(mapper, service::snapshot, service::status, pingInterval);
+        service.onChange(hub::changed);
+        var routes = new ApiRoutes(mapper, service, hub, Version.read());
+        var problems = new ProblemHandler(mapper);
         this.app = Javalin.create(config -> {
             config.startup.showJavalinBanner = false;
             // The watcher is a non-daemon thread that lives for five seconds after creation. The
@@ -23,7 +41,9 @@ public final class Server implements AutoCloseable {
             // leave a thread that delays the JVM exit.
             config.startup.startupWatcherEnabled = false;
             config.concurrency.useVirtualThreads = true;
-            config.routes.get(API_V1 + "/meta", ctx -> ctx.json(meta));
+            config.jsonMapper(new JavalinJackson(mapper, true));
+            routes.register(config.routes);
+            problems.register(config.routes);
         });
     }
 
@@ -60,10 +80,19 @@ public final class Server implements AutoCloseable {
     }
 
     /**
-     * Stops the server. Calling it more than once has no further effect.
+     * Ends the event streams, stops the HTTP server, then closes the simulator, which removes
+     * everything it created on the cluster. Calling it more than once has no further effect.
      */
     @Override
     public void close() {
-        app.stop();
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            hub.close();
+            app.stop();
+        } finally {
+            service.close();
+        }
     }
 }

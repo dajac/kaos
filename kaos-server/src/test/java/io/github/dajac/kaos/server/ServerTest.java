@@ -2,29 +2,27 @@ package io.github.dajac.kaos.server;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.dajac.kaos.ConfigMetadata;
+import io.github.dajac.kaos.Simulator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class ServerTest {
 
-    private final HttpClient client = HttpClient.newHttpClient();
     private Server server;
+    private ApiClient api;
 
     @BeforeEach
     void startServer() {
-        server = new Server().start(0);
+        server = new Server(new Simulator("localhost:9092")).start(0);
+        api = new ApiClient(server);
     }
 
     @AfterEach
@@ -33,43 +31,60 @@ class ServerTest {
     }
 
     @Test
-    void metaReturnsTheBuildVersion() throws Exception {
-        HttpResponse<String> response = get("/api/v1/meta");
+    void metaReturnsTheBuildVersionAndTheConfigMetadata() {
+        var response = api.get("/api/v1/meta");
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Content-Type")).hasValue("application/json");
 
-        JsonNode body = new ObjectMapper().readTree(response.body());
-        assertThat(body.fieldNames()).toIterable().containsExactly("version");
+        var body = ApiClient.json(response);
+        assertThat(body.fieldNames()).toIterable()
+            .containsExactly("version", "fields", "nameRule", "assignors", "faults");
         // The version comes from the filtered resource, so the Maven placeholder must be resolved.
         assertThat(body.get("version").asText()).isEqualTo(Version.read()).matches("\\d+\\.\\d+\\.\\d+.*");
+
+        var metadata = ConfigMetadata.get();
+        assertThat(body.get("fields")).hasSize(metadata.fields().size());
+        var partitions = body.get("fields").get(1);
+        assertThat(partitions.get("key").asText()).isEqualTo("partitions");
+        assertThat(partitions.get("scope").asText()).isEqualTo("TOPIC");
+        assertThat(partitions.get("defaultValue").asInt()).isEqualTo(36);
+        assertThat(partitions.get("range").get("min").asInt()).isEqualTo(1);
+        assertThat(partitions.get("range").get("max").asInt()).isEqualTo(100);
+        // An absent range is left out.
+        assertThat(body.get("fields").get(2).has("range")).isFalse();
+        var protocol = body.get("fields").get(8);
+        assertThat(protocol.get("key").asText()).isEqualTo("protocol");
+        assertThat(protocol.get("defaultValue").asText()).isEqualTo("consumer");
+
+        assertThat(body.get("nameRule").get("maxLength").asInt()).isEqualTo(249);
+        assertThat(body.get("assignors").fieldNames()).toIterable().containsExactlyInAnyOrder("consumer", "classic");
+        assertThat(body.get("assignors").get("consumer").get("customAllowed").asBoolean()).isTrue();
+        assertThat(body.get("assignors").get("classic").get("names")).extracting(n -> n.asText())
+            .containsExactly("range", "roundrobin", "sticky", "cooperative-sticky");
+        assertThat(body.get("faults")).extracting(n -> n.asText())
+            .containsExactly("freeze", "network-isolation", "connection-reset");
     }
 
     @Test
-    void unknownApiPathReturns404() throws Exception {
-        assertThat(get("/api/v1/unknown").statusCode()).isEqualTo(404);
+    void theRootIsNotServed() {
+        assertThat(api.get("/").statusCode()).isEqualTo(404);
     }
 
     @Test
-    void startOnABusyPortFailsAndReleasesTheServer() throws Exception {
+    void startOnABusyPortFailsAndReleasesTheServer() {
         Set<Thread> before = liveNonDaemonThreads();
 
-        Server second = new Server();
+        var second = new Server(new Simulator("localhost:9092"));
         assertThatThrownBy(() -> second.start(server.port()))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining(String.valueOf(server.port()));
 
         // The failed server leaves no non-daemon thread behind, so it cannot keep the JVM alive.
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
-        Set<Thread> leaked = leakedSince(before);
-        while (!leaked.isEmpty() && System.nanoTime() < deadline) {
-            Thread.sleep(20);
-            leaked = leakedSince(before);
-        }
-        assertThat(leaked).isEmpty();
+        await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(leakedSince(before)).isEmpty());
 
         // The first server is unaffected, and closing the failed one is harmless.
-        assertThat(get("/api/v1/meta").statusCode()).isEqualTo(200);
+        assertThat(api.get("/api/v1/meta").statusCode()).isEqualTo(200);
         second.close();
     }
 
@@ -81,7 +96,7 @@ class ServerTest {
 
     private static Set<Thread> liveNonDaemonThreads() {
         return Thread.getAllStackTraces().keySet().stream()
-            .filter(t -> t.isAlive() && !t.isDaemon())
+            .filter(t -> t.isAlive() && !t.isDaemon() && !t.getName().startsWith("awaitility"))
             .collect(Collectors.toSet());
     }
 
@@ -89,10 +104,5 @@ class ServerTest {
         Set<Thread> now = liveNonDaemonThreads();
         now.removeAll(before);
         return now;
-    }
-
-    private HttpResponse<String> get(String path) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + path)).build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
+import io.github.dajac.kaos.Simulator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
@@ -70,7 +71,7 @@ class MainTest {
 
     @Test
     void aBusyPortIsAStartupFailure() {
-        try (Server other = new Server().start(0)) {
+        try (Server other = new Server(new Simulator("localhost:9092")).start(0)) {
             assertThat(execute("--port", String.valueOf(other.port()))).isEqualTo(Main.EXIT_STARTUP_FAILURE);
 
             assertThat(err.toString()).contains("Cannot start the HTTP server on port " + other.port());
