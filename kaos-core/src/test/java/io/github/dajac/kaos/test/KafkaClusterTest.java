@@ -22,6 +22,7 @@ class KafkaClusterTest {
             admin.createTopics(List.of(new NewTopic(topic, 3, (short) 1)))
                 .all()
                 .get(30, TimeUnit.SECONDS);
+            cluster.awaitTopic(admin, topic);
 
             TopicDescription description = admin.describeTopics(List.of(topic))
                 .allTopicNames()
@@ -40,5 +41,12 @@ class KafkaClusterTest {
         try (Admin admin = cluster.createAdmin()) {
             assertThat(admin.describeCluster().nodes().get(30, TimeUnit.SECONDS)).hasSize(1);
         }
+    }
+
+    @Test
+    void drawsOneProxyPortPerJvm(KafkaCluster cluster, KafkaCluster other) {
+        assertThat(cluster.proxyPort())
+            .isBetween(KafkaCluster.PROXY_PORT_MIN, KafkaCluster.PROXY_PORT_MAX - 1)
+            .isEqualTo(other.proxyPort());
     }
 }

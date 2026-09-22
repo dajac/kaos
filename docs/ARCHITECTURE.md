@@ -1150,8 +1150,21 @@ the build.
 - `@IntegrationTest` lives in the `kaos-core` test sources
   (`io.github.dajac.kaos.test`) and also registers the JUnit extension
   `KafkaClusterExtension`. A test declares a `KafkaCluster` parameter,
-  which gives `bootstrapServers()`, `createAdmin()` and
-  `uniqueName(prefix)`.
+  which gives `bootstrapServers()`, `createAdmin()`, `uniqueName(prefix)`,
+  `awaitTopic(admin, name)` and `proxyPort()`.
+- `awaitTopic(admin, name)` polls the broker until it reports a topic:
+  `createTopics` completes when the controller has accepted the topic,
+  and a describe right after it can still fail with
+  `UnknownTopicOrPartitionException` until the metadata has reached the
+  broker.
+- `proxyPort()` is the port the tests of a JVM request for their
+  proxies. It is drawn at random from 20000-29999 when the cluster
+  starts: above the default proxy port, below the ephemeral ports that
+  the clients and the container runtime allocate from. Two builds on
+  one machine, or a build next to a running simulator, thus bind far
+  apart from each other and never take each other's ports. Tests never
+  request the default proxy port and never assert on absolute ports:
+  they assert relative to the ports the launcher probed or chose.
 - The broker is a Testcontainers `apache/kafka` container whose tag is
   the version of the kafka-clients on the classpath, so the broker and
   the clients match by default. The system property `kaos.test.kafka.image`
@@ -1164,9 +1177,11 @@ the build.
   cluster is shared, tests use unique topic and group names and never
   assume an empty cluster.
 - `KafkaClusterTest` is the smoke test: it creates a topic with an
-  `Admin` and describes it.
+  `Admin`, waits for it and describes it, and checks that the JVM draws
+  one proxy port.
 - `NetworkFaultInjectionTest` drives classic-protocol consumers through
-  the proxy with a 6 s session timeout: blackhole eviction and rejoin,
+  proxies launched from `proxyPort()`, with a 6 s session timeout:
+  blackhole eviction and rejoin,
   one of two clients isolated, `RESET` disconnects and quick recovery,
   two proxies in one JVM, the port fallback, a port taken between the
   probe and the bind, failed launches that leak no port and no thread,
