@@ -74,6 +74,8 @@ class ReadmeExampleTest {
         // README:end
     }
 
+    // The README has exactly one Java block, this example: a second Java block in the README
+    // fails this check, and then needs a place in this test.
     @Test
     void theReadmeShowsTheExample() throws IOException {
         assertThat(javaBlocks(Files.readString(README))).containsExactly(normalize(exampleSource()));
