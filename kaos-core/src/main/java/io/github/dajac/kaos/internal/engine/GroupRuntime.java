@@ -11,7 +11,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import io.github.dajac.kaos.Autopilot;
 import io.github.dajac.kaos.ConsumerGroup;
@@ -117,7 +116,8 @@ public final class GroupRuntime implements ConsumerGroup {
     private final Map<ConsumerRunner, Resources> consumerResources = new IdentityHashMap<>();
     /** Set while the group runs. */
     private Services services;
-    private Resources resources;
+    /** The stack that holds the sub-stack of each consumer, while the group runs. */
+    private Resources consumerStacks;
 
     /**
      * @param spec the description of the group; its consumers without an id get one
@@ -305,18 +305,26 @@ public final class GroupRuntime implements ConsumerGroup {
     }
 
     /**
-     * Starts a consumer of a running group, on its own sub-stack of the group. A start that fails
-     * leaves nothing behind. The caller holds the structure lock.
+     * Starts a consumer of a running group, on its own sub-stack of the stack of the consumers. A
+     * start that fails leaves nothing behind. Closing the sub-stack stops the consumer, which makes
+     * it leave the group, and then removes its static member if the coordinator still lists it.
+     * The caller holds the structure lock.
      */
     public void startConsumer(ConsumerRunner consumer) {
         var running = services;
         if (running == null) {
             throw new SimulationStateException("The group " + spec.id() + " does not run");
         }
-        var child = resources.start(
-            "consumer " + consumer.clientId(),
-            stack -> consumer.start(running.consumers(), stack)
-        );
+        var child = consumerStacks.start("consumer " + consumer.clientId(), stack -> {
+            var instanceId = consumer.instanceId();
+            if (!instanceId.isEmpty()) {
+                stack.register(
+                    "static member " + instanceId,
+                    () -> running.cleanup().removeStaticMembers(spec.id(), Set.of(instanceId))
+                );
+            }
+            consumer.start(running.consumers(), stack);
+        });
         consumerResources.put(consumer, child);
     }
 
@@ -328,22 +336,17 @@ public final class GroupRuntime implements ConsumerGroup {
     }
 
     /**
-     * Removes a consumer: stops it when the group runs, which makes it leave the group, and removes
-     * a static member that could not leave. The consumer is out of the group afterwards, even when
-     * its stop failed. The caller holds the structure lock.
+     * Removes a consumer: when the group runs, it closes the sub-stack of the consumer, which stops
+     * it and removes a static member that could not leave, each step whatever the other does. The
+     * consumer is out of the group afterwards, even when an undo action failed. The caller holds
+     * the structure lock.
      */
     public void removeConsumer(ConsumerRunner consumer) {
-        var running = services;
         var child = consumerResources.remove(consumer);
         try {
             if (child != null) {
                 child.close();
             }
-            if (running != null && !consumer.instanceId().isEmpty()) {
-                running.cleanup().removeStaticMembers(spec.id(), Set.of(consumer.instanceId()));
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         } finally {
             consumer.markRemoved();
             consumers = consumers.stream().filter(other -> other != consumer).toList();
@@ -353,17 +356,18 @@ public final class GroupRuntime implements ConsumerGroup {
 
     /**
      * Sets the group configs and starts the consumers. Closing {@code resources} turns the
-     * autopilot off, stops the consumers, removes the static members that are left, deletes the
-     * group and reverts the group configs, in that order. The caller holds the structure lock.
+     * autopilot off, asks every consumer to stop, stops each consumer and removes its static
+     * member if it is left, deletes the group and reverts the group configs, in that order. The
+     * consumers added later have their sub-stack in the same stack of consumers, so they are
+     * undone in that order too. The caller holds the structure lock.
      */
     public void start(Services services, Resources resources) {
         var groupId = spec.id();
         this.services = services;
-        this.resources = resources;
         // Undone last: the group runs until everything it started is undone.
         resources.register("runtime of group " + groupId, () -> {
             this.services = null;
-            this.resources = null;
+            this.consumerStacks = null;
             consumerResources.clear();
         });
 
@@ -374,28 +378,17 @@ public final class GroupRuntime implements ConsumerGroup {
             services.configs().revert(groupId, applied.previous());
         });
         resources.register("group " + groupId, () -> services.cleanup().deleteGroup(groupId));
-        // The instance ids are read when the undo runs, so they cover the consumers added later.
-        resources.register(
-            "static members of group " + groupId,
-            () -> services.cleanup().removeStaticMembers(groupId, instanceIds())
-        );
 
+        consumerStacks = resources.child("consumers of group " + groupId);
         for (var consumer : consumers) {
             startConsumer(consumer);
         }
         // Undone first: the loops end together, and each consumer then only waits for its own.
-        resources.register("consumers of group " + groupId, () -> consumers.forEach(ConsumerRunner::requestStop));
+        resources.register("stop requests of group " + groupId, () -> consumers.forEach(ConsumerRunner::requestStop));
 
         autopilot.open(services.consumers().threads());
         resources.register("autopilot of group " + groupId, autopilot::close);
         harness.changed();
-    }
-
-    private Set<String> instanceIds() {
-        return consumers.stream()
-            .map(ConsumerRunner::instanceId)
-            .filter(instanceId -> !instanceId.isEmpty())
-            .collect(Collectors.toUnmodifiableSet());
     }
 
     private static <T> List<T> append(List<T> list, T element) {

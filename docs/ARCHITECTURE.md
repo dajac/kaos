@@ -561,9 +561,9 @@ try (Simulator simulator = new Simulator("localhost:9092")
 - `Simulator.validate(SimulatorSpec)` runs the same check without side
   effects. The server uses it to return 400 before going async.
 - `ConfigValidator` is a set of pure functions that return every
-  violation at once. Next to the whole-spec check, it checks one topic,
-  producer, group or consumer on its own, against the existing topics.
-  The harness uses the whole-spec check for every `add…`.
+  violation at once. Its only entry point is the whole-spec check,
+  which the harness runs for every `add…` and `start()`, and
+  `Simulator.validate` exposes.
 - The checks:
   - the ranges of `ConfigMetadata`;
   - the name rule, on topic names, on group ids, and on the producer
@@ -756,13 +756,16 @@ built with the runner, and so is the removal.
   producers and the groups each have a sub-stack of the top-level stack,
   and a component has a sub-stack of the one of its kind; a component
   added while running goes there too, so `stop()` keeps that order
-  whenever the components were added. A group keeps the sub-stacks of
-  its consumers in its own stack. Within a group: the
-  group configs are set, the consumers are started, the autopilot is
-  opened. Undoing a group turns the autopilot off, asks every consumer
-  loop to end and then waits for each, removes the static members that
-  the coordinator still lists, deletes the group, and reverts the group
-  configs.
+  whenever the components were added. Within a group: the group
+  configs are set, the consumers are started, the autopilot is opened.
+  The group keeps one stack for its consumers, created before the step
+  that asks every consumer to stop and the autopilot, and each consumer,
+  added later or not, has its sub-stack there: stopping the consumer,
+  then removing its static member if the coordinator still lists it.
+  Undoing a group turns the autopilot off, asks every consumer loop to
+  end, then closes the stack of the consumers, which waits for each and
+  removes its static member, deletes the group, and reverts the group
+  configs. Removing a consumer closes its sub-stack only.
 - A failed `start`, a failed `add…`, `remove()` and `close()` all unwind
   through the same code. An `add…` while running starts the component on
   a new sub-stack (`Resources.start`) before the component joins the

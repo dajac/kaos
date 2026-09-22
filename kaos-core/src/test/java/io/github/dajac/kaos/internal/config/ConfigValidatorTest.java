@@ -2,7 +2,6 @@ package io.github.dajac.kaos.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -426,15 +425,15 @@ class ConfigValidatorTest {
     @ParameterizedTest
     @ValueSource(strings = {"", " ", ".", "..", "with space", "slash/name", "é"})
     void rejectsAnIllegalTopicName(String name) {
-        assertThat(ConfigValidator.validateTopic(new TopicSpec(name, 1))).extracting(Violation::field)
-            .containsExactly("name");
+        assertThat(ConfigValidator.validate(withTopic(new TopicSpec(name, 1)))).extracting(Violation::field)
+            .containsExactly("topics[0].name");
     }
 
     @Test
     void enforcesTheTopicNameLength() {
-        assertThat(ConfigValidator.validateTopic(new TopicSpec("a".repeat(249), 1))).isEmpty();
-        assertThat(ConfigValidator.validateTopic(new TopicSpec("a".repeat(250), 1)))
-            .containsExactly(new Violation("name", "must have at most 249 characters"));
+        assertThat(ConfigValidator.validate(withTopic(new TopicSpec("a".repeat(249), 1)))).isEmpty();
+        assertThat(ConfigValidator.validate(withTopic(new TopicSpec("a".repeat(250), 1))))
+            .containsExactly(new Violation("topics[0].name", "must have at most 249 characters"));
     }
 
     @ParameterizedTest
@@ -528,14 +527,13 @@ class ConfigValidatorTest {
     @ParameterizedTest
     @ValueSource(doubles = {0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY})
     void rejectsANonPositiveOrNonFiniteRate(double rate) {
-        assertThat(ConfigValidator.validateProducer(new ProducerSpec("", List.of("orders"), rate), Set.of("orders")))
-            .extracting(Violation::field).containsExactly("ratePerPartition");
+        assertThat(ConfigValidator.validate(withProducer(new ProducerSpec("", List.of("orders"), rate))))
+            .extracting(Violation::field).containsExactly("producers[0].ratePerPartition");
     }
 
     @Test
     void acceptsAFractionalRate() {
-        assertThat(ConfigValidator.validateProducer(new ProducerSpec("", List.of("orders"), 0.1), Set.of("orders")))
-            .isEmpty();
+        assertThat(ConfigValidator.validate(withProducer(new ProducerSpec("", List.of("orders"), 0.1)))).isEmpty();
     }
 
     @Test
@@ -555,22 +553,11 @@ class ConfigValidatorTest {
         );
     }
 
-    @Test
-    void validatesOneGroupAgainstTheExistingTopics() {
-        var group = GroupSpec.of("g", g -> g.subscribe("orders").sessionTimeout(Duration.ZERO));
-
-        assertThat(ConfigValidator.validateGroup(group, Set.of("orders")))
-            .containsExactly(new Violation("sessionTimeoutMs", "must be between 1000 and 300000, got 0"));
-        assertThat(ConfigValidator.validateGroup(group, Set.of())).extracting(Violation::field)
-            .containsExactly("subscribedTopics[0]", "sessionTimeoutMs");
+    private static SimulatorSpec withTopic(TopicSpec topic) {
+        return new SimulatorSpec(List.of(topic), List.of(), List.of());
     }
 
-    @Test
-    void validatesOneConsumerAgainstTheDefaultsOfItsGroup() {
-        var consumer = overriding(Optional.of(Protocol.CLASSIC), Optional.empty());
-
-        assertThat(ConfigValidator.validateConsumer(settings(Protocol.CONSUMER, "range"), consumer)).isEmpty();
-        assertThat(ConfigValidator.validateConsumer(settings(Protocol.CONSUMER, "uniform"), consumer))
-            .extracting(Violation::field).containsExactly("overrides.protocol");
+    private static SimulatorSpec withProducer(ProducerSpec producer) {
+        return new SimulatorSpec(List.of(TopicSpec.of("orders")), List.of(producer), List.of());
     }
 }

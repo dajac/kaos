@@ -7,7 +7,6 @@ import java.util.Set;
 
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.ConfigMetadata.Field;
-import io.github.dajac.kaos.ConsumerSettings;
 import io.github.dajac.kaos.ConsumerSpec;
 import io.github.dajac.kaos.GroupSpec;
 import io.github.dajac.kaos.ProducerSpec;
@@ -20,8 +19,9 @@ import io.github.dajac.kaos.Violation;
  * Checks specs against {@link ConfigMetadata}. Every method is a pure function that returns all the
  * violations it finds; an empty list means the spec is valid.
  *
- * <p>The whole-spec check and the per-component checks share the same code, so a component added
- * while the simulator runs is held to the same rules as one declared up front.
+ * <p>The harness checks the whole spec with every component it adds, before or after the start,
+ * so a component added while the simulator runs is held to the same rules as one declared up
+ * front, the references between the components included.
  */
 public final class ConfigValidator {
     private ConfigValidator() {}
@@ -67,34 +67,6 @@ public final class ConfigValidator {
             }
         }
 
-        return violations;
-    }
-
-    /** Checks one topic on its own. */
-    public static List<Violation> validateTopic(TopicSpec topic) {
-        var violations = new ArrayList<Violation>();
-        checkTopic("", topic, violations);
-        return violations;
-    }
-
-    /** Checks one producer against the names of the topics that exist. */
-    public static List<Violation> validateProducer(ProducerSpec producer, Set<String> topicNames) {
-        var violations = new ArrayList<Violation>();
-        checkProducer("", producer, topicNames, violations);
-        return violations;
-    }
-
-    /** Checks one group, with its consumers, against the names of the topics that exist. */
-    public static List<Violation> validateGroup(GroupSpec group, Set<String> topicNames) {
-        var violations = new ArrayList<Violation>();
-        checkGroup("", group, topicNames, violations);
-        return violations;
-    }
-
-    /** Checks one consumer that joins a group with the given defaults. */
-    public static List<Violation> validateConsumer(ConsumerSettings consumerDefaults, ConsumerSpec consumer) {
-        var violations = new ArrayList<Violation>();
-        checkConsumer("", EffectiveConfigResolver.resolve(consumerDefaults, consumer), violations);
         return violations;
     }
 
