@@ -15,7 +15,7 @@ section that describes it.
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
 | `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
-| `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
+| `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`); `GET /api/v1/openapi.yaml` and `StaticUi` are planned |
 | `kaos-ui` | planned |
 
 ## Context
@@ -129,13 +129,16 @@ Notes:
     of the formatter profile.
 - **Version.** Maven filters `version.properties` in `kaos-server`, and
   `/api/v1/meta` reports the version read from it.
+- **Jackson in the server.** `kaos-server` adds `jackson-datatype-jdk8`
+  for the `Optional`s of `ConsumerOverrides`.
 - **Contract enforcement.** The committed `schema.d.ts` is checked with a
   diff, and a Java contract test validates the fixtures against the spec.
 
 ## Project structure
 
 Status: the parent POM, the Maven wrapper, `run.sh`, and `Main`,
-`Server`, `CliOptions`, `Version` and `dto/MetaResponse` of
+`CliOptions`, `Version`, `Server`, `ApiRoutes`, `SimulationService`,
+`SseHub`, `ProblemHandler`, `Json`, `ApiException` and `dto/*` of
 `kaos-server` exist, next to `LICENSE`, `.gitignore`, `CLAUDE.md`, the
 CI workflow, `config/` and this document. In `kaos-core`, the spec, options and
 validation model exists: the five spec records with `ConsumerSettings`
@@ -153,8 +156,8 @@ snapshot records, the six enums next to `Protocol`, and the whole
 `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, `engine/GroupRuntime`,
 `ConsumerRunner` and `AutopilotImpl`, `kafka/GroupConfigManager`,
 `GroupPoller` and `GroupCleanup`, and `state/EventLog`. Everything else
-in the tree below is planned, including the `kaos-ui` module and the
-`-DskipUi` switch. The test harness of `kaos-core` also exists; see
+in the tree below is planned, including `StaticUi`, `openapi/kaos-v1.yaml`,
+the `kaos-ui` module and the `-DskipUi` switch. The test harness of `kaos-core` also exists; see
 [Verification](#verification).
 
 ```
@@ -186,7 +189,9 @@ kaos/
     src/test/java/io/github/dajac/kaos/test/       IT harness: IntegrationTest, KafkaClusterExtension, KafkaCluster
   kaos-server/                 Javalin adapter + shaded runnable jar
     src/main/java/io/github/dajac/kaos/server/
-      Main (CLI), CliOptions, Version, Server, ApiRoutes, SimulationService, SseHub, ProblemHandler, StaticUi, dto/*
+      Main (CLI), CliOptions, Version, Server, ApiRoutes, SimulationService, SseHub, ProblemHandler,
+      Json, ApiException, StaticUi, dto/*
+    src/test/scripts/curl-session.sh   scripted curl session against a running server
     src/main/resources/openapi/kaos-v1.yaml
   kaos-ui/                     packaging jar; vite build -> target/classes/ui
     package.json vite.config.ts tsconfig.json index.html pom.xml
@@ -693,8 +698,9 @@ built with the runner, and so is the removal.
 - Threads are named platform threads. On JDK 21, virtual threads would
   pin their carrier inside the Kafka client (`synchronized` blocks and
   selector I/O).
-- All threads are created through one internal `ThreadFactory` in
-  `engine/`, `Threads`, one instance per simulator. Switching to
+- All threads of `kaos-core` are created through one internal
+  `ThreadFactory` in `engine/`, `Threads`, one instance per simulator.
+  The server's `kaos-lifecycle` thread is the exception (see below). Switching to
   virtual threads later is then a one-line change. The threads are
   daemons, so a simulator that is never closed does not keep the JVM
   alive. An exception that ends one of them is logged through an
@@ -707,7 +713,14 @@ built with the runner, and so is the removal.
   their loop threads are `kaos-<groupId>-<consumerId>`.
 - Javalin serves HTTP requests on virtual threads (a config flag).
   Handlers only flip flags, read the snapshot reference or submit work
-  to the lifecycle executor.
+  to the lifecycle executor. An SSE client keeps its request thread for
+  the life of its stream.
+- The server has one platform thread of its own, `kaos-lifecycle`, a
+  daemon that runs the blocking operations one at a time (see
+  [HTTP API v1](#http-api-v1-kaos-server)). The server never imports
+  `internal`, so it creates this thread itself rather than through
+  `Threads`. Like the proxy's event loops, it is an exception to the
+  single `ThreadFactory`.
 
 **Shared state**
 - Only three things cross threads:
@@ -1031,7 +1044,8 @@ consumers exist.
   the wait for blackholed requests. After `close()` the ports are free
   and the proxy's threads are gone.
 - Kroxylicious runs its own Netty event loops, so the proxy's threads
-  are the one exception to the single internal `ThreadFactory`.
+  are an exception to the single internal `ThreadFactory` of
+  `kaos-core`.
 - Several proxies coexist in one JVM, each with its own faults and port
   block. Kroxylicious itself registers its metrics in Micrometer's
   global registry, which the proxies share; Kaos does not use these
@@ -1039,8 +1053,8 @@ consumers exist.
 
 ### HTTP API v1 (`kaos-server`)
 
-Status: planned, except a stub of `GET /api/v1/meta` that returns only
-`{"version": "<build version>"}`, and the command line:
+Status: built, except `GET /api/v1/openapi.yaml` and `StaticUi`, which
+are planned. The command line is
 `--bootstrap-server <host:port>` (default `localhost:9092`),
 `--port <port>` (default 8081), `--help` and `--version`. picocli parses
 it: `CliOptions` holds the annotated options, `Main` is the command that
@@ -1052,6 +1066,14 @@ Exit codes: `--help` and `--version` exit with status 0. Invalid options
 print the error and the usage, and exit with status 2. A failed startup,
 such as a port already in use, releases the server, prints the reason
 and exits with status 1.
+
+`Main` creates the `Simulator` for `--bootstrap-server` and hands it to
+the `Server`, which owns it. A JVM shutdown hook closes the server: it
+ends the event streams, stops Javalin, drops the operations that have not
+begun and closes the simulator, which waits for a start in progress and
+removes what it created on the cluster. The simulator's threads are
+daemons, so without the hook a Ctrl-C would leave its topics and groups
+behind.
 
 The HTTP API is resource-oriented and mirrors the Java model. The server
 holds one `Simulator`.
@@ -1081,8 +1103,73 @@ DELETE /api/v1/simulator/groups/{groupId}/consumers/{id}/faults/{fault}   (.../f
 POST   /api/v1/simulator/groups/{groupId}/consumers/{id}/actions
                                         {"type":"join"} | {"type":"leave"}
                                         | {"type":"switch-protocol","protocol":"classic|consumer"}
-GET    /api/v1/openapi.yaml
+GET    /api/v1/openapi.yaml                                  (planned)
 ```
+
+**Status codes**
+- An operation that runs on the lifecycle executor answers 202 with the
+  status (see below): `POST` and `DELETE /simulator`, every `POST` that
+  adds a component, every `DELETE` that removes one, and the
+  `switch-protocol` action.
+- An operation that only flips a flag answers 204: the producer state,
+  the autopilot, the faults, and the `join` and `leave` actions.
+- `DELETE /simulator` answers 204 when there is nothing to stop, and
+  keeps `lastError` then.
+- `/` is not served until `StaticUi` lands.
+
+**Status**
+- The status is `{phase, lastError, warnings}`. It is the body of the
+  202 answers and the data of the SSE `status` event, and
+  `GET /simulator` returns it with the `spec` (`SimulatorSpec`, with the
+  overrides and the effective settings of each consumer).
+- `phase` is the phase of the simulator, except that it is `STARTING`
+  as soon as a start is accepted and `STOPPING` as soon as a stop is, so
+  that a client sees its accepted request at once.
+- `lastError` is the message of the last failed operation of the
+  executor: an operation clears it when it begins and sets it if it
+  fails. It thus also reports a failed add, remove or protocol switch,
+  which the `lastError` of the snapshot does not.
+- `warnings` lists the `warnings()` of every group.
+
+**Requests**
+- The checks of a request run before it is accepted, against the
+  components as they are, not against the operations still queued:
+  - a spec with a violation is a 400, returned synchronously:
+    `POST /simulator` runs `Simulator.validate` on the spec, and an
+    add runs it on the current spec with the component appended, so its
+    paths are those of the whole spec;
+  - an unknown topic, producer, group, consumer or fault in the path is
+    a 404;
+  - a start while the simulator is not idle, a dynamic request while it
+    is not `RUNNING` (or while a start or a stop is pending), and the
+    removal of a topic that a producer or a group uses are 409. A topic
+    whose users have a removal queued is therefore still in use.
+- A dynamic operation checks the phase and joins the queue under the
+  same lock as the acceptance of a start or a stop, so the queue keeps
+  the order of acceptance and no dynamic operation is accepted behind a
+  stop. It also checks the phase again when it begins: if the simulator
+  no longer runs, it does nothing and sets `lastError`, so it never
+  declares a component on an idle simulator.
+- A failed start removes the components it declared, so the simulator
+  is empty again, and `lastError` holds the failure.
+- The request bodies of topics, producers and groups bind to `dto/*`
+  records whose numbers are boxed: a missing value, also inside a partial
+  `consumerDefaults`, takes the default of `ConfigMetadata` rather than
+  0. Consumers bind to `ConsumerSpec` directly; the `effective` settings
+  a client sends back are accepted and ignored. So the `spec` of
+  `GET /simulator` can be posted back as it is.
+- The autopilot body needs `enabled`; a missing interval keeps the
+  current one. A `min` below 1 or a `max` below `min` is a 400.
+- The actions need `type`; `switch-protocol` also needs `protocol`.
+
+**JSON**
+- A `Protocol` is its lower-case `id()` (`consumer`, `classic`), also as
+  a map key in `/meta`, and is read in any case. A fault is its `id()`.
+  The other enums are their names (`RUNNING`, `STABLE`).
+- The jdk8 module binds the `Optional`s of `ConsumerOverrides`, and the
+  output leaves out an empty one (`NON_ABSENT`).
+- `/meta` returns `{version, fields, nameRule, assignors, faults}`, the
+  `ConfigMetadata` table with the build version.
 
 **Mapping and UI usage**
 - The mapping to the Java API is one-to-one.
@@ -1099,19 +1186,33 @@ GET    /api/v1/openapi.yaml
 - `snapshot` events use `id=revision` and carry the full snapshot.
 - `status` events are sent on every change.
 - The current `status` and `snapshot` are both sent on connect.
-- A `: ping` heartbeat is sent every 15 s.
+- A `: ping` heartbeat is sent after 15 s without an event.
 - Slow clients are coalesced to the latest snapshot.
+- `SseHub` serves each client on its request thread: the thread sends
+  what changed, then waits on a condition that the snapshot listener
+  and the service signal. It reads the latest snapshot and status when
+  it wakes up, so a client that is slow to write skips the snapshots in
+  between. The stream needs no `Accept` header; a client that went away
+  is noticed at the next write, a ping at the latest.
 
 **Errors**
 - RFC 9457 `application/problem+json` with `violations[{field,message}]`.
+  `ProblemHandler` writes `{type: "about:blank", title, status, detail,
+  violations}`, and leaves `violations` out when it is empty.
 - 400 for validation failures, 404 for an unknown resource, 409 for the
-  wrong phase or a resource in use.
-- Jackson runs with `FAIL_ON_UNKNOWN_PROPERTIES`.
+  wrong phase or a resource in use. A `SimulationStateException` is a
+  409, an `IllegalArgumentException` a 400, and anything else a 500,
+  which is logged. An unknown route is a 404 problem too.
+- Jackson runs with `FAIL_ON_UNKNOWN_PROPERTIES`, and also refuses a
+  `null` element of a list, a `null` for a primitive, a number for an
+  enum, a fraction for an integer and trailing content. A body that does
+  not bind is a 400 whose violation names the path of the value, as the
+  core does (`groups[0].consumers[1].overrides.bogus`); a body that is
+  not JSON, or is missing, is a 400 without violations.
 
 **Snapshot shape**
 
-Status: the records behind this shape are built; their JSON form is
-planned with the server. Unknown values follow two conventions: a
+Status: built. Unknown values follow two conventions: a
 number (epoch, generation, lag) is `-1`, and a string (member id,
 instance id) is empty. `failure` is empty when the consumer has not
 failed.
@@ -1144,12 +1245,14 @@ failed.
 - All blocking operations are submitted there and the request returns
   202. These are start, stop, add, remove and switch-protocol.
 - Failures surface as `lastError` and as an SSE `status` event.
+- Closing the service drops the operations that have not begun and
+  closes the simulator.
 
 **Metadata and static files**
 - `/meta` is served from `ConfigMetadata`. `ConfigValidator` uses the
   same table, so there is one source of truth.
 - `StaticUi` serves the classpath `/ui` directory with an SPA fallback.
-  Hashed assets are immutable; `index.html` is `no-cache`.
+  Hashed assets are immutable; `index.html` is `no-cache`. (Planned.)
 
 ### Frontend (`kaos-ui`)
 
@@ -1263,8 +1366,8 @@ Mixed-protocol groups are supported.
 Status: planned, except that `./mvnw verify` already builds the modules,
 runs the unit tests, the integration-test harness below and the code
 format check, and produces the shaded jar, that `-DskipITs` works, that
-`./run.sh` builds and starts the server, and that the CI workflow runs
-the build.
+`./run.sh` builds and starts the server, that the CI workflow runs
+the build, and the server tests and the scripted curl session below.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
@@ -1373,9 +1476,34 @@ the build.
   removed topic is deleted; a failed `add…` of a topic, a producer or a
   group leaves the simulator unchanged. Each test checks that `close()`
   leaves no thread, topic or group behind.
-- When `kaos-server` needs the harness, `kaos-core` will publish its
-  test sources as a `test-jar` that the server consumes in test scope.
-  This is planned.
+- `kaos-core` publishes its test sources as a `test-jar`, which
+  `kaos-server` consumes in test scope for the harness.
+
+**Server tests**
+- `ServerTest`, `ApiRoutesTest`, `SseHubTest` and `JsonTest` run without
+  a broker. The simulator's bootstrap server does not resolve, so a start
+  fails at once. They cover `/meta`, the idle state, the 400s (a
+  violation, an unknown property with its path, a `null` element, an
+  unknown protocol, a malformed or missing body), the 404s, the 409 of
+  every dynamic route while idle, the problem detail shape, a failed
+  start as `lastError`, the SSE status and snapshot on connect and on
+  change, the ping, the end of the streams at close, and the binding of
+  partial bodies, of overrides and of a spec sent back.
+- `SimulationServiceTest` (`@IntegrationTest`) holds the lifecycle
+  thread busy to show that a dynamic operation is refused once a stop is
+  accepted, and that one queued before a stop that ran first does
+  nothing but set `lastError`.
+- `HttpRunTest` (`@IntegrationTest`) drives a full run through HTTP
+  against the broker: start, a second start refused, the 404s and 409s,
+  a 400 on a dynamic add, a fault injected and cleared, leave and join,
+  a protocol switch, a consumer added and removed, the autopilot, the
+  producer paused and resumed, a topic, a producer and a group added and
+  removed, a failed add as `lastError`, and the stop, which deletes the
+  topics and leaves no `kaos-` thread.
+- `kaos-server/src/test/scripts/curl-session.sh [base-url]` is the
+  scripted curl session: against a running server, it creates and
+  starts a simulator, watches the SSE stream, injects and clears a
+  fault, shows the problem details and stops.
 
 **Backend end-to-end**
 1. Start a local broker:
@@ -1384,7 +1512,8 @@ the build.
 3. Exercise start, every action and stop.
 4. Confirm the API from the command line:
    `curl localhost:8081/api/v1/simulator/snapshot` and
-   `curl -N localhost:8081/api/v1/simulator/events`.
+   `curl -N localhost:8081/api/v1/simulator/events`, or run
+   `kaos-server/src/test/scripts/curl-session.sh`.
 
 **Java API**
 - The ITs drive `new Simulator(..)`, `add…` and `start()` without HTTP,

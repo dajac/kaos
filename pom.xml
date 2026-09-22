@@ -87,6 +87,14 @@
                 <artifactId>kaos-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- The integration-test harness of kaos-core, for the tests of
+                 the other modules. -->
+            <dependency>
+                <groupId>io.github.dajac</groupId>
+                <artifactId>kaos-core</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
 
             <!-- kafka-clients is pinned here and excluded from Kroxylicious,
                  so the simulator always runs the pinned client version. -->
