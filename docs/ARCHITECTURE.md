@@ -15,7 +15,7 @@ section that describes it.
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
 | `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
-| `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`); `GET /api/v1/openapi.yaml` and `StaticUi` are planned |
+| `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`; `StaticUi` is planned |
 | `kaos-ui` | planned |
 
 ## Context
@@ -77,7 +77,9 @@ view is not carried over.
 Status: the Java build rows are in place (Java 21, Kafka, Kroxylicious,
 Javalin, Jackson, the command line, logging, packaging, the code format,
 and JUnit 6 with AssertJ, Awaitility, Testcontainers and failsafe).
-Mockito, the frontend and the API contract are planned.
+The API contract is in place on the Java side: the hand-written OpenAPI
+document and its contract test. Mockito, the frontend and the generated
+TypeScript types are planned.
 
 The versions below were checked on 2026-09-19. When a tool rejects a
 brand-new major (JUnit 6, TypeScript 7, frontend-maven-plugin 2.x), the
@@ -94,7 +96,7 @@ build steps back one major.
 | Logging | `slf4j-api` only in core; logback-classic 1.5.x in server |
 | Packaging | `maven-shade-plugin` 3.6.x |
 | Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`) and import ordering, checked in `verify` |
-| Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration` |
+| Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration`, `com.networknt:json-schema-validator` 2.0.x (the Jackson 2 line) for the contract test |
 | Frontend | Node 24 LTS (pinned by frontend-maven-plugin + `.nvmrc`), Vite 8, React 19, TypeScript, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
 | Frontend tests | Vitest, React Testing Library. Playwright is deferred. |
 | API contract | Hand-written OpenAPI 3.1 YAML, with `openapi-typescript` generating the TS types |
@@ -132,14 +134,16 @@ Notes:
 - **Jackson in the server.** `kaos-server` adds `jackson-datatype-jdk8`
   for the `Optional`s of `ConsumerOverrides`.
 - **Contract enforcement.** The committed `schema.d.ts` is checked with a
-  diff, and a Java contract test validates the fixtures against the spec.
+  diff (planned), and a Java contract test, `OpenApiContractTest`,
+  validates the fixtures against the spec with the OpenAPI 3.1 dialect
+  of `json-schema-validator`.
 
 ## Project structure
 
 Status: the parent POM, the Maven wrapper, `run.sh`, and `Main`,
 `CliOptions`, `Version`, `Server`, `ApiRoutes`, `SimulationService`,
 `SseHub`, `ProblemHandler`, `Json`, `ApiException` and `dto/*` of
-`kaos-server` exist, next to `LICENSE`, `.gitignore`, `CLAUDE.md`, the
+`kaos-server` exist, with the OpenAPI document `openapi/kaos-v1.yaml`, next to `LICENSE`, `.gitignore`, `CLAUDE.md`, the
 CI workflow, `config/` and this document. In `kaos-core`, the spec, options and
 validation model exists: the five spec records with `ConsumerSettings`
 and `ConsumerOverrides`, the three options classes, `ConfigMetadata`,
@@ -156,7 +160,7 @@ snapshot records, the six enums next to `Protocol`, and the whole
 `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, `engine/GroupRuntime`,
 `ConsumerRunner` and `AutopilotImpl`, `kafka/GroupConfigManager`,
 `GroupPoller` and `GroupCleanup`, and `state/EventLog`. Everything else
-in the tree below is planned, including `StaticUi`, `openapi/kaos-v1.yaml`,
+in the tree below is planned, including `StaticUi`,
 the `kaos-ui` module and the `-DskipUi` switch. The test harness of `kaos-core` also exists; see
 [Verification](#verification).
 
@@ -1053,8 +1057,7 @@ consumers exist.
 
 ### HTTP API v1 (`kaos-server`)
 
-Status: built, except `GET /api/v1/openapi.yaml` and `StaticUi`, which
-are planned. The command line is
+Status: built, except `StaticUi`, which is planned. The command line is
 `--bootstrap-server <host:port>` (default `localhost:9092`),
 `--port <port>` (default 8081), `--help` and `--version`. picocli parses
 it: `CliOptions` holds the annotated options, `Main` is the command that
@@ -1103,7 +1106,7 @@ DELETE /api/v1/simulator/groups/{groupId}/consumers/{id}/faults/{fault}   (.../f
 POST   /api/v1/simulator/groups/{groupId}/consumers/{id}/actions
                                         {"type":"join"} | {"type":"leave"}
                                         | {"type":"switch-protocol","protocol":"classic|consumer"}
-GET    /api/v1/openapi.yaml                                  (planned)
+GET    /api/v1/openapi.yaml             this API as an OpenAPI 3.1 document (application/yaml)
 ```
 
 **Status codes**
@@ -1198,7 +1201,9 @@ GET    /api/v1/openapi.yaml                                  (planned)
 **Errors**
 - RFC 9457 `application/problem+json` with `violations[{field,message}]`.
   `ProblemHandler` writes `{type: "about:blank", title, status, detail,
-  violations}`, and leaves `violations` out when it is empty.
+  violations}`, and leaves `violations` out when it is empty. `detail`
+  is always present: an exception without a message gives its class
+  name for a 500, and the title otherwise.
 - 400 for validation failures, 404 for an unknown resource, 409 for the
   wrong phase or a resource in use. A `SimulationStateException` is a
   409, an `IllegalArgumentException` a 400, and anything else a 500,
@@ -1247,6 +1252,41 @@ failed.
 - Failures surface as `lastError` and as an SSE `status` event.
 - Closing the service drops the operations that have not begun and
   closes the simulator.
+
+**OpenAPI document**
+- `kaos-server/src/main/resources/openapi/kaos-v1.yaml` is a hand-written
+  OpenAPI 3.1 document of every route above: parameters, request
+  bodies, responses with their status codes, and a schema for every
+  body. `ApiRoutes` reads it from the classpath once and serves it at
+  `GET /api/v1/openapi.yaml` as `application/yaml`.
+- Every object schema has `additionalProperties: false`: the server
+  refuses an unknown property in a request, and writes none that the
+  document does not list. The request schemas carry the ranges and
+  defaults of `ConfigMetadata` and the name rule; the response schemas
+  do not repeat them. The `effective` settings of a consumer in a
+  request are complete when sent, since they bind to `ConsumerSettings`.
+  An action is a `oneOf` discriminated by `type`, so that the generated
+  types give `switch-protocol` a required `protocol`.
+- OpenAPI 3.1 does not model the events of an SSE stream. The events
+  route describes them, and its `x-sse-events` extension maps each event
+  name to the schema of its data (`status` to `Status`, `snapshot` to
+  `SimulatorSnapshot`).
+- `OpenApiContractTest` keeps the document and the server in step,
+  without a broker:
+  - fixtures serialized by the server's mapper (a full snapshot with
+    both protocols, faults, lag and a failed consumer; the status; the
+    simulator with a spec with overrides; `/meta`; problems with
+    violations) match their schemas, and so do the live answers of a
+    server whose start fails (200, 202, 400, 404, 409), a 500 and a
+    400 from exceptions without a message, and the first SSE events;
+  - request bodies that match their schemas bind, and the `spec` of
+    `GET /simulator` matches the start request;
+  - the routes registered by `ApiRoutes` are exactly the documented
+    ones;
+  - the enums, the name rule, and the ranges and defaults are those of
+    the Java model and of `ConfigMetadata`;
+  - a few invalid documents are refused, so that the checks are not
+    vacuous.
 
 **Metadata and static files**
 - `/meta` is served from `ConfigMetadata`. `ConfigValidator` uses the
@@ -1480,8 +1520,9 @@ the build, and the server tests and the scripted curl session below.
   `kaos-server` consumes in test scope for the harness.
 
 **Server tests**
-- `ServerTest`, `ApiRoutesTest`, `SseHubTest` and `JsonTest` run without
-  a broker. The simulator's bootstrap server does not resolve, so a start
+- `ServerTest`, `ApiRoutesTest`, `SseHubTest`, `JsonTest` and
+  `OpenApiContractTest` (see [OpenAPI document](#http-api-v1-kaos-server))
+  run without a broker. The simulator's bootstrap server does not resolve, so a start
   fails at once. They cover `/meta`, the idle state, the 400s (a
   violation, an unknown property with its path, a `null` element, an
   unknown protocol, a malformed or missing body), the 404s, the 409 of
