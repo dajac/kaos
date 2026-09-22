@@ -95,7 +95,7 @@ build steps back one major.
 | Command line | picocli 4.7.x in server, through reflection (no annotation processor) |
 | Logging | `slf4j-api` only in core; logback-classic 1.5.x in server |
 | Packaging | `maven-shade-plugin` 3.6.x |
-| Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`) and import ordering, checked in `verify` |
+| Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`), import ordering and the Apache License 2.0 header, checked in `verify` |
 | Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration`, `com.networknt:json-schema-validator` 2.0.x (the Jackson 2 line) for the contract test |
 | Frontend | Node 24 LTS (pinned by frontend-maven-plugin + `.nvmrc`), Vite 8, React 19, TypeScript, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
 | Frontend tests | Vitest, React Testing Library. Playwright is deferred. |
@@ -124,6 +124,11 @@ Notes:
     test sources of every module, orders the imports (static, then
     `java`/`javax`, then the rest, groups separated by a blank line) and
     removes the unused ones.
+  - Every Java source file starts with the Apache License 2.0 header,
+    the `license.header` property of the parent `pom.xml`, with a fixed
+    year so that it never changes with the calendar. Spotless's
+    `licenseHeader` step puts it in place; that step always skips
+    `package-info.java`, so a `replaceRegex` step does the same there.
   - `spotless:check` runs in `verify` in every module, and
     `./mvnw spotless:apply` fixes the sources. `pom.xml` and Markdown
     files are not formatted.
