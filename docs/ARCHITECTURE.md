@@ -14,7 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
-| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics and producers declared before `start()` (`Simulator`, `Topic`, `ProducerHandle`, listeners, `internal/engine` and `internal/kafka` without the group classes); consumer groups and adding or removing components while running are planned |
+| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups declared before `start()` (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`); adding or removing components while running is planned |
 | `kaos-server` | skeleton (`Main`, `Server`, `GET /api/v1/meta` returning the version); the rest is planned |
 | `kaos-ui` | planned |
 
@@ -149,9 +149,11 @@ snapshot records, the six enums next to `Protocol`, and the whole
 `Registration`, `SimulationStateException`, and, in `internal`,
 `engine/` (`SimulatorEngine`, `TopicComponent`, `ProducerRunner`,
 `Pacer`, `Resources`, `Threads`) and `kafka/` (`TopicManager`,
-`ClientFactory`). Everything else in the tree below is planned,
-including `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, the group
-classes of `engine/` and `kafka/`, the `kaos-ui` module and the
+`ClientFactory`). So does the harness for consumer groups:
+`ConsumerGroup`, `ConsumerHandle`, `Autopilot`, `engine/GroupRuntime`,
+`ConsumerRunner` and `AutopilotImpl`, `kafka/GroupConfigManager`,
+`GroupPoller` and `GroupCleanup`, and `state/EventLog`. Everything else
+in the tree below is planned, including the `kaos-ui` module and the
 `-DskipUi` switch. The test harness of `kaos-core` also exists; see
 [Verification](#verification).
 
@@ -176,10 +178,10 @@ kaos/
       config/   ConfigValidator, EffectiveConfigResolver, Assignors
       engine/   SimulatorEngine, TopicComponent, GroupRuntime, ConsumerRunner, ProducerRunner,
                 Pacer, AutopilotImpl, Resources, Threads
-      kafka/    TopicManager, GroupConfigManager, GroupPoller (-> AdminView), ClientFactory
+      kafka/    TopicManager, GroupConfigManager, GroupPoller (-> AdminView), GroupCleanup, ClientFactory
       proxy/    NetworkProxy, ProxyLauncher, NetworkFaults, NetworkFaultFilterFactory,
                 BoundPluginRegistry (+ META-INF/services FilterFactory entry)
-      state/    SnapshotAssembler, PartitionClassifier, StatusDeriver, SnapshotPublisher,
+      state/    SnapshotAssembler, PartitionClassifier, StatusDeriver, SnapshotPublisher, EventLog,
                 AdminView, GroupLocalState, ConsumerLocalState (input records)
     src/test/java/io/github/dajac/kaos/test/       IT harness: IntegrationTest, KafkaClusterExtension, KafkaCluster
   kaos-server/                 Javalin adapter + shaded runnable jar
@@ -211,11 +213,13 @@ the paragraphs "Options lambdas", "Records as the data view" and
 "Validation" below, the `Fault` type and the `Protocol` enum. The
 snapshot records and the enums of "Own small types" are built as well;
 see [Snapshot pipeline](#snapshot-pipeline). The harness is built for
-topics and producers that are declared before `start()`: the `with…`
-methods, `addTopic`, `addProducer`, `start`, `stop`, `close`,
-`describe`, `snapshot`, the listeners and `awaitSnapshot`. Planned:
-`ConsumerGroup`, `ConsumerHandle` and `addGroup`; `add…` while the
-simulator runs, which throws `SimulationStateException` for now; and
+topics, producers and consumer groups that are declared before
+`start()`: the `with…` methods, `addTopic`, `addProducer`, `addGroup`,
+`start`, `stop`, `close`, `describe`, `snapshot`, the listeners and
+`awaitSnapshot`, and, on the groups, `consumer(..)`, `autopilot()`,
+`warnings()`, `snapshot()` and `awaitSnapshot`, and every method of
+`ConsumerHandle`. Planned: `add…` while the simulator runs, which
+throws `SimulationStateException` for now, `group.addConsumer`, and
 `remove()`.
 
 The model is a harness, `Simulator`, with independent components under
@@ -285,10 +289,11 @@ try (Simulator simulator = new Simulator("localhost:9092")
   property of every Kafka client), `withProxyPort` and `withListener`.
   They throw `IllegalStateException` after `start()`, that is whenever
   the phase is not `IDLE`.
-- `start()` runs proxy -> topics -> producers (-> groups, planned) and
-  blocks until everything runs. It validates the declared components
-  first, and throws `SimulationStateException` when the simulator is
-  already started.
+- `start()` runs proxy -> topics -> producers -> groups and blocks
+  until everything runs. It validates the declared components first,
+  and throws `SimulationStateException` when the simulator is already
+  started. The consumers are running when it returns; they join their
+  group on their own afterwards, which `awaitSnapshot` observes.
 - `stop()` undoes everything and also removes every component, so the
   simulator is `IDLE` and empty afterwards. `close()` is `stop()`. Both
   are idempotent, and the simulator can be configured, declared and
@@ -320,8 +325,9 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `stop`, `close`, `with…`, `add…`, `awaitSnapshot`): they throw
   `SimulationStateException` on the publisher thread. See "Locks" in
   [Threading and failure model](#threading-and-failure-model).
-- `Topic` and `ProducerHandle` are interfaces, implemented in
-  `internal/engine`. `topics()` and `producers()` list them.
+- `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle` and
+  `Autopilot` are interfaces, implemented in `internal/engine`.
+  `topics()`, `producers()` and `groups()` list the components.
 
 **Components**
 - The components are `Topic`, `ProducerHandle`, `ConsumerGroup` and
@@ -355,12 +361,63 @@ try (Simulator simulator = new Simulator("localhost:9092")
 - Assigned producer ids are `producer-N`. They are never reused until
   `stop()`, and skip the ids that were supplied.
 
+**Consumer groups**
+- A group is declared with `addGroup(id, options)` or
+  `addGroup(GroupSpec)`. Its consumers are reached with
+  `consumer(int)`, which is `consumer("consumer-N")`, and
+  `consumer(String)`; both throw `IllegalArgumentException` for an
+  unknown consumer. `consumers()` lists them in order.
+- `group.snapshot()` is the slice of the simulator snapshot for that
+  group; `group.awaitSnapshot(condition, timeout)` waits on that slice.
+  A group that is declared but not published yet is shown as the
+  simulator knows it: its type and state `UNKNOWN`, its consumers
+  `JOINING` and its lag unknown.
+- Starting a group sets its group configs, starts its consumers and
+  opens its autopilot. `warnings()` lists what the start could not
+  apply and went on without; it is empty while the group does not run.
+- The consumers connect through the proxy. Their Kafka settings come
+  from the effective settings of the consumer: `group.protocol`,
+  `max.poll.interval.ms`, `client.rack`, `group.instance.id` (the
+  client id, for a static member), `partition.assignment.strategy` for
+  a classic assignor and `group.remote.assignor` for a consumer-protocol
+  one, `auto.offset.reset=latest`, and a `request.timeout.ms` of 10 s
+  unless the client properties of the simulator set it, so that a
+  consumer whose request the proxy dropped recovers within that time.
+  The poll timeout and the poll delay drive the loop itself.
+- A consumer starts subscribed and without faults. `join()`, `leave()`,
+  `inject` and `clear` work before `start()` too: the consumer then
+  starts in that state.
+- `switchProtocol(protocol)` closes the Kafka consumer, which leaves
+  the group, and creates a new one with the other protocol. The
+  subscription and the faults are kept. The assignor is set for the
+  protocol of the consumer's settings; the other protocol keeps it only
+  when it lists the same name (`range`) and uses its default otherwise.
+  Switching to the current protocol does nothing. A switch whose Kafka
+  consumer cannot be created throws `SimulationException` and leaves
+  the consumer `FAILED`.
+- The autopilot is per group. `start(min, max)` validates
+  `1 ms ≤ min ≤ max`, throws `SimulationStateException` while the group
+  does not run, and gives new intervals to an autopilot that is on.
+  `stop()` keeps the intervals. The initial intervals are the
+  prototype's 10 s and 30 s.
+- Removing a static member that the coordinator still lists after its
+  consumer is closed, deleting the group, and setting a group config the
+  broker refuses are best-effort: they are logged (the config also as a
+  warning) and never fail a start or a stop.
+
 **Multiple groups**
 - Settings, consumers, autopilot, snapshot and lag are per group.
-- Client ids are `<groupId>-consumer-N`. They are unique across groups,
-  because the network fault matches on `client.id`.
+- Client ids are `<groupId>-<consumerId>`, so `<groupId>-consumer-N`
+  for an assigned id. They must be unique across groups, because the
+  network fault matches on `client.id`. A group id and a consumer id
+  may both contain a dash, so `addGroup` also refuses, as an
+  `InvalidConfigException`, a consumer whose client id another group
+  already uses.
 - Consumer ids (`consumer-N`) are stable within their group and are
-  never reused.
+  never reused. A supplied id is honored and an empty one is assigned:
+  the group counts from `consumer-0` and skips the supplied ids, so an
+  assigned id never collides with a supplied one, even one that is
+  added later.
 
 **Options lambdas**
 - `ProducerOptions`, `GroupOptions` and `ConsumerOptions`.
@@ -420,7 +477,7 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `Violation`.
 - Matching `TopicSpec`, `ProducerSpec`, `GroupSpec` and `ConsumerSpec`
   records are accepted by overloads: `addTopic(TopicSpec)`,
-  `addProducer(ProducerSpec)`, and, planned, `addGroup(GroupSpec)` and
+  `addProducer(ProducerSpec)`, `addGroup(GroupSpec)` and, planned,
   `addConsumer(ConsumerSpec)`. The server uses these overloads for
   request bodies.
 
@@ -495,7 +552,16 @@ try (Simulator simulator = new Simulator("localhost:9092")
   - a producer or a group names at least one topic, only topics of the
     spec, and none twice;
   - topic names, group ids, and assigned producer ids are unique; so are
-    assigned consumer ids within their group.
+    assigned consumer ids within their group;
+  - the consumers of a group that speak the classic protocol have an
+    assignor in common. The coordinator only admits a classic member
+    that supports a protocol every other classic member supports, and
+    refuses the others for good (`InconsistentGroupProtocolException`),
+    so the mix is a `Violation` on `consumers` rather than a `FAILED`
+    consumer. A consumer with a named assignor supports that one; a
+    consumer with the empty name supports the defaults of the client,
+    `range` and `cooperative-sticky`. The consumers of the consumer
+    protocol take no part in it, so a mixed-protocol group is valid.
 
 **Faults are first-class**
 - `Fault` is a sealed type. A new fault is a new `Fault`. It adds no
@@ -563,13 +629,17 @@ try (Simulator simulator = new Simulator("localhost:9092")
 
 ### Threading and failure model
 
-Status: built for the harness, the topics and the producers: `Threads`,
-`Resources`, the `structureLock`, the publisher and producer threads,
-and the start, stop and failed-start paths. Everything about consumers,
-groups, the poller and the autopilot is planned.
+Status: built, for the components that are declared before `start()`.
+The per-runner `switchLock` and the consumer removal it guards are
+built with the runner; the removal itself is planned.
 
 **Threads**
-- `kaos-<groupId>-consumer-N` is the sole owner of its `KafkaConsumer`.
+- `kaos-<groupId>-<consumerId>` is the sole owner of its
+  `KafkaConsumer`. The loop subscribes, unsubscribes and polls
+  according to the flags, waits with `park` while the consumer is
+  frozen or out of the group, and pauses for the poll delay between two
+  polls. A flag flip unparks it and calls `wakeup()`, so it reacts at
+  once wherever it waits.
 - There is one `kaos-producer-<id>` thread per producer.
 - `kaos-poller` runs one thread for the whole simulator. It covers all
   groups, because `describeConsumerGroups` takes a list.
@@ -621,7 +691,8 @@ groups, the poller and the autopilot is planned.
 - A single `structureLock` per `Simulator` serializes `start`, `stop`,
   the `with…` methods and every `add…`/`remove()`.
 - A per-runner `switchLock` is held during `switchProtocol` and during
-  consumer removal. `stop` takes each `switchLock` in turn.
+  consumer removal, and while a runner starts or stops. `stop` takes
+  each `switchLock` in turn.
 - Flag flips take no lock.
 - The publisher takes no locks.
 - A phase change is published synchronously: the lifecycle thread waits
@@ -644,8 +715,14 @@ groups, the poller and the autopilot is planned.
   sub-stack is undone at its position in its parent, or on its own, in
   which case the parent forgets it.
 - Undo actions are registered only after their step succeeded.
-- The order of `start()` is: admin client, proxy, topics, producers.
-  The undo order is the reverse.
+- The order of `start()` is: admin client, proxy, topics, producers,
+  poller, groups. The undo order is the reverse, so the poller still
+  reports the members while the consumers leave. Within a group: the
+  group configs are set, the consumers are started, the autopilot is
+  opened. Undoing a group turns the autopilot off, asks every consumer
+  loop to end and then waits for each, removes the static members that
+  the coordinator still lists, deletes the group, and reverts the group
+  configs.
 - A failed `start`, a failed `add…`, `remove()` and `close()` all unwind
   through the same code.
 - Each undo runs in its own try/catch. Failures are attached as
@@ -667,32 +744,55 @@ groups, the poller and the autopilot is planned.
   interrupts it, since the blocking calls of the Kafka producer are
   interruptible, and joins again; its client is then closed with a 5 s
   bound.
-- `consumer.close(Duration)` is bounded.
+- Stopping a consumer ends its loop, which closes its Kafka consumer
+  with a 5 s bound and leaves the group; the loop is joined for 10 s,
+  then interrupted, and joined again.
 - `close` is idempotent.
 - Waits are interruptible (`parkNanos` or a `Condition`, plus
   `consumer.wakeup()`). There are no sleep-slice loops.
 
 **Runtime failures**
-- A runner poll error is logged to `kaos.events` and the loop continues.
-- An unrecoverable runner error sets the consumer status to `FAILED`
-  with a message, the `failure` of the consumer snapshot. The simulator
-  keeps running.
+- A runner poll error is logged to `kaos.events` and the loop
+  continues, after at least one second so that a failing consumer does
+  not spin.
+- An unrecoverable runner error ends the loop, closes the Kafka
+  consumer and sets the consumer status to `FAILED` with a message, the
+  `failure` of the consumer snapshot. The simulator keeps running. The
+  errors counted as unrecoverable are those after which a Kafka
+  consumer stays out of its group whatever is polled: a fenced or
+  unreleased instance id, an inconsistent group protocol, an
+  unsupported assignor or version, a full group, an invalid group id,
+  and authentication and authorization failures.
 - A poller error keeps the last `AdminView` and sets `stale` on the
   snapshot.
 - Autopilot validates `min ≤ max`. It does nothing when its group has no
   consumers, and it stops when its group is removed.
 
+**Change log**
+- The logger `kaos.events` reports what changes in the groups: a group
+  or a consumer added or removed, the group type, state, epoch, target
+  assignment epoch and generation, the autopilot, and, per consumer, a
+  join or leave request, a protocol switch, a fault injected or
+  cleared, a member joining, leaving or rejoining (the member id
+  changes), the member epoch, the generation, the status, a failure and
+  the partitions assigned and revoked. The autopilot logs its own flips
+  there too.
+- `EventLog` is a snapshot listener registered first by the engine, so
+  every line is the difference between two published snapshots and the
+  log has the same source as the listeners. `EventLog.diff` is a pure
+  function.
+
 ### Snapshot pipeline
 
-Status: the snapshot records, `SnapshotAssembler`,
-`PartitionClassifier`, `StatusDeriver`, their input records and
-`SnapshotPublisher` are built, and the published snapshot has the phase,
-`lastError`, the topics and the producers. `GroupPoller`, and therefore
-step 1 and the groups of the snapshot, are planned.
+Status: built.
 
 1. `GroupPoller` polls every 200 ms, with one `describeConsumerGroups`
-   call for all groups plus the offsets. It produces an `AdminView` per
-   group.
+   call for all groups, one `listConsumerGroupOffsets` call for their
+   committed offsets and one `listOffsets` call for the end offsets of
+   their subscribed topics. It produces an `AdminView` per group. A
+   group the coordinator does not know yet (`GroupIdNotFoundException`)
+   is `AdminView.unknown()` with its lag. The lag of a partition is
+   known once the group has a committed offset for it.
 2. `SnapshotAssembler`, a pure function, merges each group's
    `AdminView` with the group's `GroupLocalState` into a
    `GroupSnapshot`. The publisher puts the group snapshots together
@@ -1139,6 +1239,10 @@ the build.
   with no workflow change.
 
 **Integration-test harness**
+- The broker sets `group.consumer.min.session.timeout.ms` to 1 s and
+  `group.consumer.min.heartbeat.interval.ms` to 500 ms, so the tests
+  can shorten the eviction and rebalance times of consumer-protocol
+  groups through the group configs.
 - All test classes are named `*Test`. An integration test is a test
   class annotated with `@IntegrationTest`, which tags it with the JUnit
   tag `integration`. The class name plays no role in the split.
@@ -1200,6 +1304,17 @@ the build.
   with `lastError`, and can be retried; a `stop()` after a failed start
   keeps `lastError`; `with…`
   and `add…` after the start throw; two simulators run in one JVM.
+- `ConsumerGroupLifecycleTest` drives consumer groups through the
+  `Simulator`: a full lifecycle with one group (join, leave, rejoin,
+  lag, the group deleted at stop); `switchProtocol` in both directions;
+  `Fault.freeze()` leads to eviction by the max poll interval and the
+  consumer rejoins once cleared; `Fault.networkIsolation()` fences the
+  member and it rejoins once healed; only the explicit group configs
+  are set and they are reverted; a config the broker refuses is a
+  warning; a quick stop and start with static members works with both
+  protocols; listeners fire only on change; an unsupported
+  consumer-protocol assignor leaves the consumer `FAILED` while the
+  simulator runs; the autopilot flips subscriptions.
 - When `kaos-server` needs the harness, `kaos-core` will publish its
   test sources as a `test-jar` that the server consumes in test scope.
   This is planned.
