@@ -18,7 +18,10 @@ before changing anything.
   - No kafka-clients class appears in the public API or in the JSON.
 - No Java type name contains "Kaos".
 - No static mutable state. Several `Simulator`s can coexist in one JVM.
-- All threads are created through the single internal `ThreadFactory`.
+- All threads of `kaos-core` are created through its single internal
+  `ThreadFactory`. The exception is `kaos-server`'s `kaos-lifecycle`
+  thread, which the server creates itself because it never imports
+  `internal`.
 - All test classes are named `*Test`; there is no `*IT` suffix. A test
   that needs Docker or a broker is annotated with `@IntegrationTest`
   (JUnit tag `integration`): surefire excludes the tag, failsafe runs

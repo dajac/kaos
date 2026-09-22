@@ -18,6 +18,7 @@ import io.github.dajac.kaos.Phase;
 import io.github.dajac.kaos.ProducerHandle;
 import io.github.dajac.kaos.ProducerSpec;
 import io.github.dajac.kaos.Protocol;
+import io.github.dajac.kaos.SimulationStateException;
 import io.github.dajac.kaos.Simulator;
 import io.github.dajac.kaos.SimulatorSnapshot;
 import io.github.dajac.kaos.SimulatorSpec;
@@ -398,8 +399,26 @@ final class SimulationService implements AutoCloseable {
         return spec.topics().isEmpty() && spec.producers().isEmpty() && spec.groups().isEmpty();
     }
 
-    private void submit(String description, Runnable operation) {
-        submit(null, description, operation);
+    /**
+     * Submits a dynamic operation. The phase check and the submission happen under {@code lock}, like
+     * the acceptance of a start or a stop, so the queue order matches the order in which the requests
+     * were accepted. The operation also checks the phase again when it begins, and does nothing but
+     * set the lastError if the simulator no longer runs: the core would otherwise declare the
+     * component on an idle simulator.
+     */
+    void submit(String description, Runnable operation) {
+        lock.lock();
+        try {
+            requireRunning();
+            submit(null, description, () -> {
+                if (simulator.snapshot().phase() != Phase.RUNNING) {
+                    throw new SimulationStateException(description + " did not run: the simulator is not running");
+                }
+                operation.run();
+            });
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**

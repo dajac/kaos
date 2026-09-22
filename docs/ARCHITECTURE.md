@@ -698,8 +698,9 @@ built with the runner, and so is the removal.
 - Threads are named platform threads. On JDK 21, virtual threads would
   pin their carrier inside the Kafka client (`synchronized` blocks and
   selector I/O).
-- All threads are created through one internal `ThreadFactory` in
-  `engine/`, `Threads`, one instance per simulator. Switching to
+- All threads of `kaos-core` are created through one internal
+  `ThreadFactory` in `engine/`, `Threads`, one instance per simulator.
+  The server's `kaos-lifecycle` thread is the exception (see below). Switching to
   virtual threads later is then a one-line change. The threads are
   daemons, so a simulator that is never closed does not keep the JVM
   alive. An exception that ends one of them is logged through an
@@ -718,7 +719,8 @@ built with the runner, and so is the removal.
   daemon that runs the blocking operations one at a time (see
   [HTTP API v1](#http-api-v1-kaos-server)). The server never imports
   `internal`, so it creates this thread itself rather than through
-  `Threads`.
+  `Threads`. Like the proxy's event loops, it is an exception to the
+  single `ThreadFactory`.
 
 **Shared state**
 - Only three things cross threads:
@@ -1042,7 +1044,8 @@ consumers exist.
   the wait for blackholed requests. After `close()` the ports are free
   and the proxy's threads are gone.
 - Kroxylicious runs its own Netty event loops, so the proxy's threads
-  are the one exception to the single internal `ThreadFactory`.
+  are an exception to the single internal `ThreadFactory` of
+  `kaos-core`.
 - Several proxies coexist in one JVM, each with its own faults and port
   block. Kroxylicious itself registers its metrics in Micrometer's
   global registry, which the proxies share; Kaos does not use these
@@ -1141,6 +1144,12 @@ GET    /api/v1/openapi.yaml                                  (planned)
     is not `RUNNING` (or while a start or a stop is pending), and the
     removal of a topic that a producer or a group uses are 409. A topic
     whose users have a removal queued is therefore still in use.
+- A dynamic operation checks the phase and joins the queue under the
+  same lock as the acceptance of a start or a stop, so the queue keeps
+  the order of acceptance and no dynamic operation is accepted behind a
+  stop. It also checks the phase again when it begins: if the simulator
+  no longer runs, it does nothing and sets `lastError`, so it never
+  declares a component on an idle simulator.
 - A failed start removes the components it declared, so the simulator
   is empty again, and `lastError` holds the failure.
 - The request bodies of topics, producers and groups bind to `dto/*`
@@ -1480,6 +1489,10 @@ the build, and the server tests and the scripted curl session below.
   start as `lastError`, the SSE status and snapshot on connect and on
   change, the ping, the end of the streams at close, and the binding of
   partial bodies, of overrides and of a spec sent back.
+- `SimulationServiceTest` (`@IntegrationTest`) holds the lifecycle
+  thread busy to show that a dynamic operation is refused once a stop is
+  accepted, and that one queued before a stop that ran first does
+  nothing but set `lastError`.
 - `HttpRunTest` (`@IntegrationTest`) drives a full run through HTTP
   against the broker: start, a second start refused, the 404s and 409s,
   a 400 on a dynamic add, a fault injected and cleared, leave and join,
