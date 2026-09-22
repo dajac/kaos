@@ -1340,11 +1340,10 @@ failed.
 
 ### Frontend (`kaos-ui`)
 
-Status: the scaffold is built: the build, the fonts, the tokens and base
-styles, and the layout of the prototype. So are the pure model under
-`model/`, the API client and the config panel with its store and its
-styles. The simulation store, the heatmap and the other styles are
-planned.
+Status: built: the build, the fonts, the tokens and base styles, the
+layout of the prototype, the pure model under `model/`, the API client
+and the event stream, the config panel, the Rows view, their stores and
+their styles.
 
 **Model (`model/`)**
 - Framework-free TypeScript: no React and no DOM. Every function is
@@ -1400,12 +1399,38 @@ planned.
   from 15, and a quarter of the partitions below.
 - `tooltip.ts`: the tooltip is 8 px below the cell, centred on it and
   clamped 4 px inside the viewport, and its text.
+- `rows.ts`: what the Rows view shows of a group snapshot. The states
+  come from the core (the status of a consumer, the states of its
+  partitions, with the out-of-group and mid-rebalance blanking already
+  applied); the module turns them into the classes and texts of the
+  prototype: the header badges (`PREPARING REBALANCE`, a dash for an
+  unknown type or number), the consumer badge (`ISOLATED` shows as
+  `PARTITIONED`, `FAILED` in the red of `stopping`, hidden for a classic
+  member that is neither stopped, faulty nor failed), and the cells of a
+  strip with their gauge, their tooltip and the signature that memoizes
+  the strip.
+- `share.ts`: structural sharing of JSON values. `shareStructure(prev,
+  next)` is `next` with every part equal to that of `prev` replaced by
+  the object of `prev`; array elements are matched by `id` when they
+  all have one, by position otherwise.
 
 **API client (`api/client.ts`)**
 - A thin `fetch` wrapper typed from `schema.d.ts`: `getMeta`,
   `getSimulator`, `startSimulator` and `stopSimulator` (which returns
-  `null` for a 204). An error status throws an `ApiError` with the
-  problem detail when the body is one, and its `violations`.
+  `null` for a 204), and the requests of the Rows view: `setAutopilot`,
+  `injectFault`, `clearFault` and `runAction`. An error status throws an
+  `ApiError` with the problem detail when the body is one, and its
+  `violations`.
+
+**Event stream (`api/events.ts`)**
+- `openEventStream(handlers, options)` opens
+  `/api/v1/simulator/events` and hands over each `status` and
+  `snapshot` event, and whether the stream is up.
+- On an error it closes the `EventSource` and opens a new one after a
+  pause that starts at 500 ms and doubles up to 10 s; the pause starts
+  over once a stream opens. The native reconnect of `EventSource` is not
+  relied on, since it gives up for good on some failures. Events of a
+  stream that failed are ignored.
 
 **State (Zustand)**
 - Components use selector subscriptions.
@@ -1423,39 +1448,92 @@ planned.
 - Start runs `startProblems` first, then posts `buildStartRequest`. A
   400 with violations shows them on their fields (see `violations.ts`)
   and the rest in the banner; any other failure goes to the banner.
-- Start and Stop answer 202 and run on the server. Until the event
-  stream lands, the store follows them by polling `GET /simulator`
-  every 500 ms while the phase is `STARTING` or `STOPPING`, and stops
-  polling once it settles. A start or a stop that ends `IDLE` with a
-  `lastError` shows it in the banner. A reload during a start polls
-  too, and shows the running spec once the phase is `RUNNING`.
-- On SSE ingest, unchanged consumer objects are reused (structural
-  sharing), so `React.memo` holds.
-- The config store keeps `groups[]` and the Rows view reads its group
-  through a `useGroup(groupId)` selector, so no component assumes a
-  single group.
+- Start and Stop answer 202 and run on the server. The store follows
+  them through the `status` events: `main.tsx` hands every one to
+  `applyStatus`, which sets the phase. The answer of the request does
+  not set it, so a status that came first is kept. A start or a stop
+  that ends `IDLE` with a `lastError` shows it in the banner (the
+  failed-start surface); a stop answered with 204 is `IDLE` at once.
+- A reload during a start shows the running spec once the phase is
+  `RUNNING`: `load()` then fetches `GET /simulator` again. A status that
+  arrived before the answer of `load()` keeps its phase.
+- `simulationStore` (`useSimulationStore(selector)`,
+  `createSimulationStore({client})` for tests) holds the connection
+  (`connecting`, `open`, `disconnected`), the last `status` and the
+  last `snapshot`. `connect()` opens the event stream. Each snapshot is
+  merged into the previous one with `shareStructure`, so unchanged
+  groups, consumers and lag arrays keep their identity and `React.memo`
+  holds. The revision is not used to skip a snapshot: it starts over
+  when the server restarts.
+- It also sends the requests of the Rows view (actions, faults,
+  autopilot) and keeps the message of the last one that failed. That
+  message, or the `lastError` of the status while the simulation runs
+  (a failed protocol switch, for instance), shows in a dismissible
+  banner of the main area.
+- The Rows view reads its group through `useGroup(groupId)`, and every
+  component of it takes the group id: no component assumes a single
+  group. The shown group is the first of the snapshot
+  (`selectShownGroupId`), for parity with the prototype.
+- `uiSettingsStore` holds the S/M/L strip height (48, 72 or 120 px),
+  kept in `localStorage` under `kaos.uiSettings` as
+  `{"stripHeightPreset": "M"}`. The `mode` of the prototype is ignored,
+  and a missing, corrupt or unavailable storage gives `M`.
+
+**Rows view (`components/rows/`)**
+- `RowsView` is the main area: the empty state while the simulation is
+  idle, and from a start until the stop has ended, the header and the
+  grid of the shown group. The banners float over its bottom right: the
+  event stream is down ("Disconnected from the server.
+  Reconnecting…"), or a request failed.
+- `GroupHeader`: the type and state badges, then the epoch and target
+  epoch, or the generation of a classic group; `STARTING` until the
+  group is reported. Then the `Legend` and the `UiSettingsMenu` (⚙).
+- `RowsGrid` renders one memoized `ConsumerRow` per consumer and sets
+  `--strip-height`. `ConsumerRow` renders a `PartitionStrip` per topic,
+  the axis rail, the name (the consumer id, its client id as the title)
+  with the badge, the hover meta (protocol, member id, instance, epoch
+  or generation) and the `ActionMenu`.
+- `ActionMenu` ("Actions ▾"): Stop or Start consumer (`leave`/`join`),
+  Upgrade to consumer or Downgrade to classic (`switch-protocol`),
+  Partition network or Heal network (`network-isolation`), Freeze or
+  Unfreeze consumer (`freeze`). A consumer out of the group has only
+  Start and the ways back from its faults. The menus share
+  `useDropdown` with the config panel's `Dropdown`.
+- The Auto-Pilot button of the sidebar turns the autopilot of the shown
+  group on and off with `{enabled}`; the intervals are those of the
+  core, 10 to 30 s. It shows the `autopilot` of the snapshot.
 
 **Heatmap**
-- `PartitionStrip` is memoized on a cheap signature.
+- `PartitionStrip` is memoized on a cheap signature: the state and the
+  tooltip of each cell.
 - Cells are plain `<div class="pcell" style="--fill">`.
-- There is one delegated tooltip.
+- There is one delegated tooltip (`cellTooltip.ts`): the grid hands its
+  `mouseover` and `mouseout` to it, it reads the `data-tip` of the cell,
+  and it is driven imperatively, so hovering renders nothing. It is
+  portaled to `<body>` as `#pcell-tip`, hides on scroll, resize and
+  click, and a strip that renders again refreshes its text in place.
 
 **CSS**
 - The styles are the prototype's `<style>` block (`simulator.html` on
   `initial-setup`), lifted **verbatim** and split by region into
   `styles/*.css`. The class names are kept. `tokens.css` (the `:root`
   block) and `base.css` (the `*`, `html, body` and `body` rules) exist,
-  and so do `controls.css` (the buttons and the `.dd` dropdown) and
-  `config.css` (the layout shell, the sidebar and the config panel,
-  including the `#config-mode.locked` rules).
-- `config.css` ends with the only rules that are not the prototype's:
-  the inline field errors (`.field-error`, `.consumers-error`) and the
-  error banner (`.config-banner`), which replace `alert()`.
+  and so do `controls.css` (the buttons, the `.dd` dropdown, the ⚙
+  menu and the "Actions" menu), `config.css` (the layout shell, the
+  sidebar and the config panel, including the `#config-mode.locked`
+  rules) and `rows.css` (the main area, the header, the legend, the
+  empty state, the `#rows-grid` rules and `#pcell-tip`).
+- `config.css` and `rows.css` end with the only rules that are not the
+  prototype's: the inline field errors (`.field-error`,
+  `.consumers-error`) and the error banner (`.config-banner`), which
+  replace `alert()`, and the banners of the main area
+  (`.rows-banner*`).
 - The fonts are bundled from fontsource instead of Google Fonts.
   `--font-mono` and `--font-body` name the variable families,
   `'JetBrains Mono Variable'` and `'DM Sans Variable'`, first, then the
   families of the prototype.
-- The Bento rules and the dead rules are not carried over.
+- The Bento rules, the lag gradient of the legend and the other dead
+  rules are not carried over.
 - No CSS modules. The visual result is identical to the prototype.
 
 **Dev loop**
@@ -1491,9 +1569,8 @@ removing components at runtime.
 - The panel is locked while a simulation runs.
 - Status: built (`components/config/`: `ConfigPanel`, `GroupSection`,
   `ConsumerSection`, `Dropdown`, `AssignorField`, `NumberInput`,
-  `FieldError`), with Start and Stop, inline validation errors and the
-  error banner. The Auto-Pilot button of the footer is there but stays
-  disabled until the Rows view.
+  `FieldError`), with Start and Stop, the Auto-Pilot, inline validation
+  errors and the error banner.
 - Keyboard: a dropdown closes on Escape and when the focus leaves it,
   and its button carries `aria-expanded`; the × of a consumer is a
   button of its own, inside a header that has the role of a button.
@@ -1525,6 +1602,8 @@ Mixed-protocol groups are supported.
 - Per-partition lag is the latest offset minus the committed offset.
 
 **Rows view**
+- Status: built (see [Frontend](#frontend-kaos-ui)), with the header
+  and the Auto-Pilot.
 - Each consumer has a heatmap strip per topic.
 - Cell states are assigned, pending, revoking or empty.
 - The lag gauge rounds up to a multiple of 5 and scales to 100.
@@ -1548,6 +1627,10 @@ Mixed-protocol groups are supported.
 - The eager mid-rebalance blanking uses the per-consumer assignor.
 - Errors show inline or as a banner instead of `alert()`.
 - A "disconnected" banner appears when SSE drops.
+- A failed request of the Rows view, or a failed protocol switch, shows
+  in a banner; the prototype ignored them.
+- A consumer whose runner failed shows a `FAILED` badge, with the
+  failure as its title; the prototype had no such state.
 
 ## Verification
 

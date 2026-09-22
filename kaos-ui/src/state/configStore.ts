@@ -17,7 +17,7 @@
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-import { ApiError, createClient, type ApiClient, type Meta, type Simulator } from '../api/client';
+import { ApiError, createClient, type ApiClient, type Meta, type Status } from '../api/client';
 import type { components } from '../api/schema';
 import {
   buildStartRequest,
@@ -34,8 +34,8 @@ import { groupFieldKey, mapViolations } from '../model/violations';
 // the simulator, and the errors of the last start.
 //
 // Start and Stop answer 202 at once and run on the lifecycle thread of the
-// server. Until the event stream lands, the store follows a start or a stop
-// by polling `GET /simulator` while the phase is `STARTING` or `STOPPING`.
+// server. The store follows them through the `status` events of the event
+// stream, which the app hands to `applyStatus`.
 
 type Phase = components['schemas']['Phase'];
 
@@ -53,6 +53,8 @@ export interface ConfigState {
   readonly bannerDetails: readonly string[];
 
   load(): Promise<void>;
+  /** Follows the status of the simulator, as the event stream sends it. */
+  applyStatus(status: Status): void;
   /** Replaces the group at `index` by `update(group, meta)`, and clears the error of `field`. Ignored while locked. */
   editGroup(index: number, update: (group: GroupForm, meta: Meta) => GroupForm, field?: string): void;
   /** Expands or collapses a consumer section; also while locked, as the prototype does. */
@@ -64,8 +66,6 @@ export interface ConfigState {
 
 export interface ConfigStoreOptions {
   readonly client?: ApiClient;
-  /** The period of the poll of `GET /simulator` during a start or a stop. */
-  readonly pollIntervalMs?: number;
 }
 
 type Writable<T> = { -readonly [K in keyof T]: T[K] };
@@ -87,40 +87,24 @@ function messageOf(error: unknown): string {
 
 export function createConfigStore(options: ConfigStoreOptions = {}): StoreApi<ConfigState> {
   const client = options.client ?? createClient();
-  const pollIntervalMs = options.pollIntervalMs ?? 500;
-  let pollTimer: ReturnType<typeof setTimeout> | undefined;
+  // Whether a status has been applied: it is newer than the answer of the
+  // `GET /simulator` of `load()`.
+  let statusSeen = false;
+  // Whether the form waits for the spec of a start in progress: a reload
+  // during a start shows the running spec once the phase is `RUNNING`.
+  let rehydratePending = false;
 
   return createStore<ConfigState>()((set, get) => {
-    // Applies the status of `GET /simulator`. A failed start or stop is back
-    // to IDLE with a `lastError`, which the banner shows.
-    function applySimulator(simulator: Simulator, rehydrate: boolean): void {
-      const { meta } = get();
-      const previous = get().phase;
-      const update: Partial<Writable<ConfigState>> = { phase: simulator.phase };
-      if (rehydrate && meta !== null && simulator.phase === 'RUNNING') {
-        update.config = configFromSimulator(meta, simulator);
-      }
-      if (simulator.phase === 'IDLE' && isTransient(previous) && simulator.lastError !== '') {
-        update.banner = previous === 'STARTING' ? 'The simulation failed to start.' : 'The simulation failed to stop.';
-        update.bannerDetails = [simulator.lastError];
-      }
-      set(update);
-    }
-
-    function schedulePoll(rehydrate: boolean): void {
-      clearTimeout(pollTimer);
-      pollTimer = setTimeout(() => void poll(rehydrate), pollIntervalMs);
-    }
-
-    async function poll(rehydrate: boolean): Promise<void> {
-      pollTimer = undefined;
+    async function rehydrate(): Promise<void> {
+      rehydratePending = false;
       try {
-        applySimulator(await client.getSimulator(), rehydrate);
+        const simulator = await client.getSimulator();
+        const { meta } = get();
+        if (meta !== null && simulator.phase === 'RUNNING' && get().phase === 'RUNNING') {
+          set({ config: configFromSimulator(meta, simulator) });
+        }
       } catch {
-        // Keep the phase and try again.
-      }
-      if (isTransient(get().phase)) {
-        schedulePoll(rehydrate);
+        // Keep the form as it is.
       }
     }
 
@@ -136,13 +120,34 @@ export function createConfigStore(options: ConfigStoreOptions = {}): StoreApi<Co
       async load() {
         try {
           const [meta, simulator] = await Promise.all([client.getMeta(), client.getSimulator()]);
-          set({ meta, config: configFromSimulator(meta, simulator), loadError: null, phase: simulator.phase });
-          if (isTransient(simulator.phase)) {
+          const phase = statusSeen ? get().phase : simulator.phase;
+          set({ meta, config: configFromSimulator(meta, simulator), loadError: null, phase });
+          if (simulator.phase !== 'RUNNING' && phase !== 'IDLE') {
             // A reload during a start: show the spec once it runs.
-            schedulePoll(simulator.phase === 'STARTING');
+            rehydratePending = true;
+            if (phase === 'RUNNING') {
+              void rehydrate();
+            }
           }
         } catch (error) {
           set({ loadError: `Could not load the simulator: ${messageOf(error)}` });
+        }
+      },
+
+      applyStatus(status) {
+        statusSeen = true;
+        const previous = get().phase;
+        const update: Partial<Writable<ConfigState>> = { phase: status.phase };
+        if (status.phase === 'IDLE' && isTransient(previous) && status.lastError !== '') {
+          // A failed start or stop is back to IDLE with its error.
+          update.banner = previous === 'STARTING' ? 'The simulation failed to start.' : 'The simulation failed to stop.';
+          update.bannerDetails = [status.lastError];
+        }
+        set(update);
+        if (status.phase === 'IDLE') {
+          rehydratePending = false;
+        } else if (status.phase === 'RUNNING' && rehydratePending && get().meta !== null) {
+          void rehydrate();
         }
       },
 
@@ -182,8 +187,8 @@ export function createConfigStore(options: ConfigStoreOptions = {}): StoreApi<Co
         }
         set({ phase: 'STARTING', fieldErrors: NO_ERRORS, banner: null, bannerDetails: [] });
         try {
-          const status = await client.startSimulator(buildStartRequest(meta, config));
-          set({ phase: status.phase });
+          // 202: the status events follow the start from here.
+          await client.startSimulator(buildStartRequest(meta, config));
         } catch (error) {
           if (error instanceof ApiError && error.violations.length > 0) {
             const { fields, unmapped } = mapViolations(config, error.violations);
@@ -198,9 +203,6 @@ export function createConfigStore(options: ConfigStoreOptions = {}): StoreApi<Co
           }
           return;
         }
-        if (isTransient(get().phase)) {
-          schedulePoll(false);
-        }
       },
 
       async stop() {
@@ -210,14 +212,13 @@ export function createConfigStore(options: ConfigStoreOptions = {}): StoreApi<Co
         }
         set({ phase: 'STOPPING', banner: null, bannerDetails: [] });
         try {
+          // 202: the status events follow the stop; 204: there was nothing to stop.
           const status = await client.stopSimulator();
-          set({ phase: status === null ? 'IDLE' : status.phase });
+          if (status === null) {
+            set({ phase: 'IDLE' });
+          }
         } catch (error) {
           set({ phase: 'RUNNING', banner: `Failed to stop: ${messageOf(error)}`, bannerDetails: [] });
-          return;
-        }
-        if (isTransient(get().phase)) {
-          schedulePoll(false);
         }
       },
 

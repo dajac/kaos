@@ -20,12 +20,14 @@ import './styles/tokens.css';
 import './styles/base.css';
 import './styles/controls.css';
 import './styles/config.css';
+import './styles/rows.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
 import { configStore } from './state/configStore';
+import { simulationStore } from './state/simulationStore';
 
 const root = document.getElementById('root');
 if (root === null) {
@@ -33,6 +35,7 @@ if (root === null) {
 }
 
 void configStore.getState().load();
+simulationStore.getState().connect({ onStatus: (status) => configStore.getState().applyStatus(status) });
 
 createRoot(root).render(
   <StrictMode>
