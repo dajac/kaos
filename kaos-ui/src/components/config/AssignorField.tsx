@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import type { Meta } from '../../api/client';
 import type { components } from '../../api/schema';
-import { assignorOptions, assignorOptionValue, isCustomAssignor } from '../../model/assignors';
+import { assignorOptions, CUSTOM_OPTION, isCustomAllowed, isCustomAssignor } from '../../model/assignors';
 import { metaField } from '../../model/configModel';
 import { Dropdown } from './Dropdown';
 import { FieldError } from './FieldError';
@@ -27,6 +27,10 @@ type Protocol = components['schemas']['Protocol'];
 
 // The assignor row: the presets of the protocol, and, for a custom name, a
 // text input under the dropdown. The row then anchors its label to the top.
+// A name typed in the input keeps the row custom while it is the assignor,
+// even when it is a preset (`range` on the way to `range-sticky`). The row
+// leaves the input when a preset is picked, when the name changes from
+// outside the row, or when the protocol refuses a custom name.
 
 export interface AssignorFieldProps {
   readonly meta: Meta;
@@ -43,13 +47,19 @@ export interface AssignorFieldProps {
 }
 
 export function AssignorField({ meta, protocol, value, onPick, onCustomName, remove, error }: AssignorFieldProps) {
-  const custom = isCustomAssignor(meta, protocol, value);
+  const [typedName, setTypedName] = useState<string | null>(null);
+  const custom =
+    isCustomAssignor(meta, protocol, value) || (value === typedName && isCustomAllowed(meta, protocol));
+  const pick = (option: string) => {
+    // Picking "custom" again keeps the name, a preset one included.
+    if (option === CUSTOM_OPTION && custom) {
+      return;
+    }
+    setTypedName(null);
+    onPick(option);
+  };
   const dropdown = (
-    <Dropdown
-      options={assignorOptions(meta, protocol)}
-      value={assignorOptionValue(meta, protocol, value)}
-      onChange={onPick}
-    />
+    <Dropdown options={assignorOptions(meta, protocol)} value={custom ? CUSTOM_OPTION : value} onChange={pick} />
   );
   const input = custom ? (
     <input
@@ -58,7 +68,10 @@ export function AssignorField({ meta, protocol, value, onPick, onCustomName, rem
       style={{ marginTop: '6px' }}
       value={value}
       placeholder="custom assignor name"
-      onChange={(event) => onCustomName(event.target.value)}
+      onChange={(event) => {
+        setTypedName(event.target.value);
+        onCustomName(event.target.value);
+      }}
     />
   ) : null;
 

@@ -70,11 +70,6 @@ export function isCustomAssignor(meta: Meta, protocol: Protocol, name: string): 
   return isCustomAllowed(meta, protocol) && !isPresetAssignor(meta, protocol, name);
 }
 
-/** The selected option of the picker for `name`. */
-export function assignorOptionValue(meta: Meta, protocol: Protocol, name: string): string {
-  return isCustomAssignor(meta, protocol, name) ? CUSTOM_OPTION : name;
-}
-
 /**
  * The assignor after picking `option`. Picking "custom" starts an empty name
  * when leaving a preset, and keeps a custom name already there.
