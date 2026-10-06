@@ -1580,7 +1580,11 @@ removing components at runtime.
 - Fields: group id, protocol (consumer or classic), static membership,
   number of topics (1–20) and number of partitions (1–100).
 - Assignor. The presets depend on the protocol. A custom free-text name
-  is accepted for the consumer protocol.
+  is accepted for the consumer protocol. Its text input stays while it
+  has the focus, even when the name typed so far is a preset (`range`
+  on the way to `range-sticky`); once the input loses the focus, a
+  preset name shows as that preset, as in the prototype, which took
+  the name on `change`.
 - Optional group settings, added with "+ Add setting":
   - session timeout, heartbeat interval, assignment interval;
   - poll timeout, poll delay, max poll interval.
@@ -1858,10 +1862,10 @@ that the README example compiles.
   (a toggle and a × that are separate buttons, mouse and keyboard),
   adding, editing and removing an override, the chips of a collapsed
   consumer in menu order, the "inherits all settings" note,
-  duplicate-last and add, a custom assignor name, the fallback to the
-  first preset after a protocol switch (override and group), a
-  violation of a refused start on its field, cleared by an edit, and the
-  locked panel.
+  duplicate-last and add, a custom assignor name, typed through a
+  preset name too, the fallback to the first preset after a protocol
+  switch (override and group), a violation of a refused start on its
+  field, cleared by an edit, and the locked panel.
 - `ConsumerRow.test.tsx` checks the state badge of every status on both
   protocols (hidden for a healthy classic member), and the "Actions ▾"
   menu for every protocol, membership and set of faults, whatever the

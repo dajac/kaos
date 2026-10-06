@@ -227,6 +227,18 @@ describe('overrides', () => {
     expect(chipsOf(0)).toEqual(['assignor=my-assignor']);
   });
 
+  it('keeps the custom input while the name typed so far is a preset', async () => {
+    await user.click(toggleOf(0));
+    const section = sectionOf(0);
+    await pick(section, '+ Add override', 'Assignoruniform');
+    await pick(section, 'uniform', 'custom');
+    await user.type(within(section).getByPlaceholderText('custom assignor name'), 'uniform-v2');
+
+    expect(within(section).getByRole('button', { name: 'custom▾' })).toBeDefined();
+    await user.click(toggleOf(0));
+    expect(chipsOf(0)).toEqual(['assignor=uniform-v2']);
+  });
+
   it('falls back to the first preset when a protocol override refuses the assignor', async () => {
     await user.click(toggleOf(0));
     const section = sectionOf(0);
@@ -259,6 +271,32 @@ describe('group assignor', () => {
     expect(within(section).queryByPlaceholderText('custom assignor name')).toBeNull();
     // The consumers inherit the protocol.
     expect(toggleOf(0).textContent).toContain('classic');
+  });
+
+  it('keeps the custom input while the name typed so far is a preset', async () => {
+    const section = groupSection();
+    await pick(section, 'uniform', 'custom');
+    const name = within(section).getByPlaceholderText('custom assignor name');
+    await user.type(name, 'range');
+
+    expect(configStore.getState().config?.groups[0]?.assignor).toBe('range');
+    expect(within(section).getByRole('button', { name: 'custom▾' })).toBeDefined();
+    expect(within(section).getByPlaceholderText('custom assignor name')).toBe(name);
+
+    await user.type(name, '-sticky');
+    expect(configStore.getState().config?.groups[0]?.assignor).toBe('range-sticky');
+    expect(within(section).getByRole('button', { name: 'custom▾' })).toBeDefined();
+  });
+
+  it('shows a typed preset as that preset once the custom input loses the focus', async () => {
+    const section = groupSection();
+    await pick(section, 'uniform', 'custom');
+    await user.type(within(section).getByPlaceholderText('custom assignor name'), 'range');
+
+    await user.tab();
+
+    expect(within(section).getByRole('button', { name: 'range▾' })).toBeDefined();
+    expect(within(section).queryByPlaceholderText('custom assignor name')).toBeNull();
   });
 });
 

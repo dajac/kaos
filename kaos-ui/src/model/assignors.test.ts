@@ -19,7 +19,6 @@ import { describe, expect, it } from 'vitest';
 import {
   adaptAssignor,
   assignorOptions,
-  assignorOptionValue,
   CUSTOM_OPTION,
   firstPreset,
   isCustomAllowed,
@@ -88,20 +87,18 @@ describe('isPresetAssignor and isCustomAllowed', () => {
   });
 });
 
-describe('assignorOptionValue and isCustomAssignor', () => {
-  // Parity with `assignorDropdownValue(protocol, value)` and
-  // `isCustomAssignor(protocol, value)` of simulator.html on initial-setup,
-  // run on these inputs.
+describe('isCustomAssignor', () => {
+  // Parity with `isCustomAssignor(protocol, value)` of simulator.html on
+  // initial-setup, run on these inputs.
   it.each([
-    ['consumer', 'uniform', 'uniform', false],
-    ['consumer', 'range', 'range', false],
-    ['consumer', 'foo', CUSTOM_OPTION, true],
-    ['consumer', '', CUSTOM_OPTION, true],
-    ['classic', 'range', 'range', false],
-    ['classic', 'sticky', 'sticky', false],
-    ['classic', 'foo', 'foo', false],
-  ] as const)('%s shows %j as %j (custom: %s)', (protocol, name, value, custom) => {
-    expect(assignorOptionValue(META, protocol, name)).toBe(value);
+    ['consumer', 'uniform', false],
+    ['consumer', 'range', false],
+    ['consumer', 'foo', true],
+    ['consumer', '', true],
+    ['classic', 'range', false],
+    ['classic', 'sticky', false],
+    ['classic', 'foo', false],
+  ] as const)('%s shows %j as a custom name: %s', (protocol, name, custom) => {
     expect(isCustomAssignor(META, protocol, name)).toBe(custom);
   });
 });

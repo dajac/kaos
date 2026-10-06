@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import type { Meta } from '../../api/client';
 import type { components } from '../../api/schema';
-import { assignorOptions, assignorOptionValue, isCustomAssignor } from '../../model/assignors';
+import { assignorOptions, CUSTOM_OPTION, isCustomAllowed, isCustomAssignor } from '../../model/assignors';
 import { metaField } from '../../model/configModel';
 import { Dropdown } from './Dropdown';
 import { FieldError } from './FieldError';
@@ -27,6 +27,10 @@ type Protocol = components['schemas']['Protocol'];
 
 // The assignor row: the presets of the protocol, and, for a custom name, a
 // text input under the dropdown. The row then anchors its label to the top.
+// The input stays while it has the focus, even when the name typed so far is
+// a preset (`range` on the way to `range-sticky`): as in the prototype, which
+// took the name on `change`, the name shows as a preset once the input loses
+// the focus.
 
 export interface AssignorFieldProps {
   readonly meta: Meta;
@@ -43,13 +47,10 @@ export interface AssignorFieldProps {
 }
 
 export function AssignorField({ meta, protocol, value, onPick, onCustomName, remove, error }: AssignorFieldProps) {
-  const custom = isCustomAssignor(meta, protocol, value);
+  const [typing, setTyping] = useState(false);
+  const custom = isCustomAssignor(meta, protocol, value) || (typing && isCustomAllowed(meta, protocol));
   const dropdown = (
-    <Dropdown
-      options={assignorOptions(meta, protocol)}
-      value={assignorOptionValue(meta, protocol, value)}
-      onChange={onPick}
-    />
+    <Dropdown options={assignorOptions(meta, protocol)} value={custom ? CUSTOM_OPTION : value} onChange={onPick} />
   );
   const input = custom ? (
     <input
@@ -59,6 +60,8 @@ export function AssignorField({ meta, protocol, value, onPick, onCustomName, rem
       value={value}
       placeholder="custom assignor name"
       onChange={(event) => onCustomName(event.target.value)}
+      onFocus={() => setTyping(true)}
+      onBlur={() => setTyping(false)}
     />
   ) : null;
 
