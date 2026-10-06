@@ -227,14 +227,18 @@ describe('overrides', () => {
     expect(chipsOf(0)).toEqual(['assignor=my-assignor']);
   });
 
-  it('keeps the custom input while the name typed so far is a preset', async () => {
+  it('keeps a typed custom name that is a preset', async () => {
     await user.click(toggleOf(0));
     const section = sectionOf(0);
     await pick(section, '+ Add override', 'Assignoruniform');
     await pick(section, 'uniform', 'custom');
-    await user.type(within(section).getByPlaceholderText('custom assignor name'), 'uniform-v2');
+    const name = within(section).getByPlaceholderText('custom assignor name');
+    await user.type(name, 'uniform');
 
     expect(within(section).getByRole('button', { name: 'custom▾' })).toBeDefined();
+    expect(within(section).getByPlaceholderText('custom assignor name')).toBe(name);
+
+    await user.type(name, '-v2');
     await user.click(toggleOf(0));
     expect(chipsOf(0)).toEqual(['assignor=uniform-v2']);
   });
@@ -273,7 +277,7 @@ describe('group assignor', () => {
     expect(toggleOf(0).textContent).toContain('classic');
   });
 
-  it('keeps the custom input while the name typed so far is a preset', async () => {
+  it('keeps a typed custom name that is a preset, also once the input loses the focus', async () => {
     const section = groupSection();
     await pick(section, 'uniform', 'custom');
     const name = within(section).getByPlaceholderText('custom assignor name');
@@ -283,18 +287,40 @@ describe('group assignor', () => {
     expect(within(section).getByRole('button', { name: 'custom▾' })).toBeDefined();
     expect(within(section).getByPlaceholderText('custom assignor name')).toBe(name);
 
+    await user.tab();
+    expect(within(section).getByRole('button', { name: 'custom▾' })).toBeDefined();
+    expect(within(section).getByPlaceholderText('custom assignor name')).toBe(name);
+
     await user.type(name, '-sticky');
     expect(configStore.getState().config?.groups[0]?.assignor).toBe('range-sticky');
-    expect(within(section).getByRole('button', { name: 'custom▾' })).toBeDefined();
   });
 
-  it('shows a typed preset as that preset once the custom input loses the focus', async () => {
+  it('keeps a typed custom name that is a preset when custom is picked again', async () => {
     const section = groupSection();
     await pick(section, 'uniform', 'custom');
     await user.type(within(section).getByPlaceholderText('custom assignor name'), 'range');
 
-    await user.tab();
+    await pick(section, 'custom', 'custom');
 
+    expect(configStore.getState().config?.groups[0]?.assignor).toBe('range');
+    expect((within(section).getByPlaceholderText('custom assignor name') as HTMLInputElement).value).toBe('range');
+  });
+
+  it('leaves a typed custom name that is a preset for a picked preset or a protocol that refuses it', async () => {
+    const section = groupSection();
+    await pick(section, 'uniform', 'custom');
+    await user.type(within(section).getByPlaceholderText('custom assignor name'), 'range');
+
+    await pick(section, 'custom', 'uniform');
+
+    expect(configStore.getState().config?.groups[0]?.assignor).toBe('uniform');
+    expect(within(section).queryByPlaceholderText('custom assignor name')).toBeNull();
+
+    await pick(section, 'uniform', 'custom');
+    await user.type(within(section).getByPlaceholderText('custom assignor name'), 'range');
+    await pick(section, 'consumer', 'classic');
+
+    expect(configStore.getState().config?.groups[0]).toMatchObject({ protocol: 'classic', assignor: 'range' });
     expect(within(section).getByRole('button', { name: 'range▾' })).toBeDefined();
     expect(within(section).queryByPlaceholderText('custom assignor name')).toBeNull();
   });
