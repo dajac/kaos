@@ -16,4 +16,6 @@ identity=${FACTORY_TRUSTED:+$FACTORY_TRUSTED/scripts/factory/identity.sh}
 [[ -n $identity && -f $identity ]] || identity=$home/scripts/factory/identity.sh
 [[ -f $identity ]] || identity=$project/scripts/factory/identity.sh
 [[ -f $identity ]] || exit 0
-printf '. %q\n' "$identity" >>"$CLAUDE_ENV_FILE"
+# The line runs in the user's shell, bash or zsh, which cannot always
+# tell identity.sh where it lives: the hook says it.
+printf 'FACTORY_IDENTITY_DIR=%q . %q\n' "$(cd "$(dirname "$identity")" && pwd)" "$identity" >>"$CLAUDE_ENV_FILE"

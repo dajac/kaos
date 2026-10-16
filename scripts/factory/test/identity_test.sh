@@ -189,7 +189,7 @@ test_session_hook_sources_identity_before_every_command() {
     mkdir -p project/scripts/factory
     touch project/scripts/factory/identity.sh
     "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/session-identity.sh"
-    assert_eq "$(cat env)" ". $(pwd -P)/project/scripts/factory/identity.sh"
+    assert_eq "$(cat env)" "FACTORY_IDENTITY_DIR=$(pwd -P)/project/scripts/factory . $(pwd -P)/project/scripts/factory/identity.sh"
 }
 
 test_session_hook_prefers_the_trusted_checkout() {
@@ -198,5 +198,18 @@ test_session_hook_prefers_the_trusted_checkout() {
     touch project/scripts/factory/identity.sh trusted/scripts/factory/identity.sh
     export CLAUDE_ENV_FILE=$PWD/env CLAUDE_PROJECT_DIR=$PWD/project FACTORY_TRUSTED=$PWD/trusted
     "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/session-identity.sh"
-    assert_eq "$(cat env)" ". $PWD/trusted/scripts/factory/identity.sh"
+    assert_eq "$(cat env)" "FACTORY_IDENTITY_DIR=$PWD/trusted/scripts/factory . $PWD/trusted/scripts/factory/identity.sh"
+}
+
+test_identity_works_when_zsh_sources_the_hooks_line() {
+    command -v zsh >/dev/null || return 0
+    fake_home
+    unset FACTORY_HOME
+    git init -q project
+    export CLAUDE_ENV_FILE=$PWD/env CLAUDE_PROJECT_DIR=$PWD/home FACTORY_TRUSTED=$FACTORY_TEST_SCRIPTS/../..
+    "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/session-identity.sh"
+    out=$(FACTORY_HOME=$PWD/home zsh -f -c ". $PWD/env; echo \$FACTORY_IDENTITY \$GH_TOKEN; command -v gh; git -C home var GIT_AUTHOR_IDENT")
+    assert_contains "$out" "kaos-agent[bot] ghs_cached"
+    assert_contains "$out" "$FACTORY_TEST_SCRIPTS/bin/gh"
+    assert_contains "$out" "kaos-agent[bot] <1234+kaos-agent[bot]@users.noreply.github.com>"
 }

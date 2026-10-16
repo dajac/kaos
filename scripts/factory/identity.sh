@@ -17,13 +17,23 @@
 #
 # Before the bot exists ("factory setup" has not installed it), it
 # changes nothing. It must stay fast and silent: it runs before every
-# command.
+# command. It runs in the user's shell, bash or zsh: Claude Code sources
+# CLAUDE_ENV_FILE in the shell of its Bash tool. zsh has no BASH_SOURCE,
+# so the caller passes the directory of this file in FACTORY_IDENTITY_DIR
+# (the SessionStart hook does); bash finds it by itself.
 
-_factory_home=${FACTORY_HOME:-$(dirname "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" 2>/dev/null)}
-if [[ -n $_factory_home && -f $_factory_home/.factory/bot.env ]] &&
+_factory_dir=${FACTORY_IDENTITY_DIR:-}
+if [[ -z $_factory_dir && -n ${BASH_SOURCE[0]:-} ]]; then
+    _factory_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+fi
+
+_factory_home=${FACTORY_HOME:-}
+if [[ -z $_factory_home && -n $_factory_dir ]]; then
+    _factory_home=$(dirname "$(git -C "$_factory_dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" 2>/dev/null)
+fi
+if [[ -n $_factory_dir && -n $_factory_home && -f $_factory_home/.factory/bot.env ]] &&
     grep -q '^FACTORY_INSTALLATION_ID=.' "$_factory_home/.factory/bot.env"; then
     . "$_factory_home/.factory/bot.env"
-    _factory_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
     export FACTORY_HOME=$_factory_home
     export FACTORY_IDENTITY=$FACTORY_BOT_LOGIN
     case ":$PATH:" in
@@ -58,6 +68,6 @@ if [[ -n $_factory_home && -f $_factory_home/.factory/bot.env ]] &&
     export GIT_SSH_COMMAND=$_factory_dir/bin/no-ssh
     export GIT_TERMINAL_PROMPT=0
     unset -f _factory_git_config
-    unset _factory_dir _factory_n
+    unset _factory_n
 fi
-unset _factory_home
+unset _factory_home _factory_dir
