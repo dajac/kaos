@@ -61,32 +61,81 @@ and stops. Any session can pick up any issue.
 
 ### Labels
 
-Acceptance and stage are separate so that the acceptance label stays
-put while the stage moves.
+Two flags record David's decisions and never move:
 
-| Label | Meaning | Set by |
+- `accepted`: David accepted the work. **Only David adds it.**
+- `needs-spec`: a spec must be approved before the build. The triage
+  proposes it, David keeps or drops it, the spec agent removes it after
+  the LGTM.
+
+The stage is a separate label, and an open issue has **exactly one**:
+
+| Stage | Meaning |
+|---|---|
+| `needs-triage` | Not looked at yet |
+| `triaged` | Triage proposal posted, waiting for David |
+| `needs-info` | Waiting for the reporter |
+| `queued` | Accepted, waiting for a spec or build agent |
+| `spec-review` | Spec PR open |
+| `in-progress` | An agent is implementing or addressing comments |
+| `in-review` | PR ready, waiting for David |
+| `changes-requested` | David left comments, not picked up yet |
+| `blocked` | Waiting on a decision, see the last `[claude]` comment |
+
+Transitions, all applied by the factory unless stated (an arrow swaps
+the old stage label for the new one):
+
+| From | Event | To |
 |---|---|---|
-| `needs-triage` | New, not looked at | issue templates |
-| `triaged` | Triage proposal posted, waiting for David | triage agent |
-| `needs-info` | Waiting for the reporter | triage agent or David |
-| `accepted` | David accepted the work (renamed from `ready`) | **David only** |
-| `needs-spec` | A spec must be approved before the build | triage proposes, David keeps or drops it; spec agent removes it after the LGTM |
-| `spec-review` | Spec PR open | spec agent |
-| `in-progress` | An agent is implementing or addressing | build / address agent |
-| `in-review` | PR open | build agent |
-| `changes-requested` | David left comments to address | address agent (on pickup) |
-| `blocked` | Waiting on something, see the last comment | any agent |
+| none | issue opened, or any open issue without a stage label | `needs-triage` |
+| `needs-triage` | triage done | `triaged`, or `needs-info` |
+| `needs-info` | a new comment from the reporter or David | `needs-triage` |
+| `triaged` | David adds `accepted` | `queued` |
+| `triaged` | a new comment from David, no `accepted` | `needs-triage` |
+| `queued` + `needs-spec` | spec agent claims it | `spec-review` |
+| `spec-review` | David's LGTM, threads resolved | `queued`, `needs-spec` removed |
+| `queued`, no `needs-spec` | build agent claims it | `in-progress` |
+| `in-progress` | swarm done, PR ready for review | `in-review` |
+| `in-review` | a new comment or unresolved thread from David | `changes-requested` |
+| `changes-requested` | address agent claims it | `in-progress` |
+| any | an agent cannot go on | `blocked` |
+| `blocked` | a new comment from David | the stage named in the blocking comment |
+| `in-review` | David merges | closed by `Closes #N` |
+
+"New comment from David" means a comment without a prefix, newer than
+the last prefixed comment on the issue or PR: the last `[claude…]`
+comment is the watermark, no other state is needed. The control room
+reports any issue that breaks the one-stage invariant.
 
 Type labels stay (`bug`, `enhancement`, `task`, `documentation`).
-New area labels drive the reviewer selection and the gates:
-`area:core`, `area:server`, `area:api`, `area:ui`, `area:build`,
+New area labels drive the reviewer selection: `area:core`,
+`area:server`, `area:api`, `area:ui`, `area:build`, `area:protocol`,
 `area:factory`. `priority:high` lets David jump the queue; otherwise
-the oldest accepted issue goes first.
+the oldest `queued` issue goes first.
 
-The build agent starts only on an issue that has `accepted` and no
-`needs-spec`. Since every action is taken as `dajac`, GitHub cannot
-tell David's labels from Claude's: the guard hook (below) refuses any
-command run by Claude that adds `accepted`.
+Since every action is taken as `dajac`, GitHub cannot tell David's
+labels from Claude's: the guard hook (below) refuses any command run
+by Claude that adds `accepted`.
+
+#### Migration
+
+The existing `ready` label is removed rather than renamed: the eight
+issues that carry it (#61, #63, #70, #72–#76) were never triaged, and
+a rename would make them buildable at once. They go to `needs-triage`
+and David re-accepts them on the proposals. The descriptions of
+`in-progress`, `in-review`, `blocked` and `changes-requested` are
+updated to the meanings above.
+
+#### Claims
+
+A label is not a lock: a manual `/factory build N` can race a tick. An
+agent claims an issue by posting a `[claude] Claim` comment with its
+session id and time, then re-reads the comments: the oldest open claim
+wins and the loser stops. A working agent refreshes its claim (edits
+the comment's time) at every step. A claim older than two hours
+without a refresh is stale: the tick moves the issue to `blocked` and
+tells David, who decides whether to resume or restart it from the
+worktree.
 
 ### Comments
 
@@ -122,7 +171,8 @@ factory:
 Issue forms in `.github/ISSUE_TEMPLATE/` (`bug.yml`, `feature.yml`,
 `task.yml`) ask for the problem, the repro or motivation, the expected
 behavior and the scope, and apply `needs-triage`. Blank issues stay
-allowed for David; the triage agent fills the gaps.
+allowed for David; they have no label, so the tick gives them
+`needs-triage`, and the triage agent fills the gaps.
 
 UI issues carry annotated screenshots on the orphan `issue-screenshots`
 branch, as today (`gh` cannot upload attachments to a private repo).
@@ -152,9 +202,10 @@ Route rules, which David can override:
 - **close** for duplicates and things already fixed, proposed only.
 
 The triage agent never closes an issue and never adds `accepted`.
-David answers by adding `accepted` (with or without `needs-spec`), by
-commenting, or by closing. A plain comment from David on a `triaged`
-issue sends it back to triage on the next tick.
+David answers by adding `accepted` (and keeping or removing
+`needs-spec`), by commenting, or by closing. A comment from David
+without `accepted` sends the issue back to triage on the next tick,
+which revises the proposal.
 
 ### 3. Spec
 
@@ -168,9 +219,10 @@ For an accepted issue with `needs-spec`. `/factory spec N`:
 - open the spec PR (`Spec: <title>`, body `Spec for #N`), label the
   issue `spec-review`;
 - address David's inline comments with the same loop as code;
-- on David's LGTM with every thread resolved: remove `needs-spec` and
-  `spec-review` from the issue, comment the spec link, close the spec
-  PR. The branch stays until the issue is closed.
+- on David's LGTM with every thread resolved: remove `needs-spec`,
+  move the issue from `spec-review` to `queued`, comment the spec link,
+  close the spec PR. The branch stays until the issue is closed;
+  `merge.sh` deletes it with the last implementation PR.
 
 Specs are not merged: `docs/ARCHITECTURE.md` describes the merged code,
 and the implementation PR updates it. A spec that turns out wrong
@@ -179,19 +231,35 @@ on the issue) instead of being quietly diverged from.
 
 ### 4. Build
 
-`/factory build N`, or `/factory next` (oldest `accepted` issue, after
-`priority:high`). The agent:
+`/factory build N`, or `/factory next` (the oldest `queued` issue
+without `needs-spec`, after `priority:high`). The agent:
 
-1. Claims the issue: `in-progress`, a `[claude]` comment, worktree
-   `.claude/worktrees/<N>-<slug>` on branch `<N>-<slug>` from `main`
-   (stacked PRs branch from their parent).
+1. Claims the issue (`in-progress`, the claim comment), creates the
+   worktree `.claude/worktrees/<N>-<slug>` on branch `<N>-<slug>` from
+   `main`.
 2. For a bug, writes a test that fails on `main` first.
 3. Implements, following `CLAUDE.md` and the spec; updates
    `docs/ARCHITECTURE.md` in the same PR.
-4. Runs `scripts/factory/gates.sh` (below) until it is green.
-5. For `area:ui`, captures the screenshots (below).
-6. Opens a **draft** PR with the body below, labels the issue
-   `in-review`, and hands the PR to the review swarm.
+4. Runs `scripts/factory/gates.sh` (below) until it is green, with at
+   most three fix attempts per failing step. A test that also fails on
+   `main`, or passes on a rerun without a change, is a flake: the agent
+   files it as its own issue, says so in the PR, and goes on.
+   Otherwise the issue goes to `blocked`.
+5. When the diff touches `kaos-ui/`, captures the screenshots (below),
+   whatever the triage areas said.
+6. Opens a **draft** PR with the body below and hands it to the review
+   swarm. The issue stays `in-progress` until the swarm is done.
+
+#### Stacked PRs
+
+When the spec plans a stack, the spec's PR list becomes a checklist on
+the issue. Each PR branches from its parent, has the parent's branch
+as base, and says `Part of #N`; only the last one says `Closes #N`.
+The issue stays `in-progress` while PRs remain, and the build agent
+starts the next one once the previous is ready for review. When David
+merges a PR of a stack, `merge.sh` rebases its child onto `main`
+(`git rebase --onto main <parent> <child>`), retargets the child PR to
+`main` and force-pushes it; the gates rerun on the next tick.
 
 The PR is a draft until the swarm is done: draft means "agents'
 turn", ready for review means "David's turn".
@@ -246,7 +314,9 @@ quote that line; a skipped step can never read as a pass.
   before a PR leaves draft.
 
 CI keeps running `./mvnw verify` on every PR; the build agent waits
-for it to be green before handing over to David.
+for it to be green, for at most 30 minutes, before handing over to
+David. A red or timed-out CI follows the same flake rule as the local
+gates.
 
 #### Screenshots and "try it"
 
@@ -255,12 +325,15 @@ Both rest on one script, `scripts/factory/try-pr.sh <PR|branch>
 
 1. creates or reuses a worktree for the branch and builds the shaded
    jar (`-DskipTests`);
-2. starts `apache/kafka:4.3.1` in Docker unless a broker answers on
-   `localhost:9092`;
-3. runs the server on free ports and, with `--scenario`, drives it to
-   a known state through the HTTP API (create the topic, start the
-   group, freeze a consumer...);
-4. prints the URL and stops everything on Ctrl-C.
+2. starts its own `apache/kafka:4.3.1` container on a free port, so
+   that parallel runs (David trying a PR while the UX reviewer runs
+   another) never share topics or groups; `--bootstrap-server` reuses
+   an existing broker instead;
+3. runs the server with `--port 0` and a free proxy port and, with
+   `--scenario`, drives it to a known state through the HTTP API
+   (create the topic, start the group, freeze a consumer...);
+4. prints the URL and stops everything, the container included, on
+   Ctrl-C or with `--stop`.
 
 Scenarios are small JSON files under `scripts/factory/scenarios/`
 (a list of HTTP calls and waits), so David, the build agent and the UX
@@ -272,14 +345,17 @@ shipped in the jar. A PR adds or reuses a capture script under
 (hover, open a menu) and saves PNGs. The build agent runs it twice,
 against `main` and against the branch, commits the images to the
 `issue-screenshots` branch under `pr-<N>/` and links them in the
-body. Light and dark themes are both captured when the change affects
-colors.
+body. Each PR writes only its own directory, so concurrent pushes to
+that branch are retried after a fetch and rebase, which never
+conflicts. Light and dark themes are both captured when the change
+affects colors.
 
 ### 5. Review swarm
 
-`/factory review N`, run by the build agent after it opens the draft.
-The orchestrator picks the reviewers from the areas of the changed
-files and runs them in parallel as subagents in
+`/factory review N`, started by the orchestrator once the build agent
+has opened the draft (a subagent cannot start subagents, see "Driving
+the factory"). The orchestrator picks the reviewers from the changed
+paths and runs them in parallel as subagents in
 `.claude/agents/reviewer-*.md`.
 
 | Reviewer | When | Looks at |
@@ -288,8 +364,8 @@ files and runs them in parallel as subagents in
 | `tests` | always | the new test fails without the change (it reverts the fix to check), coverage of the acceptance criteria, flakiness (sleeps, ports, timing) |
 | `rules` | always | `CLAUDE.md` rules (public vs `internal`, no kafka-clients type in the API or JSON, no static mutable state, the single `ThreadFactory`, `*Test` names, `@IntegrationTest`, `var`), `docs/ARCHITECTURE.md` matches the code, PR body complete |
 | `api` | public package of `kaos-core`, `kaos-server`, OpenAPI | naming and consistency with the existing API, compatibility, JSON shape, OpenAPI and `schema.d.ts` in sync, error responses |
-| `ux` | `kaos-ui` | runs `try-pr.sh` with the scenario and drives the UI in a browser; the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus, states (loading, stale, stopped); the screenshots match what it sees |
-| `kafka` | consumer group, assignment, protocol, fault code | the simulated behavior matches the real group coordinator and clients, checked against the Apache Kafka sources (KIP-848 and classic protocols, epochs, revocation, static membership) |
+| `ux` | `kaos-ui` | runs `try-pr.sh` with the scenario and drives the UI with headless Playwright (not the shared Chrome); the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus, states (loading, stale, stopped); the screenshots match what it sees |
+| `kafka` | the consumer, group, assignment, proxy and fault code of `kaos-core`, or `area:protocol` | the simulated behavior matches the real group coordinator and clients, checked against the Apache Kafka sources at the tag of the kafka-clients version in the `pom.xml` (KIP-848 and classic protocols, epochs, revocation, static membership) |
 
 Each reviewer is independent: it gets the issue, the spec, the
 acceptance criteria and the diff, but not the build agent's reasoning,
@@ -302,11 +378,11 @@ duplicates. The survivors are posted as one PR review per reviewer,
 inline, prefixed `[claude-review:<angle>]`.
 
 The build agent then replies to every thread (`[claude] Fixed in
-<sha>` or why not), pushes new commits (no force-push) and the swarm
-re-reviews only the threads and the new diff. At most two rounds. Then
-the agent:
+<sha>` or why not), pushes new commits (no force-push), and only the
+reviewers that had findings re-review their threads and the new diff.
+At most two rounds. Then the build agent:
 
-- marks the PR ready for review;
+- marks the PR ready for review and moves the issue to `in-review`;
 - posts a `[claude] Ready for review` comment: the verdict of each
   reviewer, the findings left open with the reason, the "Decisions for
   David", and what David should look at first;
@@ -323,18 +399,21 @@ view, screenshots on UI issues, the independent review) move there.
 
 ### 6. David's review and merge
 
-David reviews the ready PR as he does now. On a tick, or with
-`/factory address N`, an agent picks up his unresolved threads and
-non-prefixed comments, labels the issue `changes-requested`, fixes,
-replies once per thread, reruns the gates (and the screenshots if the
-UI moved), pushes, runs a light review on the new diff (`code` and
-`rules`, plus the reviewer of the touched angle), and moves back to
-`in-review`. It never resolves a thread.
+David reviews the ready PR as he does now. A tick sees his new
+comments and unresolved threads and moves the issue to
+`changes-requested`. The address agent (on the tick, or with
+`/factory address N`) claims it (`in-progress`), fixes, replies once
+per thread, reruns the gates (and the screenshots if the UI moved),
+and pushes. The orchestrator then runs a light review on the new diff
+(`code` and `rules`, plus the reviewers of the touched paths), and the
+issue goes back to `in-review`. No agent ever resolves a thread.
 
 Approval is David's "LGTM" (not in a prefixed comment) with every
-thread resolved. Only David merges, with `scripts/factory/merge.sh N`:
-squash with the part of the body above `---`, delete the branch, remove
-the worktree. `Closes #N` closes the issue.
+thread resolved. Only David merges, with `scripts/factory/merge.sh N`,
+which he runs himself, outside Claude: squash with the part of the
+body above `---`, delete the branch (and the spec branch with the last
+PR of the issue), remove the worktree, rebase the child of a stacked
+PR. `Closes #N` closes the issue.
 
 ## Driving the factory
 
@@ -350,11 +429,22 @@ One entry point, the `factory` skill:
 | `/factory address N` | Address David's comments on a PR or a spec |
 | `/factory tick` | One pass of everything above that is unblocked |
 
+The session that runs `/factory` is the orchestrator and stays thin.
+A subagent cannot start subagents, so the orchestrator starts every
+stage agent (triage, spec, build, address) as a subagent, then starts
+the reviewers and the verifier itself, and keeps only the `yaml`
+handoffs in its own context, never the diffs or the logs.
+
 `/loop /factory tick` runs the factory unattended in a local session.
-A tick triages, addresses David's new comments, and starts at most one
-build, subject to a work-in-progress limit: no new build while two PRs
-wait for David. Work that waits for David is the bottleneck, so the
-factory does not pile it up.
+A tick first runs `scripts/factory/status.sh`, which reads the open
+issues and PRs with `gh` and prints one JSON document: the stage of
+each issue, David's new comments, stale claims, broken invariants. When
+nothing changed since the last tick, the tick ends there, with no
+model work. Otherwise it applies the label transitions, triages,
+addresses David's new comments, and starts at most one build, subject
+to a work-in-progress limit: no new build while two PRs wait for
+David. Work that waits for David is the bottleneck, so the factory
+does not pile it up.
 
 Local first: the build and the UX review need Docker, a broker and a
 browser, which a local session has. Triage needs none of them and can
@@ -366,13 +456,17 @@ later move to a scheduled cloud routine or a GitHub Action on
 A `PreToolUse` hook, `.claude/hooks/factory-guard.sh`, registered in a
 committed `.claude/settings.json`, refuses:
 
-- `gh pr merge`, `git push` to `main`, any force-push to `main`;
-- adding the `accepted` label;
-- closing an issue, resolving a review thread;
+- `gh pr merge`, `scripts/factory/merge.sh`, `git push` to `main`,
+  any force-push to `main` or to `issue-screenshots`;
+- adding the `accepted` label, through `gh issue edit` or `gh api
+  …/labels`;
+- `gh issue close`, and the `resolveReviewThread` GraphQL mutation;
 - deleting the `issue-screenshots` branch.
 
-Hooks are a guardrail, not a security boundary; the skills state the
-same rules. Changes to the factory itself (`.claude/`, `scripts/factory/`,
+It matches these exact subcommands, so `gh pr close` (the spec agent
+closing an approved spec PR) and `Closes #N` in a PR body stay
+allowed. Hooks are a guardrail, not a security boundary; the skills
+state the same rules. Changes to the factory itself (`.claude/`, `scripts/factory/`,
 `docs/factory/`, `.github/`) are always routed to a spec and flagged by
 the `rules` reviewer.
 
@@ -387,7 +481,7 @@ the `rules` reviewer.
 .claude/agents/review-verifier.md
 .github/ISSUE_TEMPLATE/{bug,feature,task}.yml, config.yml
 .github/pull_request_template.md
-scripts/factory/{gates,try-pr,merge}.sh
+scripts/factory/{status,gates,try-pr,merge}.sh
 scripts/factory/scenarios/*.json
 kaos-ui/e2e/                          Playwright capture scripts
 docs/factory/README.md                the process, for humans
@@ -397,6 +491,11 @@ docs/specs/                           only on spec branches
 
 `CLAUDE.md` gets a short "Factory" section pointing to
 `docs/factory/README.md`.
+
+`.gitignore` ignores the whole `.claude/` today, so none of the files
+above would be committed. It becomes `.claude/*` with exceptions for
+`settings.json`, `hooks/`, `skills/` and `agents/`;
+`settings.local.json` and `worktrees/` stay ignored.
 
 ## Alternatives considered
 
@@ -420,12 +519,12 @@ docs/specs/                           only on spec branches
 
 Each step is one PR, usable on its own:
 
-1. Labels (rename `ready` to `accepted`, add the stage and area
-   labels), issue forms, PR template, `docs/factory/README.md`, the
-   `CLAUDE.md` pointer.
+1. The labels and their migration, issue forms, PR template,
+   `docs/factory/README.md`, the `CLAUDE.md` pointer, the `.gitignore`
+   exceptions.
 2. `.claude/settings.json`, the guard hook, `gates.sh`, `merge.sh`.
-3. The `factory` and `factory-triage` skills; pilot on the open
-   issues.
+3. `status.sh`, the `factory` and `factory-triage` skills; pilot on
+   the open issues.
 4. `try-pr.sh`, the scenarios, the Playwright capture; the
    `factory-build` skill.
 5. The reviewers, the verifier, the review guides and the
@@ -442,8 +541,10 @@ configs, core bug), #76 (remove the auto-pilot, likely a spec).
    no: `accepted` is always his.
 2. Playwright as a `kaos-ui` dev dependency, or headless Chrome
    driven from a script with no new dependency?
-3. Should the part of the PR body below `---` be dropped at merge, or
-   kept in the commit like the "Checks" section of #53?
-4. Rename `ready` to `accepted`, or keep `ready`?
-5. Is the `kafka` reviewer worth its cost on every core change, or only
-   when the triage tags the issue with a protocol area?
+3. Should the part of the PR body below `---` be dropped at merge? It
+   changes the current style: the "Checks" section of #53 landed in
+   the commit.
+4. `accepted` plus a stage label, or keep `ready` as the name of the
+   flag (the migration is the same)?
+5. The `kafka` reviewer runs only on the consumer, group, proxy and
+   fault paths of `kaos-core`. Is that the right scope?
