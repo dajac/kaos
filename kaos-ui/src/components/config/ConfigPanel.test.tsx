@@ -376,4 +376,14 @@ describe('start', () => {
     await user.click(toggleOf(1));
     expect(toggleOf(1).getAttribute('aria-expanded')).toBe('true');
   });
+
+  it('shows the transient phases with an ellipsis character on a disabled button', async () => {
+    configStore.setState({ phase: 'STARTING' });
+    const starting = await screen.findByRole('button', { name: 'Starting…' });
+    expect(starting.hasAttribute('disabled')).toBe(true);
+
+    configStore.setState({ phase: 'STOPPING' });
+    const stopping = await screen.findByRole('button', { name: 'Stopping…' });
+    expect(stopping.hasAttribute('disabled')).toBe(true);
+  });
 });
