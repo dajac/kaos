@@ -126,6 +126,8 @@ trap 'exit 130' INT TERM
 # A scenario is a file, or a name: the tree's, the factory's, or one
 # published for the PR.
 [[ -n $scenario ]] || scenario=default.json
+# A name may leave out its .json.
+[[ $scenario == none || -f $scenario || $scenario == *.json ]] || scenario=$scenario.json
 if [[ $scenario != none && ! -f $scenario ]]; then
     found=
     for candidate in "$tree/scripts/factory/scenarios/$scenario" "$FACTORY_SCRIPTS/scenarios/$scenario"; do
