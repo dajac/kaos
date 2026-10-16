@@ -61,22 +61,52 @@ automatic, but each job stops at a gate rather than guessing.
 
 ## Architecture
 
-Two kinds of processes, both local:
+The factory is skills first: what the agents do is a set of Claude
+Code skills and subagents, and the plumbing that runs them is a few
+bash scripts around `gh`, `jq`, `git` and `openssl`. There is no
+program to build and no runtime beyond what the repository already
+needs.
 
-- **The orchestrator**, one per repository. A plain Node script, no
-  model. It polls GitHub, applies the label transitions, starts and
-  watches jobs, updates the Pipeline issue, and cleans up after merges. Every
-  decision it takes is mechanical and follows the tables below, so it
-  is predictable, cheap and testable.
+Three pieces:
+
+- **The loop**, `./factory up`, a bash script. It holds a lock, so
+  there is a single orchestrator, and every two minutes it:
+  1. runs `scripts/factory/status.sh`, which reads the open issues and
+     PRs with `gh` and prints one JSON snapshot: stages, flags, PRs,
+     CI, the newest activity per issue;
+  2. when the snapshot differs from the previous one, or a job just
+     ended, runs one **tick**;
+  3. runs the job the tick chose, if any, and waits for it;
+  4. re-renders the Pipeline issue from the labels
+     (`scripts/factory/pipeline.sh`, no model).
+- **The tick**, `claude -p "/factory-tick"`, a short headless session
+  and the brain of the orchestrator. It gets the snapshot, applies the
+  transitions of the tables below, and returns the next job to run as
+  structured output (`--json-schema`: `{job, issue}` or nothing). It
+  changes stages only through `scripts/factory/stage.sh <N> <to>`,
+  which knows the legal transitions and refuses any other, so a
+  mistaken tick cannot jump a gate. Each tick starts from a fresh
+  context: nothing accumulates from one issue to the next.
 - **Jobs**, one per piece of model work: `triage`, `spec`, `build`,
-  `review`, `address`. A job is a headless Claude Code session
-  (`claude -p "/factory-<kind> <N>"`). It does its work, posts its
-  result on GitHub with a `yaml` handoff block, and exits. It never
-  changes a stage label; the orchestrator reads the handoff and moves
-  the stage.
+  `review`, `address`. A job is a skill run headless by
+  `scripts/factory/job.sh <kind> <N>` (`claude -p "/factory-<kind>
+  <N>"`) in the issue's worktree. It does its work, posts its result
+  on GitHub with a `yaml` handoff block, and exits. It never changes a
+  stage label; the next tick reads the handoff and moves the stage.
 
-Each job runs in a worktree under `.claude/worktrees/`, which the
-orchestrator prepares:
+```
+ ./factory up (bash loop, lock)
+   │ every 2 min
+   ├─► status.sh ──► snapshot changed? ──no──► sleep
+   │                      │yes
+   ├─► claude -p /factory-tick ──► stage.sh (labels) ──► {job: build, issue: 75}
+   ├─► job.sh build 75 ──► claude -p /factory-build 75 (worktree 75-…)
+   └─► pipeline.sh ──► Pipeline issue
+              all GitHub calls as kaos-agent[bot]
+```
+
+Each job runs in a worktree under `.claude/worktrees/`, which
+`job.sh` prepares:
 
 | Job | Worktree |
 |---|---|
@@ -85,59 +115,53 @@ orchestrator prepares:
 | `build`, `address` | `<N>-<slug>` on branch `<N>-<slug>`, kept until the merge |
 | `review` | `review-<N>`, detached at the PR head, removed afterwards, so that the `tests` reviewer can revert the fix without touching the author's worktree |
 
-```
-           ┌──────────────────────────────┐
- GitHub ◄──┤ orchestrator (./factory up)  ├──► Pipeline issue
- (truth)   │ poll · transitions · limits  │    (bot)
-   ▲       └───────┬──────────────────────┘
-   │               │ spawns, watches pid + log
-   │       ┌───────┴────────┬──────────────┐
-   └───────┤ build #75      │ review #81   │ … at most 2 jobs
-   (bot)   │ claude -p      │ claude -p    │
-           │ worktree 75-…  │ 6 reviewer   │
-           └────────────────┤ subagents    │
-                            └──────────────┘
-```
+Why this shape:
 
-Why this split:
-
-- **One orchestrator.** It holds a lock file
-  (`.factory/orchestrator.lock`), so a second `./factory up` refuses to
-  start. Only the orchestrator starts jobs, including the ones David
-  asks for by hand (`./factory run build 75` sends the request to it),
-  so two jobs never race for one issue and no claim protocol is needed.
+- **One orchestrator.** The lock (`.factory/lock`, with the loop's
+  pid) makes a second `./factory up` refuse to start. Jobs that David
+  asks for by hand (`./factory run build 75`) are queued in
+  `.factory/requests/` and run by the loop, so two jobs never race for
+  one issue and no claim protocol is needed.
+- **One job at a time.** The loop waits for each job. Nothing needs
+  supervising, and David's review is the bottleneck anyway. A long
+  build delays the next triage by its length; if that starts to hurt,
+  the loop can run jobs in the background later without changing the
+  skills.
 - **Review is its own job.** It starts from a fresh context and a
   fresh checkout, with no access to the build job's reasoning, which
   keeps the reviewers independent of the author. It fans out to the
   reviewer subagents itself.
-- **Small contexts.** Each job sees one issue and ends. Nothing
-  accumulates across issues, unlike a long `/loop` session.
+- **Idle polls are free.** `status.sh` is plain `gh` and `jq`; a tick,
+  and its model cost, only happens when something changed.
 
-The orchestrator keeps a little local runtime state in `.factory/`
-(gitignored): the lock, one file per running job (pid, kind, issue,
-start time, log path), the job logs and the current bot token. GitHub
-stays the truth: after a crash or a reboot, the orchestrator rebuilds
-everything from the labels, the PRs and the timeline. For an issue in
-`in-progress`, `reviewing` or `spec-review` with no live job, it looks
-for a valid handoff newer than the stage label: if there is one, the
-job finished while the orchestrator was down and the handoff is
-applied; otherwise the job died and the issue goes to `blocked`.
+The loop keeps a little local runtime state in `.factory/`
+(gitignored): the lock, the last snapshot, the running job (kind,
+issue, start time, log path), the request queue, the job logs and the
+current bot token. GitHub stays the truth: after a crash or a reboot,
+the next tick rebuilds everything from the labels, the PRs and the
+timeline. For an issue in `in-progress`, `reviewing` or `spec-review`
+with no running job, it looks for a valid handoff newer than the stage
+label: if there is one, the job finished while the loop was down and
+the handoff is applied; otherwise the job died and the issue goes to
+`blocked`.
+
+Below, "the orchestrator" means the loop and its ticks together.
 
 ### Limits
 
-- At most two jobs at a time, at most one `build`.
-- No new `build` while two PRs wait for David: his review is the
-  bottleneck, so the factory does not pile work up in front of him.
-- Each job has a time limit (`build` 90 minutes, others 30) and a
-  budget cap passed to `claude -p`. A job that hits one is killed and
-  its issue goes to `blocked` with the tail of its log.
-- A poll costs no model work. It is a few `gh api` calls every two
-  minutes, and nothing runs when nothing changed.
+- One job at a time.
+- No new `build` while two PRs wait for David, so the factory does not
+  pile work up in front of him.
+- Each job has a time limit (`build` 90 minutes, others 30), enforced
+  by `job.sh`, and a budget cap passed to `claude -p`. A job that hits
+  one is stopped and its issue goes to `blocked` with the tail of its
+  log.
 
 ### Permissions of a job
 
-Headless jobs cannot ask for permission. Without a mode, a `-p` run
-can start in `auto`, so the orchestrator always passes one:
+Headless sessions cannot ask for permission. Without a mode, a `-p`
+run can start in `auto`, so `job.sh` (and the loop, for the tick)
+always passes one:
 
     claude -p "/factory-build 75" \
       --permission-mode dontAsk --permission-prompts none \
@@ -164,27 +188,26 @@ One script at the root of the repository, `./factory`:
 
 | Command | Does |
 |---|---|
-| `./factory setup` | One-time: checks `claude`, `gh`, Docker and Node, creates the bot, the labels and the Pipeline issue, stores the bot key in the macOS Keychain, checks that every GitHub action comes out as the bot |
-| `./factory up` | Starts the orchestrator in the background; `--foreground` to watch it |
-| `./factory down` | Stops the orchestrator; running jobs finish, or `--now` kills them |
-| `./factory status` | The pipeline in the terminal: what waits for David, running jobs, blocked issues |
-| `./factory logs [N]` | Follows the orchestrator log, or the log of the job of issue N |
-| `./factory run <kind> <N>` | Asks the orchestrator to run one job now, e.g. `./factory run triage 76` |
-| `./factory pause` / `resume` | Stop or restart new jobs without stopping the orchestrator |
+| `./factory setup` | One-time: checks `claude`, `gh`, `jq`, Docker and Chrome, creates the bot, the labels and the Pipeline issue, stores the bot key in the macOS Keychain, checks that every GitHub action comes out as the bot |
+| `./factory up` | Starts the loop in the background; `--foreground` to watch it |
+| `./factory down` | Stops the loop; the running job finishes, or `--now` stops it |
+| `./factory status` | The pipeline in the terminal: what waits for David, the running job, blocked issues |
+| `./factory logs [N]` | Follows the loop log, or the log of the job of issue N |
+| `./factory run <kind> <N>` | Queues one job, e.g. `./factory run triage 76` |
+| `./factory pause` / `resume` | Stop or restart new jobs without stopping the loop |
 | `./factory try <PR>` | Builds and runs the PR locally with its scenario (see "Try it") |
 | `./factory merge <PR>` | David's merge (see stage 6) |
 
 `./factory up --at-login` installs a launchd agent instead, so the
-orchestrator survives reboots. launchd does not inherit the shell's
-`PATH`, so `setup` records the absolute paths of `claude`, `gh`,
-`docker` and `node`, and runs a dry job under launchd to check that
-the Keychain items can be read without a prompt. Inside an interactive Claude Code
-session, `/factory` prints the same status and can call `./factory run`.
+loop survives reboots. launchd does not inherit the shell's `PATH`,
+so `setup` records the absolute paths of `claude`, `gh`, `jq` and
+`docker`, and runs a dry tick under launchd to check that the Keychain
+items can be read without a prompt. Inside an interactive Claude Code
+session, `/factory` prints the same status and can queue a job.
 
 Local first: builds and UX reviews need Docker, a broker and a browser,
-which David's machine has. Since the orchestrator and the jobs only
-talk to GitHub, they can later move to a server or a cloud runner
-without changing the job contract.
+which David's machine has. Since the loop and the jobs only talk to
+GitHub, they can later move to a server without changing the skills.
 
 ## Identity: the bot
 
@@ -202,7 +225,7 @@ and PRs show as `kaos-agent[bot]`.
   Such a change is always factory work, which goes through a spec, and
   the job hands David a patch to push himself.
 - **Tokens:** `scripts/factory/token.sh` signs a JWT and exchanges it
-  for an installation token, valid one hour. The orchestrator refreshes
+  for an installation token, valid one hour. The loop refreshes
   it into `.factory/token` every 45 minutes, and jobs read it from
   there on every call, since a build can outlive one token.
 - **`dajac` is David's only.** Nothing the factory or any Claude
@@ -219,7 +242,7 @@ and PRs show as `kaos-agent[bot]`.
     (`kaos-agent[bot] <<app-user-id>+kaos-agent[bot]@users.noreply.github.com>`),
     through `GIT_AUTHOR_*` and `GIT_COMMITTER_*`, so the local
     `user.name` (David) is never used.
-  - Jobs get this environment from the orchestrator. Interactive
+  - Jobs and ticks get this environment from `job.sh`. Interactive
     sessions get it from a `SessionStart` hook in the committed
     `.claude/settings.json`, which writes it to `CLAUDE_ENV_FILE`.
   - The guard hook refuses any `gh` or `git push` command when the
@@ -275,7 +298,7 @@ Editing an issue body notifies no one, so the issue does not spam
 David.
 
 ```markdown
-Updated 2026-10-16 09:14 UTC · orchestrator up · 2 jobs running · paused: no
+Updated 2026-10-16 09:14 UTC · loop up · running: review #73 · paused: no
 
 ## Waiting for David (3)
 | Issue | What | Since |
@@ -285,10 +308,10 @@ Updated 2026-10-16 09:14 UTC · orchestrator up · 2 jobs running · paused: no
 | #91 Lag gauge legend | triage proposal | 10 min |
 
 ## In flight (2)
-| Issue | Job | Started | PR |
+| Issue | Stage | Since | PR |
 |---|---|---|---|
-| #75 Classic session timeout | build | 25 min | |
-| #73 Ellipses | review, round 1 | 4 min | #89 |
+| #73 Ellipses | reviewing, round 1 (running) | 4 min | #89 |
+| #75 Classic session timeout | changes requested | 1 h | #87 |
 
 ## Queued (1) · Blocked (1) · Needs info (0)
 …
@@ -566,7 +589,7 @@ Then:
 
 `scripts/factory/gates.sh [quick|full]` runs the checks and ends with
 one verdict line: `GATES: PASS`, `GATES: FAIL <step>` or
-`GATES: MISCONFIGURED <why>` (Docker missing, Node too old). Jobs quote
+`GATES: MISCONFIGURED <why>` (Docker missing, wrong JDK). Jobs quote
 that line, so a skipped step can never read as a pass.
 
 - `quick`: `./mvnw spotless:apply`, then `./mvnw verify -DskipITs`.
@@ -600,14 +623,25 @@ Scenarios are small JSON files under `scripts/factory/scenarios/`: a
 list of HTTP calls and waits. David, the build job and the UX reviewer
 all see the same state.
 
-Screenshots add no dependency. `scripts/factory/capture.mjs` starts
-the local Chrome headless with a remote debugging port, and drives it
-through the Chrome DevTools Protocol over Node's built-in `WebSocket`.
-It loads a scenario, performs the interactions (hover, click, open a
-menu, set the color scheme), and saves PNGs with
-`Page.captureScreenshot`. A PR adds or reuses a capture file under
-`scripts/factory/captures/`: a list of steps, such as "click the
-selector, wait for the text, hover, shoot `rest-after.png`".
+Screenshots add no dependency and no code: the scenario puts the
+server in the state to show (freeze a consumer, add a group, wait for
+the lag), then `scripts/factory/capture.sh` runs Chrome's own headless
+screenshot:
+
+    "Google Chrome" --headless --screenshot=<file> \
+      --window-size=1440,900 --virtual-time-budget=5000 <url>
+
+`--virtual-time-budget` lets the UI receive its first snapshot over
+SSE before the shot, and `--force-dark-mode` gives the dark theme. A
+PR lists its shots in `scripts/factory/captures/<N>.txt`, one line
+each: the scenario, the URL, the window size, the theme and the file
+name.
+
+The limit is that a shot shows a state, not an interaction: hover
+states, open menus and keyboard focus cannot be captured. The PR's
+"How to test" covers those for David instead. Most Kaos UI issues are
+about states (cells, badges, contrast, stale data), so this covers
+most of them; a CDP driver can be added later if it does not.
 
 The build job runs the capture twice, against `main` and against the
 branch. It commits the images to the `issue-screenshots` branch under
@@ -629,7 +663,7 @@ changed paths and runs them in parallel as subagents in
 | `tests` | always | the new test fails without the change (it reverts the fix to check), coverage of the acceptance criteria, flakiness (sleeps, ports, timing) |
 | `rules` | always | `CLAUDE.md` rules (public vs `internal`, no kafka-clients type in the API or JSON, no static mutable state, the single `ThreadFactory`, `*Test` names, `@IntegrationTest`, `var`), `docs/ARCHITECTURE.md` matches the code, PR body complete |
 | `api` | public package of `kaos-core`, `kaos-server`, OpenAPI | naming and consistency with the existing API, compatibility, JSON shape, OpenAPI and `schema.d.ts` in sync, error responses |
-| `ux` | `kaos-ui` | runs `./factory try` with the scenario and drives the UI with `capture.mjs` in headless Chrome; the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus, states (loading, stale, stopped); the screenshots match what it sees |
+| `ux` | `kaos-ui` | runs `./factory try` with the scenario and takes its own shots with `capture.sh` (states only, it cannot click); the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus styles in the CSS, states (loading, stale, stopped); the screenshots match what it sees |
 | `kafka` | the consumer, group, assignment, proxy and fault code of `kaos-core`, or `area:protocol` | the simulated behavior matches the real group coordinator and clients, checked against the Apache Kafka sources at the tag of the kafka-clients version in the `pom.xml` (KIP-848 and classic protocols, epochs, revocation, static membership) |
 
 Each reviewer is independent. It gets the issue, the spec, the
@@ -727,32 +761,36 @@ them.
 ## Files
 
 ```
-factory                               the CLI (bash, calls the Node scripts)
-scripts/factory/orchestrator.mjs      poll, transitions, jobs, Pipeline issue
-scripts/factory/github.mjs            the REST and GraphQL calls, no npm dependency
-scripts/factory/{token,gates,try-pr,merge}.sh
+factory                               the CLI and the loop (bash)
+scripts/factory/status.sh             the snapshot (gh + jq)
+scripts/factory/stage.sh              legal stage transitions, nothing else
+scripts/factory/pipeline.sh           renders the Pipeline issue (gh + jq)
+scripts/factory/job.sh                runs one job or tick headless, with limits
+scripts/factory/token.sh              the bot's installation token (openssl + curl)
+scripts/factory/identity.sh           the bot's gh, git and author environment
+scripts/factory/{gates,try-pr,capture,merge}.sh
 scripts/factory/scenarios/*.json
-scripts/factory/test/                 tests of the transitions on recorded GitHub states
+scripts/factory/captures/<N>.txt      the shots of a PR
+scripts/factory/test/                 tests of stage.sh and status.sh on recorded states
 .claude/factory-job.json              settings of the jobs: allowlist, deny rules, hook
-.claude/settings.json                 the hook, for interactive sessions
+.claude/settings.json                 the SessionStart and guard hooks, for interactive sessions
 .claude/hooks/factory-guard.sh
 .claude/skills/factory/SKILL.md       /factory in an interactive session
+.claude/skills/factory-tick/SKILL.md  the transitions and the choice of the next job
 .claude/skills/factory-{triage,spec,build,review,address}/SKILL.md
 .claude/agents/reviewer-{code,tests,rules,api,ux,kafka}.md
 .claude/agents/review-verifier.md
 .github/ISSUE_TEMPLATE/{bug,feature,task}.yml, config.yml
 .github/pull_request_template.md
-scripts/factory/capture.mjs              headless Chrome over CDP, no dependency
-scripts/factory/captures/*.json        capture steps per PR
 docs/factory/README.md                the process, for humans
 docs/factory/review/<angle>.md        review guides
 docs/specs/                           only on spec branches
 .factory/                             runtime state and logs, gitignored
 ```
 
-The orchestrator is Node because the build already requires Node 24
-for `kaos-ui`. It uses only the standard library (`fetch`,
-`child_process`), so the factory adds no dependency to the product.
+The scripts need `bash`, `gh`, `jq`, `git`, `openssl`, `curl`, Docker
+and Chrome, all already on David's machine; no Node, Python or extra
+Java code.
 
 `CLAUDE.md` gets a short "Factory" section pointing to
 `docs/factory/README.md`.
@@ -765,10 +803,15 @@ added.
 
 ## Alternatives considered
 
-- **A Claude session as orchestrator** (`/loop /factory tick`). Simple
-  to start, but every tick costs model work, the session's context
-  grows with every issue, and the decisions are not reproducible. The
-  transitions are mechanical, so a script takes them better.
+- **A program as orchestrator** (Node or Java), with the transitions
+  in code, several jobs in parallel, and a CDP driver for interactive
+  screenshots. More predictable and parallel, but it is a program to
+  write, test and maintain, and a runtime to require. Skills first is
+  enough at David's review pace; the loop can become a program later
+  without changing the skills, the labels or the handoffs.
+- **A long `/loop /factory tick` session.** Its context grows with
+  every issue, and it costs model work on every tick. The bash loop
+  starts a fresh tick only when something changed.
 - **Everything in GitHub Actions** (`claude-code-action` on issue and
   PR events). Event-driven and hands-off, but the runners have no
   browser for the UX review, every run pays a cold Maven and npm
@@ -806,14 +849,14 @@ applies to everything, the remaining rollout steps included.
    the `.gitignore` changes and the `CLAUDE.md` pointer.
 2. `factory-job.json`, `.claude/settings.json`, the guard hook,
    `gates.sh`, `./factory merge`.
-3. The orchestrator with the transitions, its tests, the Pipeline issue,
-   `./factory up/down/status/logs/run`, and the `triage` job. Pilot on
-   the open issues.
-4. `./factory try`, the scenarios, `capture.mjs`, and the
-   `build` job.
+3. The loop, `status.sh`, `stage.sh` and their tests, `job.sh`, the
+   Pipeline issue, `./factory up/down/status/logs/run`, the `tick` and
+   `triage` skills. Pilot on the open issues.
+4. `./factory try`, the scenarios, `capture.sh`, and the `build`
+   skill.
 5. The reviewers, the verifier, the review guides, and the `review`
-   job.
-6. The `spec` and `address` jobs, and stacked PRs with sub-issues.
+   skill.
+6. The `spec` and `address` skills, and stacked PRs with sub-issues.
 
 Pilot candidates: #73 (ellipses, trivial UI), #75 (classic consumer
 configs, core bug), #76 (remove the auto-pilot, likely a spec).
@@ -826,7 +869,9 @@ configs, core bug), #76 (remove the auto-pilot, likely a spec).
 - The bot is the GitHub App `kaos-agent`; `dajac` is never used for
   anything David does not do himself, outside the bootstrap.
 - The repository stays `dajac/kaos`, on GitHub Free.
-- Screenshots use the local Chrome through a script of our own, with
-  no new dependency.
+- Skills first: skills and subagents for the behavior, bash for the
+  plumbing, no program and no new runtime.
+- Screenshots use the local Chrome's headless screenshot, with no new
+  dependency; they show states, not interactions.
 - The `kafka` reviewer runs only on the `kaos-core` code that
   simulates Kafka.
