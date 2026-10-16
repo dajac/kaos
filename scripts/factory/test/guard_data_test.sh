@@ -1,6 +1,6 @@
-# Tests of the guard hook against the false positives of whole-line
-# checks (messages, bodies and patterns are data) and against quote,
-# case and alias tricks.
+# Tests of the guard hook on ordinary job work, on messages (refused
+# when they name a command only David runs: jobs write messages to
+# files), and on quote, case, alias, heredoc and substitution tricks.
 
 guard() {
     jq -n --arg c "$1" --arg cwd "$PWD/home" '{tool_name: "Bash", tool_input: {command: $c}, cwd: $cwd}' |
@@ -32,8 +32,9 @@ with_bot() {
 test_messages_bodies_and_patterns_are_data() {
     with_bot
     allowed 'git commit -m "Harden security of the guard"' \
-        'git commit -m "Drop xargs from the allow list; gh pr merge stays refused"' \
-        "git commit -m 'Refuse env -u GH_TOKEN and gh auth'" \
+        'git commit -m "Drop xargs from the allow list"' \
+        'git commit -F .factory/commit-msg.txt' \
+        'gh pr create --draft --base main --title x --body-file .factory/pr-body.md' \
         'grep -rn security docs' \
         'grep -c user. file' \
         'wc -c alias.txt' \
@@ -46,8 +47,38 @@ test_messages_bodies_and_patterns_are_data() {
         'bash -n scripts/factory/merge.sh' \
         'git diff -- scripts/factory/merge.sh'
     local heredoc
-    heredoc=$(printf 'git commit -F - <<%s\nNever run gh pr merge or gh issue close.\n%s' EOF EOF)
+    heredoc=$(printf 'git commit -F - <<%s\nHarden the guard against aliases.\n%s' EOF EOF)
     allowed "$heredoc"
+}
+
+test_inline_messages_naming_davids_commands_are_refused() {
+    with_bot
+    refused 'git commit -m "Drop xargs; gh pr merge stays refused"' \
+        "git commit -m 'Refuse env -u GH_TOKEN and gh auth'"
+}
+
+test_heredocs_substitutions_and_compound_commands_are_refused() {
+    with_bot
+    local c
+    for c in "$(printf 'cat <<EOF\n$(gh pr merge 81)\nEOF')" \
+        "$(printf 'cat <<EOF\n`gh pr merge 81`\nEOF')" \
+        "$(printf 'git commit -F- <<EOF\nx ${x:-$(git push origin main)}\nEOF')" \
+        "echo \"\$(echo ')' ; gh pr merge 81)\"" \
+        'echo "$(case a in a) gh pr merge 81;; esac)"' \
+        "$(printf 'echo $((1<<2))\ngh pr merge 81')" \
+        "$(printf '# do not worry\ngh pr merge 81')" \
+        "git -c protocol.ext.allow=always ls-remote 'ext::gh pr merge 81'" \
+        "GIT_EDITOR='sh x' git commit --amend" \
+        "GIT_SEQUENCE_EDITOR='sh x' git rebase -i HEAD~2" \
+        'FOO=1 git push origin main' \
+        '{ git push origin main; }' \
+        'if true; then git push origin main; fi' \
+        '! git push origin main' \
+        '{ git branch -D issue-screenshots; }' \
+        "gh api -X PUT repos/dajac/kaos/pulls/81/mer''ge" \
+        "gh api repos/dajac/kaos/pulls/81/reviews -f event=APP''ROVE"; do
+        refused "$c"
+    done
 }
 
 test_quote_and_case_tricks_and_aliases_are_refused() {

@@ -36,6 +36,10 @@ Argument: the issue number.
   paths, `./mvnw -pl <module>`, `npm --prefix kaos-ui`.
 - Edit files of the worktree only. Write scratch files (PR body,
   comments) under `.factory/`, which is ignored.
+- Write every message to a file under `.factory/` and pass the file:
+  `git commit -F .factory/commit-msg.txt`, `--body-file`. The guard
+  reads the whole command line, quoted text and heredocs included, and
+  refuses a line that names a command only David runs.
 - Push only the issue's branch, with plain pushes: never `main`, never
   a force-push. Commits are yours (the bot's); end each message with
   `Co-Authored-By: Claude <model> <noreply@anthropic.com>`, with the

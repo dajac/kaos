@@ -8,17 +8,19 @@
 # boundary: the skills state the same rules, and the jobs' settings
 # repeat the main ones as deny rules.
 #
-# It looks at a command in two ways:
-# - the simple commands of the line (split on ;, &, |, &&, ||, $( and
-#   backquotes), with their quote characters removed, so that
-#   gh pr "merge" reads as gh pr merge: each is checked from its first
-#   word;
-# - the whole line without its quoted strings and heredoc bodies, which
-#   are data (commit messages, PR bodies, patterns): a command can run
-#   another one (xargs, find -exec, git aliases), so David's gates and
-#   the ways around the bot's identity are refused wherever they appear
-#   in it. What runs a quoted string as a command (bash -c, eval) is
-#   refused, as the guard cannot see into it.
+# It cannot tell a message from a command in a shell line (heredocs
+# and quoted strings run substitutions; quotes and backslashes hide
+# words), so it does not try: it removes quotes and backslashes, takes
+# newlines for separators, and checks the whole line, messages and
+# heredoc bodies included. A job writes its messages and bodies to files
+# (git commit -F, --body-file), which the guard never reads; a command
+# that names a David-only command inline is refused, even in a message.
+# It checks the line in two ways:
+# - anywhere in it: David's gates, and the ways around the bot's
+#   identity;
+# - at a command position (the start, after a separator, a $( or a
+#   backquote, or a then, do, else, !...): the commands that only count
+#   as commands, such as security, eval or an environment assignment.
 # Every match ignores case: git's configuration keys do.
 set -uo pipefail
 shopt -s nocasematch
@@ -26,29 +28,25 @@ shopt -s nocasematch
 input=$(cat)
 [[ $(jq -r '.tool_name // empty' <<<"$input") == Bash ]] || exit 0
 raw=$(jq -r '.tool_input.command // empty' <<<"$input")
-command=$(tr '\n\t' '  ' <<<"$raw" | tr -s ' ')
-
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-# The line without its quoted strings and heredoc bodies (what line_has
-# looks at), and the commands' view, where a quoted single word only
-# loses its quotes; see factory-guard.awk.
-bare=$(awk -v view=bare -f "$here/factory-guard.awk" <<<"$raw")
-words=$(awk -v view=words -f "$here/factory-guard.awk" <<<"$raw")
-# The raw line without backslashes, for the API calls whose quoted
-# arguments are the point (a GraphQL query).
-command=$(tr -d '\\' <<<"$command")
+# The line as the guard reads it: newlines are separators; quotes and
+# backslashes are gone, so that gh pr "merge", mer\ge and mer''ge read
+# as merge.
+line=$(tr '\n' ';' <<<"$raw" | tr '\t' ' ' | tr -d "\"'\\\\" | tr -s ' ')
 
 refuse() {
     echo "factory-guard: refused, $1. See docs/factory/README.md, \"Guardrails\"." >&2
     exit 2
 }
 
-# The simple commands of the line, one per element, with leading spaces
-# and env-free prefixes ("command", "builtin", "exec") removed.
+# A command position.
+at='(^|[;&|({}`]|\$\(|(^| )(then|do|else|elif|if|while|until|!)) *'
+
+# The simple commands of the line, one per element, without the words
+# before the command itself: assignments, then, do, !, command, exec...
 segments=()
 while IFS= read -r segment; do
     segment=${segment#"${segment%%[! ]*}"}
-    while [[ $segment =~ ^(command|builtin|exec|time|nohup)\ +(.*)$ ]]; do
+    while [[ $segment =~ ^(command|builtin|exec|time|nohup|then|do|else|elif|if|while|until|!|[A-Za-z_][A-Za-z_0-9]*=[^\ ]*)\ +(.*)$ ]]; do
         segment=${BASH_REMATCH[2]}
     done
     # gh takes its repository flag before the subcommand too.
@@ -56,21 +54,11 @@ while IFS= read -r segment; do
         segment="${BASH_REMATCH[1]} ${BASH_REMATCH[5]}"
     done
     [[ -n $segment ]] && segments+=("$segment")
-done < <(sed -E 's/\$\(|`|&&|\|\||[;&|()]/\n/g' <<<"$words")
+done < <(sed -E 's/\$\(|`|&&|\|\||[;&|(){}]/\n/g' <<<"$line")
 
-# True when the line, without its quoted strings and heredocs, matches.
 line_has() {
-    [[ $bare =~ $1 ]]
+    [[ $line =~ $1 ]]
 }
-
-# True when the raw line matches: for API calls whose arguments are the
-# point (a GraphQL query is a quoted string).
-raw_has() {
-    [[ $command =~ $1 ]]
-}
-
-# A command position: the line's start or a command separator.
-at='(^|[;&|(]) *'
 
 project=${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}
 home=$(dirname "$(git -C "${project:-.}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" 2>/dev/null)
@@ -87,35 +75,39 @@ line_has "$at(bash|sh|zsh|dash|ksh) +-[a-z]*c( |\$)|${at}eval( |\$)" &&
 
 # David's gates, wherever they appear: merging, approving, closing an
 # issue, resolving a thread, the accepted label.
-raw_has 'pulls/[0-9]+/merge' && refuse "merging a PR is David's"
+line_has 'pulls/[0-9]+/merge' && refuse "merging a PR is David's"
 line_has "$at([^ ]*/)?merge\.sh( |\$)" && refuse "merging a PR is David's"
-raw_has 'resolveReviewThread' && refuse "resolving a review thread is David's"
-raw_has 'mergePullRequest|enablePullRequestAutoMerge' && refuse "merging a PR is David's"
-raw_has 'addPullRequestReview' && raw_has 'APPROVE' && refuse "approving a PR is David's"
-raw_has 'event[^a-z]*APPROVE' && refuse "approving a PR is David's"
-raw_has '/issues/[0-9]+[^ ]* .*state[^a-z]*closed' && refuse "closing an issue is David's"
+line_has 'resolveReviewThread' && refuse "resolving a review thread is David's"
+line_has 'mergePullRequest|enablePullRequestAutoMerge' && refuse "merging a PR is David's"
+line_has 'addPullRequestReview' && line_has 'APPROVE' && refuse "approving a PR is David's"
+line_has 'event[^a-z]*APPROVE' && refuse "approving a PR is David's"
+line_has '/issues/[0-9]+[^ ]* .*state[^a-z]*closed' && refuse "closing an issue is David's"
 line_has '(^|[^a-z-])gh +((-R|--repo)[= ][^ ]+ +)*pr +merge' && refuse "merging a PR is David's"
 line_has '(^|[^a-z-])gh +((-R|--repo)[= ][^ ]+ +)*issue +close' && refuse "closing an issue is David's"
 line_has '(^|[^a-z-])gh +((-R|--repo)[= ][^ ]+ +)*pr +review[^;&|]*(--approve| -[a-z]*a[a-z]*( |$))' && refuse "approving a PR is David's"
 line_has '(^|[^a-z-])factory +merge' && refuse "merging a PR is David's"
 line_has '(^|[^a-z-])gh +alias' && refuse "gh aliases hide commands from the guard"
-grep -q 'settings\.local\.json' <<<"$command" && line_has '(>|tee|cp|mv|ln|install|rsync)' &&
+line_has 'settings\.local\.json' && line_has '(>|tee|cp|mv|ln|install|rsync)' &&
     refuse "a local settings file would loosen the session's permissions"
 
 # Labels written through the API: the accepted label is David's, the
 # stage labels change through stage.sh only. Reading labels is fine.
-if line_has '(^|[^a-z-])gh +api' && grep -qiE 'labels' <<<"$command" &&
+if line_has '(^|[^a-z-])gh +api' && line_has 'labels' &&
     line_has ' (-X|--method) *(POST|PUT|PATCH|DELETE)| (-f|-F|--field|--raw-field|--input)( |=)'; then
-    grep -qiE 'accepted' <<<"$command" && refuse "the accepted label is David's"
-    grep -qiE 'needs-triage|triaged|needs-info|queued|spec-review|in-progress|reviewing|in-review|changes-requested|blocked' <<<"$command" &&
+    line_has 'accepted' && refuse "the accepted label is David's"
+    line_has 'needs-triage|triaged|needs-info|queued|spec-review|in-progress|reviewing|in-review|changes-requested|blocked' &&
         refuse "stage labels change through scripts/factory/stage.sh only"
 fi
 
 # Once the bot exists, the ways around its identity, wherever they
 # appear.
 if $bot; then
-    line_has '(^|[^a-z_])(GH_TOKEN|GITHUB_TOKEN|GH_CONFIG_DIR|GH_HOST|GIT_CONFIG_[A-Z_0-9]*|GIT_AUTHOR_[A-Z]*|GIT_COMMITTER_[A-Z]*|GIT_SSH[A-Z_]*|GIT_ASKPASS|SSH_ASKPASS)=' &&
-        refuse "overriding the bot's identity"
+    # An assignment, before a command or exported, of what carries the
+    # bot's identity, or of a program git runs (an editor, a pager).
+    line_has "$at((env|export)( +-[a-z-]+)* +)?([A-Za-z_][A-Za-z_0-9]*=[^ ]* +)*(GH_TOKEN|GITHUB_TOKEN|GH_CONFIG_DIR|GH_HOST|GIT_CONFIG_[A-Z_0-9]*|GIT_AUTHOR_[A-Z]*|GIT_COMMITTER_[A-Z]*|GIT_SSH[A-Z_]*|GIT_ASKPASS|SSH_ASKPASS|GIT_EDITOR|GIT_SEQUENCE_EDITOR|EDITOR|VISUAL|GIT_PAGER|PAGER|GIT_EXTERNAL_DIFF|PATH)=" &&
+        refuse "overriding the bot's identity, or a program git runs"
+    line_has 'protocol\.[a-z]*\.allow|ext::' && refuse "git's ext transport runs commands"
+
     line_has '(^|[;&|( ])(unset|env)( [^;&|]*)? -u|(^|[;&|( ])env [^;&|]*(-i|--ignore-environment|--unset)|(^|[;&|( ])unset [^;&|]*(GH_|GITHUB_TOKEN|GIT_)' &&
         refuse "overriding the bot's identity"
     line_has '(^|[^a-z-])gh +auth' && refuse "gh auth reads or changes David's login"
@@ -123,7 +115,7 @@ if $bot; then
         refuse "reading credentials other than the bot's"
     line_has '\.git-credentials|\.config/gh|Library/Keychains|\.netrc|\.ssh/' &&
         refuse "reading credentials other than the bot's"
-    line_has '(^|[^a-z-])git( [^;&|]*)? (-c *|--config-env[= ])' && line_has '(-c *|--config-env[= ] *)(alias\.|credential|url\.|core\.(sshCommand|askPass|hooksPath|editor|pager|fsmonitor)|sequence\.editor|diff\.|filter\.|remote\.|user\.|author\.|committer\.|include)' &&
+    line_has '(^|[^a-z-])git( [^;&|]*)? (-c *|--config-env[= ])' && line_has '(-c *|--config-env[= ] *)(alias\.|credential|url\.|core\.(sshCommand|askPass|hooksPath|editor|pager|fsmonitor)|sequence\.editor|diff\.|filter\.|remote\.|pager\.|gpg\.|protocol\.|user\.|author\.|committer\.|include)' &&
         refuse "overriding the bot's git identity"
     line_has '(^|[^a-z-])git( [^;&|]*)? config( [^;&|]*)? (alias\.|include)' && ! line_has ' (--get|--get-all|--list|-l)( |$)' &&
         refuse "git aliases hide commands from the guard"
@@ -161,9 +153,6 @@ for s in ${segments[@]+"${segments[@]}"}; do
     # Once the bot exists, nothing may run as David: no way around the
     # bot's gh wrapper, token, credential helper, SSH block or author.
     if $bot; then
-        # An assignment overrides the environment only before the command.
-        [[ $s =~ ^([A-Za-z_][A-Za-z_0-9]*=[^\ ]*\ +)*(export\ +)?(GH_TOKEN|GITHUB_TOKEN|GH_CONFIG_DIR|GH_HOST|GIT_CONFIG_[A-Z_0-9]*|GIT_AUTHOR_[A-Z]*|GIT_COMMITTER_[A-Z]*|GIT_SSH[A-Z_]*|GIT_ASKPASS|SSH_ASKPASS|PATH)= ]] &&
-            refuse "overriding the bot's identity"
         [[ $s =~ ^(unset|export\ +-n)\ .*(GH_|GITHUB_TOKEN|GIT_|PATH) ]] && refuse "overriding the bot's identity"
         [[ $s =~ ^env\ .*(-u|-i|--unset|--ignore-environment) ]] && refuse "overriding the bot's identity"
         [[ $s =~ ^(\\gh|/[^\ ]*/gh)(\ |$) && ! $s =~ ^/[^\ ]*/scripts/factory/bin/gh(\ |$) ]] &&
@@ -172,7 +161,7 @@ for s in ${segments[@]+"${segments[@]}"}; do
         if [[ $s =~ ^git(\ |$) ]]; then
             [[ $s =~ \ (--no-verify|-n)(\ |$) && $s =~ ^git(\ +-[^\ ]+(\ +[^-\ ][^\ ]*)?)*\ +(push|commit)(\ |$) ]] &&
                 refuse "skipping the bot's git hooks"
-            [[ $s =~ \ (-c\ *|--config-env[=\ ]\ *)(alias\.|credential|url\.|core\.(sshCommand|askPass|hooksPath|editor|pager|fsmonitor)|sequence\.editor|diff\.|filter\.|remote\.|user\.|author\.|committer\.|include) ]] &&
+            [[ $s =~ \ (-c\ *|--config-env[=\ ]\ *)(alias\.|credential|url\.|core\.(sshCommand|askPass|hooksPath|editor|pager|fsmonitor)|sequence\.editor|diff\.|filter\.|remote\.|pager\.|gpg\.|protocol\.|user\.|author\.|committer\.|include) ]] &&
                 refuse "overriding the bot's git identity"
             # git config <key> alone reads; with a value, --add, --unset or
             # --replace-all it writes.

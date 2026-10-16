@@ -167,7 +167,8 @@ factory_paths=(.claude CLAUDE.md CLAUDE.local.md .mcp.json scripts/factory facto
 if [[ $kind == spec || $kind == build || $kind == address ]]; then
     fork=$(git -C "$dir" merge-base "$base" HEAD)
     if ! git -C "$dir" diff --quiet "$fork" HEAD -- "${factory_paths[@]}" ||
-        [[ -n $(git -C "$dir" status --porcelain -uall -- "${factory_paths[@]}") ]]; then
+        [[ -n $(git -C "$dir" status --porcelain -uall -- "${factory_paths[@]}") ]] ||
+        [[ -n $(git -C "$dir" status --porcelain -uall --ignored -- .claude) ]]; then
         refuse_job "the branch changes the factory itself (.claude/, a CLAUDE.md, .mcp.json, scripts/factory/ or ./factory): David builds it by hand"
     fi
 fi

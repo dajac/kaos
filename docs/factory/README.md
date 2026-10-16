@@ -913,13 +913,17 @@ push to `main`. The refused commands are:
   which run commands the guard would not see.
 
 A command can run another one (`xargs`, `find -exec`, git and `gh`
-aliases), so David's gates and the identity escapes are refused
-wherever they appear in the line, not only as a command's first word;
-what runs a quoted string as a command (`bash -c`, `eval`) is refused,
-since the guard cannot look into it. Quoted strings and heredoc bodies
-are data (commit messages, PR bodies, patterns): the line-wide checks
-skip them, while the per-command checks see through quotes, so that
-`gh pr "merge"` reads as `gh pr merge`; every match ignores case. Its
+aliases, heredocs and strings with substitutions), and a shell line
+cannot be told apart into messages and commands without running a
+shell. So the guard does not try: it removes quotes and backslashes,
+takes newlines for separators, and refuses David's gates and the
+identity escapes wherever they appear in the line, messages and
+heredoc bodies included; what only counts as a command (`security`,
+`eval`, an environment assignment) is checked at command positions.
+The jobs write their messages to files (`git commit -F`,
+`--body-file`), which the guard never reads; an inline message that
+names a command only David runs is refused. Every match ignores case.
+Its
 tests are in `scripts/factory/test/guard_test.sh` and
 `guard_data_test.sh`. Hooks are a guardrail, not a security boundary: the job
 instructions state the same rules, `factory-job.json` repeats the
