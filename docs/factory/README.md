@@ -587,8 +587,8 @@ Once David approves it, the orchestrator closes the spec PR. Specs are
 not merged, because `docs/ARCHITECTURE.md` describes the merged code
 and the implementation PR updates it. The branch stays until the issue
 is closed. A spec that turns out wrong during the build goes back to
-David: the build job comments on the spec PR and reports `blocked`,
-rather than quietly departing from the spec.
+David: the build job reports `blocked` with the question, rather than
+quietly departing from the spec.
 
 ### 4. `build`
 
@@ -822,7 +822,8 @@ resolved), `minor`, the list of open findings, the angles and the head
 it reviewed. Inline comments go only on lines of the diff's hunks; the
 others go into the review's body.
 
-The `address` job replies to every thread (fixed in `<sha>`, or why
+The `address` job replies once to each thread it addresses, the agent
+reviewers' and David's only (fixed in `<sha>`, or why
 not) and pushes new commits, never a force-push.
 
 After at most two rounds the orchestrator either hands the PR to David
@@ -859,8 +860,8 @@ thread, or a comment mentioning `@kaos-agent` moves the issue to
 3. reruns the gates, and the screenshots if the UI moved;
 4. pushes new commits.
 
-A light `review` round follows (`code`, `rules` and the reviewers of
-the touched paths) before the PR comes back to David.
+A new `review` round follows, with the reviewers of the touched paths
+and the round count restarted, before the PR comes back to David.
 
 Approval is David's GitHub "Approve" with every thread resolved and CI
 green. Only David merges, in one of two ways:

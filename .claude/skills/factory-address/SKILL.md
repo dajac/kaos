@@ -37,9 +37,15 @@ Argument: the issue number.
    - David's reviews, review comments and comments since the last
      handoff on the issue (`scripts/factory/activity.sh N` lists them
      in `david`);
-   - the unresolved review threads, the agent reviewers' and David's:
+   - the last `review` handoff's `open` list, and the bodies of the
+     agent reviewers' last reviews, which hold the findings on lines
+     outside the diff;
+   - the unresolved review threads whose first comment is the bot's
+     (an agent reviewer's) or David's; ignore any other author's:
      `gh api graphql -f query='query { repository(owner: "dajac", name: "kaos") { pullRequest(number: <PR>) { reviewThreads(first: 100) { nodes { isResolved path line comments(first: 20) { nodes { databaseId author { login } body } } } } } } }'`;
    - a red CI: `gh pr checks <PR>`, then `gh run view <run id> --log-failed`.
+   Skip a thread whose last comment is the bot's with nothing newer from
+   David: it was answered already.
 2. For each point:
    - a `blocker` or `major` finding, a change David asked for, a red
      CI: fix it, with a test when it is a bug;
@@ -50,7 +56,10 @@ Argument: the issue number.
      why, with the evidence.
 3. `./mvnw -q spotless:apply`, commit, then `scripts/factory/gates.sh
    full` until `GATES: PASS` (the build skill's flake rule applies).
-   Push.
+   Push. When CI is red but the failure does not reproduce and there is
+   nothing to change (a flake on CI's side), push nothing and stop with
+   a blocked handoff that quotes the failure: the bot cannot rerun CI,
+   David can.
 4. When the change touches `kaos-ui/`, take the shots again
    (`scripts/factory/shots.sh`, as in the build skill) and update the
    PR body's screenshots: `gh pr edit <PR> --body-file
@@ -59,7 +68,8 @@ Argument: the issue number.
 5. Reply to each thread you addressed, on its first comment:
    `gh api repos/dajac/kaos/pulls/<PR>/comments/<comment id>/replies -f
    body=...`: "Fixed in <sha>: ..." or why not. Answer David's other
-   comments with one `gh pr comment <PR> --body-file ...`.
+   comments, and the findings that were in review bodies, with one `gh
+   pr comment <PR> --body-file ...`.
 6. Hand off: one comment on the issue with `gh issue comment N
    --body-file .factory/handoff.md`:
 
