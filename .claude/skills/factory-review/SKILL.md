@@ -41,10 +41,10 @@ Arguments: the issue number and the PR number.
    (`git rev-parse HEAD`).
 2. The round: 1, plus the number of `review` handoffs on the issue,
    not counting blocked ones, since the later of the last `build`
-   handoff and David's last request for changes (a review of David's
-   that requests changes, or a comment of his that mentions
-   `@kaos-agent`). Read them from the issue's comments and the PR's
-   reviews.
+   handoff and David's last request for changes: what sends a ready PR
+   back (a review of David's that requests changes, a review comment of
+   his, or a comment of his that mentions `@kaos-agent`). Read them from
+   the issue's comments and the PR's reviews.
 3. Choose the reviewers:
    - always `reviewer-code`, `reviewer-tests`, `reviewer-rules`;
    - `reviewer-api` when a path is in the public package of `kaos-core`
