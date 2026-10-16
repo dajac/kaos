@@ -30,7 +30,7 @@ And, for David:
 
 7. One command starts and stops the factory.
 8. One orchestrator decides what runs.
-9. A GitHub board shows the whole pipeline and what waits for him.
+9. One place on GitHub shows the whole pipeline and what waits for him.
 10. The factory acts as its own GitHub identity, a bot, never as David.
 
 Non-goals: auto-merge, deployment, a hosted service.
@@ -65,7 +65,7 @@ Two kinds of processes, both local:
 
 - **The orchestrator**, one per repository. A plain Node script, no
   model. It polls GitHub, applies the label transitions, starts and
-  watches jobs, syncs the board, and cleans up after merges. Every
+  watches jobs, updates the Pipeline issue, and cleans up after merges. Every
   decision it takes is mechanical and follows the tables below, so it
   is predictable, cheap and testable.
 - **Jobs**, one per piece of model work: `triage`, `spec`, `build`,
@@ -87,8 +87,8 @@ orchestrator prepares:
 
 ```
            ┌──────────────────────────────┐
- GitHub ◄──┤ orchestrator (./factory up)  ├──► GitHub Project board
- (truth)   │ poll · transitions · limits  │    (David's token)
+ GitHub ◄──┤ orchestrator (./factory up)  ├──► Pipeline issue
+ (truth)   │ poll · transitions · limits  │    (bot)
    ▲       └───────┬──────────────────────┘
    │               │ spawns, watches pid + log
    │       ┌───────┴────────┬──────────────┐
@@ -164,7 +164,7 @@ One script at the root of the repository, `./factory`:
 
 | Command | Does |
 |---|---|
-| `./factory setup` | One-time: checks `claude`, `gh`, Docker and Node, creates the labels and the board, stores the bot's key in the macOS Keychain, checks that both tokens work |
+| `./factory setup` | One-time: checks `claude`, `gh`, Docker and Node, creates the bot, the labels and the Pipeline issue, stores the bot key in the macOS Keychain, checks that every GitHub action comes out as the bot |
 | `./factory up` | Starts the orchestrator in the background; `--foreground` to watch it |
 | `./factory down` | Stops the orchestrator; running jobs finish, or `--now` kills them |
 | `./factory status` | The pipeline in the terminal: what waits for David, running jobs, blocked issues |
@@ -205,15 +205,32 @@ and PRs show as `kaos-agent[bot]`.
   for an installation token, valid one hour. The orchestrator refreshes
   it into `.factory/token` every 45 minutes, and jobs read it from
   there on every call, since a build can outlive one token.
-- **Isolation from David's login.** A job must not be able to fall
-  back to David's credentials:
+- **`dajac` is David's only.** Nothing the factory or any Claude
+  session does appears under `dajac`: no PR, comment, review, label,
+  push or commit. This holds for jobs and for interactive Claude Code
+  sessions in the repository alike, so Claude can never fall back to
+  David's credentials:
   - `gh` runs with `GH_CONFIG_DIR` set to an empty directory, through
     a wrapper that sets `GH_TOKEN` from `.factory/token`.
   - `git` runs with `credential.helper` reset and replaced by a helper
     that prints the bot token. Otherwise the macOS Keychain helper,
     which holds David's credentials, answers first.
-  - `setup` checks both: `gh api user` and a `git push --dry-run` from
-    a job environment must authenticate as the bot.
+  - `git` author and committer are the bot
+    (`kaos-agent[bot] <<app-user-id>+kaos-agent[bot]@users.noreply.github.com>`),
+    through `GIT_AUTHOR_*` and `GIT_COMMITTER_*`, so the local
+    `user.name` (David) is never used.
+  - Jobs get this environment from the orchestrator. Interactive
+    sessions get it from a `SessionStart` hook in the committed
+    `.claude/settings.json`, which writes it to `CLAUDE_ENV_FILE`.
+  - The guard hook refuses any `gh` or `git push` command when the
+    environment does not carry the bot's identity, so a missing token
+    makes the command fail; it does not fall back to `dajac`.
+  - `setup` checks it: `gh api user`, a `git push --dry-run` and a
+    test commit from a job environment and from an interactive session
+    must all come out as the bot.
+
+  David's own terminal, outside Claude, keeps his login: his merges,
+  approvals and comments are his.
 - **Commits** are authored by the bot, with
   `Co-Authored-By: Claude <noreply@anthropic.com>`, and so is the
   squash commit that lands on `main`, although David merges. GitHub's
@@ -250,43 +267,44 @@ kills the running ones and alerts David. GitHub Pro would allow a
 ruleset on `main` that closes the hole server side; it is left out for
 now and can be added later without changing the design.
 
-## The board: GitHub Projects
+## The overview: the Pipeline issue
 
-A GitHub Project, **Kaos factory**, shows the whole pipeline.
+A pinned issue, **Pipeline**, opened by the bot, shows the whole
+pipeline. The orchestrator rewrites its body when the state changes.
+Editing an issue body notifies no one, so the issue does not spam
+David.
 
-- **Items:** every open issue of `dajac/kaos`. The project's built-in
-  auto-add workflow adds new ones (the free plan allows one such
-  workflow, which is all this needs). Auto-add does not backfill, so
-  `setup` adds the existing issues. Closed issues move to Done through
-  the built-in workflow.
-- **Status field**, one option per stage: Triage · Waiting for David ·
-  Needs info · Queued · Spec · Building · Reviewing · Changes requested ·
-  Blocked · Done.
-- **Waiting on field:** David, Factory or Reporter.
-- **More fields:** PR (link), Job (running, idle or failed), Areas,
-  Round (review round).
-- **Views:**
-  - *Pipeline*: a board grouped by Status.
-  - *David*: a table filtered on "Waiting on: David", oldest first.
-  - *In flight*: a table of the issues with a running job.
+```markdown
+Updated 2026-10-16 09:14 UTC · orchestrator up · 2 jobs running · paused: no
 
-The labels stay the source of truth, and the orchestrator mirrors them
-onto the board on every poll.
+## Waiting for David (3)
+| Issue | What | Since |
+|---|---|---|
+| #81 Row text unreadable | PR #90 ready for review | 2 h |
+| #76 Remove the auto-pilot | spec PR #88 | 1 d |
+| #91 Lag gauge legend | triage proposal | 10 min |
 
-GitHub Apps can only reach projects owned by an organization, not by a
-user, and fine-grained tokens cannot reach user-owned projects either.
-The board is David's (user-owned), so the orchestrator writes to it
-with a second token: a classic token of David's with the `project` and
-`repo` scopes (a board with items from a private repo needs `repo`),
-in the Keychain. `repo` is broad, so this token is used by the board
-sync only, in the orchestrator process, and never reaches a job.
-Writing a field on a board notifies no one and shows no authorship on
-the repo. The repository stays under David's account, so this second
-token stays.
+## In flight (2)
+| Issue | Job | Started | PR |
+|---|---|---|---|
+| #75 Classic session timeout | build | 25 min | |
+| #73 Ellipses | review, round 1 | 4 min | #89 |
 
-GitHub already offers two other views without the board: the labels,
-as saved issue searches, and David's review queue
-(`github.com/pulls/review-requested`).
+## Queued (1) · Blocked (1) · Needs info (0)
+…
+```
+
+The labels stay the source of truth; the issue is a view of them. The
+other GitHub views remain:
+- the labels as saved issue searches, e.g.
+  `is:open label:in-review`;
+- David's review queue, `github.com/pulls/review-requested`, since
+  the bot requests his review on every ready PR.
+
+A GitHub Projects board would look better, but GitHub Apps can only
+write to projects owned by an organization, and the repository stays
+under David's account. Syncing a board would therefore need David's
+own token, which the factory never uses (see "Identity").
 
 ## State: labels and handoffs
 
@@ -302,7 +320,7 @@ Two flags record David's decisions and never move:
 
 The stage is a separate label, and an open issue has **exactly one**:
 
-| Stage | Meaning | Board status |
+| Stage | Meaning | Pipeline section |
 |---|---|---|
 | `needs-triage` | Not looked at yet | Triage |
 | `triaged` | Proposal posted, waiting for David | Waiting for David |
@@ -354,7 +372,7 @@ A "new" comment is one newer than the `seen_until` time of the last
 handoff, the moment its job read GitHub, so a comment posted while a
 job runs is not lost behind that job's own comments. The orchestrator
 reads issue comments, PR comments, reviews and inline review comments
-together. `./factory status` and the board flag any issue that breaks
+together. `./factory status` and the Pipeline issue flag any issue that breaks
 the one-stage invariant.
 
 Type labels stay (`bug`, `enhancement`, `task`, `documentation`).
@@ -582,10 +600,14 @@ Scenarios are small JSON files under `scripts/factory/scenarios/`: a
 list of HTTP calls and waits. David, the build job and the UX reviewer
 all see the same state.
 
-Screenshots use Playwright, as a dev dependency of `kaos-ui` that is
-never shipped in the jar. A PR adds or reuses a capture script under
-`kaos-ui/e2e/`. The script loads a scenario, performs the interactions
-(hover, open a menu) and saves PNGs.
+Screenshots add no dependency. `scripts/factory/capture.mjs` starts
+the local Chrome headless with a remote debugging port, and drives it
+through the Chrome DevTools Protocol over Node's built-in `WebSocket`.
+It loads a scenario, performs the interactions (hover, click, open a
+menu, set the color scheme), and saves PNGs with
+`Page.captureScreenshot`. A PR adds or reuses a capture file under
+`scripts/factory/captures/`: a list of steps, such as "click the
+selector, wait for the text, hover, shoot `rest-after.png`".
 
 The build job runs the capture twice, against `main` and against the
 branch. It commits the images to the `issue-screenshots` branch under
@@ -607,7 +629,7 @@ changed paths and runs them in parallel as subagents in
 | `tests` | always | the new test fails without the change (it reverts the fix to check), coverage of the acceptance criteria, flakiness (sleeps, ports, timing) |
 | `rules` | always | `CLAUDE.md` rules (public vs `internal`, no kafka-clients type in the API or JSON, no static mutable state, the single `ThreadFactory`, `*Test` names, `@IntegrationTest`, `var`), `docs/ARCHITECTURE.md` matches the code, PR body complete |
 | `api` | public package of `kaos-core`, `kaos-server`, OpenAPI | naming and consistency with the existing API, compatibility, JSON shape, OpenAPI and `schema.d.ts` in sync, error responses |
-| `ux` | `kaos-ui` | runs `./factory try` with the scenario and drives the UI with headless Playwright; the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus, states (loading, stale, stopped); the screenshots match what it sees |
+| `ux` | `kaos-ui` | runs `./factory try` with the scenario and drives the UI with `capture.mjs` in headless Chrome; the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus, states (loading, stale, stopped); the screenshots match what it sees |
 | `kafka` | the consumer, group, assignment, proxy and fault code of `kaos-core`, or `area:protocol` | the simulated behavior matches the real group coordinator and clients, checked against the Apache Kafka sources at the tag of the kafka-clients version in the `pom.xml` (KIP-848 and classic protocols, epochs, revocation, static membership) |
 
 Each reviewer is independent. It gets the issue, the spec, the
@@ -671,7 +693,7 @@ The orchestrator does the cleanup either way, after it sees the merge:
   issue;
 - removes the worktree;
 - rebases the child of a stacked PR;
-- moves the item on the board.
+- updates the Pipeline issue.
 
 `Closes #N` closes the issue.
 
@@ -706,7 +728,7 @@ them.
 
 ```
 factory                               the CLI (bash, calls the Node scripts)
-scripts/factory/orchestrator.mjs      poll, transitions, jobs, board sync
+scripts/factory/orchestrator.mjs      poll, transitions, jobs, Pipeline issue
 scripts/factory/github.mjs            the REST and GraphQL calls, no npm dependency
 scripts/factory/{token,gates,try-pr,merge}.sh
 scripts/factory/scenarios/*.json
@@ -720,7 +742,8 @@ scripts/factory/test/                 tests of the transitions on recorded GitHu
 .claude/agents/review-verifier.md
 .github/ISSUE_TEMPLATE/{bug,feature,task}.yml, config.yml
 .github/pull_request_template.md
-kaos-ui/e2e/                          Playwright capture scripts
+scripts/factory/capture.mjs              headless Chrome over CDP, no dependency
+scripts/factory/captures/*.json        capture steps per PR
 docs/factory/README.md                the process, for humans
 docs/factory/review/<angle>.md        review guides
 docs/specs/                           only on spec branches
@@ -751,14 +774,15 @@ added.
   browser for the UX review, every run pays a cold Maven and npm
   build, and it needs an API key in the repo. Still possible later for
   triage only, since the job contract is the same.
-- **A machine user** (a second GitHub account) instead of an App. It can reach a user-owned board and needs no token
+- **A machine user** (a second GitHub account) instead of an App. It
+  could write to a user-owned Projects board and needs no token
   minting, but it is a full account with a long-lived token, counts as
   a collaborator, and its actions look like a person's. The App is the
   real bot, with short-lived tokens scoped to one repo.
-- **Moving `kaos` to a free organization.** It would let the App own
-  the board and drop David's classic token, but it changes the repo's
-  URLs and still gives no ruleset on a private repo. Rejected: the repo
-  stays `dajac/kaos`.
+- **A GitHub Projects board** synced with David's token. Rejected:
+  the factory never acts as `dajac`. Moving the repo to an
+  organization would let the App own a board, but the repo stays
+  `dajac/kaos`.
 - **A local job directory as state** (zazencodes' factory). Invisible
   on GitHub and tied to one machine.
 - **An agent approver that merges low-risk PRs** (zazencodes).
@@ -769,17 +793,23 @@ added.
 
 ## Rollout
 
-Each step is one PR, usable on its own:
+Each step is one PR, usable on its own.
+
+Bootstrap exception: until step 1 has created `kaos-agent` and
+`./factory setup` has checked its identity, the factory's own PRs
+(this design included) are opened, committed and pushed under
+`dajac`, as David allowed. From then on, the rule in "Identity"
+applies to everything, the remaining rollout steps included.
 
 1. The bot: create the App, `token.sh`, `./factory setup`; the labels
    and their migration; issue forms; PR template; `docs/factory/README.md`;
    the `.gitignore` changes and the `CLAUDE.md` pointer.
 2. `factory-job.json`, `.claude/settings.json`, the guard hook,
    `gates.sh`, `./factory merge`.
-3. The orchestrator with the transitions, its tests, the board sync,
+3. The orchestrator with the transitions, its tests, the Pipeline issue,
    `./factory up/down/status/logs/run`, and the `triage` job. Pilot on
    the open issues.
-4. `./factory try`, the scenarios, the Playwright capture, and the
+4. `./factory try`, the scenarios, `capture.mjs`, and the
    `build` job.
 5. The reviewers, the verifier, the review guides, and the `review`
    job.
@@ -788,23 +818,15 @@ Each step is one PR, usable on its own:
 Pilot candidates: #73 (ellipses, trivial UI), #75 (classic consumer
 configs, core bug), #76 (remove the auto-pilot, likely a spec).
 
-## Open questions
+## Decisions
 
-1. Screenshots need a tool that opens the UI in a browser by itself,
-   clicks through the scenario and saves the images. Playwright, a
-   standard tool added to the dev dependencies of `kaos-ui` (never
-   shipped), or a small script of our own driving the local Chrome
-   (no new dependency, but more code to maintain)? The design assumes
-   Playwright.
-2. The `kafka` reviewer checks that the simulator behaves like real
-   Kafka (epochs, revocation, static membership) against the Kafka
-   sources, which makes it the most expensive reviewer. It runs only
-   when a PR touches the code that simulates Kafka (consumers, groups,
-   assignment, proxy, faults in `kaos-core`), not on UI, server or
-   docs changes. Is that the right trigger?
-
-Settled: David always accepts issues himself, small bugs included;
-the PR body's review material (below `---`) is dropped at merge; the
-bot authors every commit, the squash commit included; the bot is the
-GitHub App `kaos-agent`; the repository stays `dajac/kaos` on GitHub
-Free.
+- David always accepts issues himself, small bugs included.
+- The PR body's review material (below `---`) is dropped at merge.
+- The bot authors every commit, the squash commit included.
+- The bot is the GitHub App `kaos-agent`; `dajac` is never used for
+  anything David does not do himself, outside the bootstrap.
+- The repository stays `dajac/kaos`, on GitHub Free.
+- Screenshots use the local Chrome through a script of our own, with
+  no new dependency.
+- The `kafka` reviewer runs only on the `kaos-core` code that
+  simulates Kafka.
