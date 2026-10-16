@@ -216,10 +216,13 @@ and PRs show as `kaos-agent[bot]`.
     a job environment must authenticate as the bot.
 - **Commits** are authored by the bot, with
   `Co-Authored-By: Claude <noreply@anthropic.com>`, and so is the
-  squash commit that lands on `main`: David merges, the bot is the
-  author. `./factory merge` passes the bot as the author of the squash
-  commit, and the orchestrator's audit of `main` flags a factory commit
-  with another author.
+  squash commit that lands on `main`, although David merges. GitHub's
+  merge API takes no author, so rollout step 2 checks on a test PR who
+  GitHub records as the author of a squash merged by David. If it is
+  David, `./factory merge` instead lets the orchestrator merge with the
+  bot's token once David has approved and run the command, so the
+  merge stays David's decision and the bot stays the author. The
+  audit of `main` then expects the bot as the merger of factory PRs.
 
 What the bot makes simpler:
 
