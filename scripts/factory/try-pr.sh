@@ -1,36 +1,47 @@
 #!/usr/bin/env bash
 # Builds and runs a PR, a branch or a worktree of Kaos against its own
 # broker, and drives it to a known state with a scenario: what
-# "./factory try" runs for David, and what the build job and the UX
-# reviewer use for their screenshots.
+# "./factory try" runs for David, and what the build job uses for its
+# screenshots.
 #
-# Usage: scripts/factory/try-pr.sh <PR|branch|main|.> [--scenario <file>] [--detach] [--no-build]
+# Usage: scripts/factory/try-pr.sh <PR|branch|main|.> [--scenario <name|file|none>] [--detach] [--no-build] [--as <name>]
 #        scripts/factory/try-pr.sh --stop <name>
+#        scripts/factory/try-pr.sh --clean
 #
 # - <PR> or <branch>: a worktree .claude/worktrees/try-<name> at its
-#   head; "main": origin/main; ".": the current worktree, as it is.
-# - It builds the shaded jar (-DskipTests), starts apache/kafka:4.3.1 in
-#   its own container on a free port (so that parallel runs never share
-#   topics or groups), runs the server on free ports, runs the scenario
-#   (the PR's own scripts/factory/scenarios/default.json unless
-#   --scenario says otherwise: a file, or the name of one of the tree's
-#   scenarios; "none" for no scenario), and prints the UI's URL.
+#   head; "main": origin/main; ".": the current worktree, as it is. The
+#   name is try-<PR|branch|main|worktree>, or try-<name> with --as, so
+#   that parallel runs of one target (David's, a job's) do not collide.
+# - It builds the shaded jar (-DskipTests; --no-build reuses an earlier
+#   one of the same head), starts apache/kafka:4.3.1 in its own
+#   container on a free port, runs the server on free ports, runs the
+#   scenario (the tree's default.json unless --scenario names another of
+#   its scenarios or a file; "none" for none), and prints the UI's URL
+#   on its last line.
 # - Without --detach it waits, and stops everything on Ctrl-C. With
-#   --detach it returns, leaving everything running, and prints the
-#   name to stop it with: try-pr.sh --stop <name>. Its state is in
-#   .factory/try/<name>/ (url, logs, pids).
-# - --no-build reuses the jar of an earlier build of the same tree.
+#   --detach it returns, leaving everything running: --stop <name> stops
+#   it. Its state is in .factory/try/<name>/ (url, logs, pids).
+# - --clean stops every run and removes the try-* worktrees.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 image=apache/kafka:4.3.1
 state_root=$FACTORY_STATE/try
 
+# Stops a run: the server first, waiting for it to exit, then its broker.
+# Removing the broker first would leave the server retrying it for a
+# minute, long enough to reach the next run's broker on the same port.
 stop() {
-    local dir=$state_root/$1
-    [[ -d $dir ]] || die "nothing runs as $1"
+    local dir=$state_root/$1 pid i
+    [[ -d $dir ]] || return 0
     if [[ -f $dir/server.pid ]]; then
-        kill "$(cat "$dir/server.pid")" 2>/dev/null || true
+        pid=$(cat "$dir/server.pid")
+        kill "$pid" 2>/dev/null || true
+        for ((i = 0; i < 20; i++)); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 0.5
+        done
+        kill -9 "$pid" 2>/dev/null || true
     fi
     if [[ -f $dir/container ]]; then
         docker rm -f "$(cat "$dir/container")" >/dev/null 2>&1 || true
@@ -39,50 +50,58 @@ stop() {
     info "stopped $1"
 }
 
-if [[ ${1:-} == --stop ]]; then
+case ${1:-} in
+--stop)
     stop "${2:?usage: try-pr.sh --stop <name>}"
     exit 0
-fi
+    ;;
+--clean)
+    for dir in "$state_root"/*; do
+        [[ -d $dir ]] && stop "$(basename "$dir")"
+    done
+    for tree in "$FACTORY_HOME"/.claude/worktrees/try-*; do
+        [[ -d $tree ]] || continue
+        git -C "$FACTORY_HOME" worktree remove --force "$tree" && info "removed $tree"
+    done
+    exit 0
+    ;;
+esac
 
-target=${1:?usage: try-pr.sh <PR|branch|main|.> [--scenario <file>] [--detach]}
+target=${1:?usage: try-pr.sh <PR|branch|main|.> [--scenario <name|file|none>] [--detach] [--no-build] [--as <name>]}
 shift
 scenario=
 detach=false
 build=true
+as=
 while (($#)); do
     case $1 in
-    --scenario) scenario=${2:?--scenario needs a file}; shift 2 ;;
+    --scenario) scenario=${2:?--scenario needs a name or a file}; shift 2 ;;
     --detach) detach=true; shift ;;
     --no-build) build=false; shift ;;
+    --as) as=${2:?--as needs a name}; shift 2 ;;
     *) die "unknown option $1" ;;
     esac
 done
 
-# The tree to run.
 case $target in
-.)
-    tree=$(git rev-parse --show-toplevel)
-    name=$(basename "$tree")
-    ;;
-main)
-    name=main
-    tree=$FACTORY_HOME/.claude/worktrees/try-main
-    git -C "$FACTORY_HOME" fetch -q origin main
-    rev=$(git -C "$FACTORY_HOME" rev-parse origin/main)
-    ;;
-*)
-    if [[ $target =~ ^[0-9]+$ ]]; then
-        name=$target
-        git -C "$FACTORY_HOME" fetch -q origin "pull/$target/head"
-    else
-        name=${target//\//-}
-        git -C "$FACTORY_HOME" fetch -q origin "$target"
-    fi
-    rev=$(git -C "$FACTORY_HOME" rev-parse FETCH_HEAD)
-    tree=$FACTORY_HOME/.claude/worktrees/try-$name
-    ;;
+.) key=$(basename "$(git rev-parse --show-toplevel)") ;;
+*) key=${target//\//-} ;;
 esac
-if [[ $target != . ]]; then
+name=try-${as:-$key}
+
+# The tree to run, at the target's head, fetched into a ref of its own
+# (FETCH_HEAD is shared with the loop's fetches).
+if [[ $target == . ]]; then
+    tree=$(git rev-parse --show-toplevel)
+else
+    ref=refs/factory/try/$name
+    case $target in
+    main) git -C "$FACTORY_HOME" fetch -q origin "+main:$ref" ;;
+    *[!0-9]*) git -C "$FACTORY_HOME" fetch -q origin "+refs/heads/$target:$ref" ;;
+    *) git -C "$FACTORY_HOME" fetch -q origin "+pull/$target/head:$ref" ;;
+    esac
+    rev=$(git -C "$FACTORY_HOME" rev-parse "$ref")
+    tree=$FACTORY_HOME/.claude/worktrees/$name
     if [[ -d $tree ]]; then
         [[ $(git -C "$tree" rev-parse HEAD) == "$rev" ]] || build=true
         git -C "$tree" checkout -q --detach "$rev"
@@ -91,10 +110,15 @@ if [[ $target != . ]]; then
         git -C "$FACTORY_HOME" worktree add -q --detach "$tree" "$rev"
     fi
 fi
-name=try-$name
+
 dir=$state_root/$name
-[[ -d $dir ]] && stop "$name"
+stop "$name"
 mkdir -p "$dir"
+# Whatever goes wrong from here, nothing is left running, unless the run
+# is handed over with --detach.
+handed_over=false
+trap '$handed_over || stop "$name"' EXIT
+trap 'exit 130' INT TERM
 
 # A scenario is a file, or the name of one of the tree's scenarios.
 [[ -n $scenario ]] || scenario=default.json
@@ -141,16 +165,19 @@ proxy_port=$(free_port 19500)
 info "starting the server on localhost:$http_port"
 java -jar "$jar" --bootstrap-server "localhost:$kafka_port" --port "$http_port" --proxy-port "$proxy_port" \
     >"$dir/server.log" 2>&1 &
-echo $! >"$dir/server.pid"
+server=$!
+echo "$server" >"$dir/server.pid"
 url=http://localhost:$http_port
 echo "$url" >"$dir/url"
 
+# Ready when our server, not another run's that took the same free port
+# first, answers on it.
 deadline=$(($(date +%s) + 120))
-until curl -sf "$url/api/v1/meta" >/dev/null 2>&1; do
-    if (($(date +%s) > deadline)) || ! kill -0 "$(cat "$dir/server.pid")" 2>/dev/null; then
+until curl -sf "$url/api/v1/meta" >/dev/null 2>&1 &&
+    [[ $(lsof -nP -iTCP:"$http_port" -sTCP:LISTEN -t 2>/dev/null | head -n 1) == "$server" ]]; do
+    if (($(date +%s) > deadline)) || ! kill -0 "$server" 2>/dev/null; then
         tail -n 40 "$dir/server.log" >&2
-        stop "$name"
-        die "the server did not start"
+        die "the server did not start (or another run took its port)"
     fi
     sleep 1
 done
@@ -158,15 +185,15 @@ done
 if [[ $scenario != none ]]; then
     info "running the scenario $(basename "$scenario")"
     "$FACTORY_SCRIPTS/scenario.sh" "$url" "$scenario" >"$dir/scenario.log" 2>&1 ||
-        { tail -n 20 "$dir/scenario.log" >&2; stop "$name"; die "the scenario failed"; }
+        { tail -n 20 "$dir/scenario.log" >&2; die "the scenario failed"; }
 fi
 
-echo "$url/"
 if $detach; then
+    handed_over=true
     info "running as $name; stop it with: scripts/factory/try-pr.sh --stop $name"
+    echo "$url/"
     exit 0
 fi
 info "open $url/ ; Ctrl-C stops the server and the broker"
-trap 'stop "$name"; exit 0' INT TERM
-wait "$(cat "$dir/server.pid")" || true
-stop "$name"
+echo "$url/"
+wait "$server" || true

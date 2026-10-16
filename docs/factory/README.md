@@ -587,21 +587,26 @@ rather than quietly departing from the spec.
 
 ### 4. `build`
 
-The job:
+`.claude/skills/factory-build/SKILL.md`. The loop has created the
+worktree `.claude/worktrees/<N>-<slug>` on branch `<N>-<slug>` from
+`main`, or continues it when an earlier build pushed it. The job:
 
-1. Creates the worktree `.claude/worktrees/<N>-<slug>` on branch
-   `<N>-<slug>` from `main`.
-2. For a bug, writes a test that fails on `main` first.
+1. Reads the issue, the accepted triage and, if any, the approved spec.
+2. For a bug, writes a test that fails first, and keeps its failure.
 3. Implements, following `CLAUDE.md` and the spec; updates
-   `docs/ARCHITECTURE.md` in the same PR.
-4. Runs `scripts/factory/gates.sh` (below) until it is green, with at
-   most three fix attempts per failing step. A test that also fails on
-   `main`, or passes on a rerun without a change, is a flake. The job
-   files it as its own issue, says so in the PR, and goes on.
+   `docs/ARCHITECTURE.md` in the same PR; formats and commits.
+4. Runs `scripts/factory/gates.sh full` (below) until it is green, with
+   at most three fix attempts per failing step. A failing test whose
+   class passes twice when run alone, without a change, is a flake: the
+   job files it as its own issue, says so in the PR, and goes on.
    Otherwise it reports `blocked`.
-5. When the diff touches `kaos-ui/`, captures the screenshots (below),
-   whatever the triage areas said.
-6. Opens a **draft** PR with the body below and hands off.
+5. Adds a scenario when none shows the change, and pushes.
+6. Opens a **draft** PR with the body below, or updates the one an
+   earlier run opened.
+7. When the diff touches `kaos-ui/`, whatever the triage areas said,
+   lists the shots, takes them of `main` and of the branch, checks
+   them, publishes them, and puts them in the body (below).
+8. Hands off with a `build` comment on the issue.
 
 Draft means it is the agents' turn. Ready for review, with David's
 review requested, means it is David's turn.
@@ -698,46 +703,52 @@ flake rule as the local gates.
 (`scripts/factory/try-pr.sh`) does four things:
 
 1. creates or reuses a worktree `.claude/worktrees/try-<name>` at the
-   PR's head (`.` runs the current worktree as it is) and builds the
-   shaded jar (`-DskipTests`; `--no-build` reuses an earlier one);
+   PR's head, fetched into a ref of its own (`.` runs the current
+   worktree as it is), and builds the shaded jar (`-DskipTests`;
+   `--no-build` reuses an earlier build of the same head);
 2. starts its own `apache/kafka:4.3.1` container on a free port, with
    the KRaft settings of a single node and the port it advertises, so
    that parallel runs never share topics or groups (for example David
    trying one PR while a job takes screenshots of another);
-3. runs the server on free ports and, unless `--scenario none`, drives
-   it to a known state through the HTTP API with a scenario, the
-   tree's `default.json` unless `--scenario` names another;
+3. runs the server on free ports, checks that the port answering is
+   its own server's, and, unless `--scenario none`, drives it to a
+   known state through the HTTP API with a scenario, the tree's
+   `default.json` unless `--scenario` names another;
 4. prints the URL, then stops everything, the container included, on
-   Ctrl-C; with `--detach` it returns and `try-pr.sh --stop <name>`
-   stops it.
+   Ctrl-C or on any failure: the server first, then its broker, so that
+   a dying server never reaches the next run's broker on the same port.
+   With `--detach` it returns and `try-pr.sh --stop <name>` stops it.
+
+A run is named after its target, `try-<PR|branch|main>`, or after
+`--as <name>`: the build job's shots run as `try-shots-…`, so they
+never stop a run of David's. `./factory try --clean` stops every run
+and removes the `try-*` worktrees.
 
 Scenarios are small JSON files under `scripts/factory/scenarios/`, run
 by `scripts/factory/scenario.sh`: requests, waits on a `jq` filter of a
 `GET`, and sleeps, with an optional `include` of another scenario.
 `default.json` makes one topic of 6 partitions, a producer and a group
-of 3 consumers, and waits until the coordinator has assigned every
-partition; `frozen-consumer.json` then freezes `consumer-0` for a
-minute. David, the build job and the UX reviewer all see the same
-state.
+of 3 consumers, and waits until each consumer owns the partitions the
+coordinator targets for it; `frozen-consumer.json` then freezes
+`consumer-0` for a minute. David and the build job see the same state.
 
 Screenshots add no dependency and no code to maintain:
-`scripts/factory/capture.sh <url> <out.png> [--size WxH] [--wait-ms N]
-[--dark]` runs the local Chrome's own headless screenshot, with a
-profile of its own:
-
-    "Google Chrome" --headless=new --screenshot=<file> \
-      --window-size=1440,900 --timeout=6000 <url>
-
-`--timeout` lets the UI receive its first snapshot over SSE before
-Chrome stops the page and takes the shot. (Chrome's
-`--virtual-time-budget` would wait forever on the open SSE stream.)
+`scripts/factory/capture.sh <url> <out.png> [--size WxH] [--wait-ms N]`
+uses the local Chrome's own headless screenshot, with a profile of its
+own. Chrome takes that shot at the page's load event, before the UI
+has received its first snapshot over SSE (its `--virtual-time-budget`
+would wait forever on the open stream, and its `--timeout` does not
+delay the shot). So Chrome loads a local wrapper page: the UI in a
+full-size frame, and a hidden image that a one-shot `nc` server answers
+only after `--wait-ms`. The load event, and the shot, wait for it.
 
 A PR lists its shots in `scripts/factory/captures/<issue>.txt`, one
-per line: `<name> <scenario> <path> <size> <light|dark>`.
-`scripts/factory/shots.sh <tree> <list> <out-dir> <suffix>` takes them
-for one tree, building it once and running a fresh server per shot;
-the scenarios come from the PR's `scenarios/` directory, so that the
-shots of `main` show the same state, even with a scenario the PR adds.
+per line: `<name> <scenario> <path> <size>` (the UI has a dark theme
+only). `scripts/factory/shots.sh <tree> <list> <out-dir> <suffix>`
+takes them for one tree, building it once and running a fresh server
+per shot; the scenarios come from the PR's `scenarios/` directory, so
+that the shots of `main` show the same state, even with a scenario the
+PR adds.
 
 The limit is that a shot shows a state, not an interaction: hover
 states, open menus and keyboard focus cannot be captured. The PR's
@@ -747,9 +758,10 @@ most of them; a CDP driver can be added later if it does not.
 
 The build job takes the shots twice, of `main` (suffix `before`) and of
 its worktree (`after`), checks them, and publishes them with
-`scripts/factory/publish-shots.sh <PR> <file>...`: it commits them to
-the `issue-screenshots` branch under `pr-<PR>/` and prints the Markdown
-images for the body. Each PR writes only its own directory, so a push
+`scripts/factory/publish-shots.sh <PR> <file>...`: from a detached
+worktree of its own (`.claude/worktrees/factory-screenshots`), it
+commits them to the `issue-screenshots` branch under `pr-<PR>/` and
+prints the Markdown images for the body. Each PR writes only its own directory, so a push
 rejected by a concurrent one is simply retried after a rebase; it
 never conflicts.
 

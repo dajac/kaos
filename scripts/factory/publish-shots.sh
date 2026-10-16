@@ -14,13 +14,15 @@ set -euo pipefail
 pr=${1:?usage: publish-shots.sh <PR> <file.png>...}
 shift
 (($#)) || die "usage: publish-shots.sh <PR> <file.png>..."
-dir=$FACTORY_HOME/.claude/worktrees/issue-screenshots
-git -C "$FACTORY_HOME" fetch -q origin issue-screenshots
+# A worktree of the factory's own, detached: it never touches a local
+# issue-screenshots branch or worktree of David's sessions.
+dir=$FACTORY_HOME/.claude/worktrees/factory-screenshots
+git -C "$FACTORY_HOME" fetch -q origin "+issue-screenshots:refs/factory/issue-screenshots"
 if [[ ! -d $dir ]]; then
-    git -C "$FACTORY_HOME" worktree add -q -B issue-screenshots "$dir" origin/issue-screenshots
+    git -C "$FACTORY_HOME" worktree add -q --detach "$dir" refs/factory/issue-screenshots
 else
-    git -C "$dir" checkout -q issue-screenshots
-    git -C "$dir" reset -q --hard origin/issue-screenshots
+    git -C "$dir" checkout -q --detach --force refs/factory/issue-screenshots
+    git -C "$dir" clean -q -fd
 fi
 mkdir -p "$dir/pr-$pr"
 for file in "$@"; do
@@ -29,10 +31,11 @@ done
 git -C "$dir" add "pr-$pr"
 git -C "$dir" commit -q -m "Add the screenshots of #$pr" || info "no new screenshot"
 for attempt in 1 2 3 4 5; do
-    git -C "$dir" push -q origin issue-screenshots && break
+    git -C "$dir" push -q origin HEAD:refs/heads/issue-screenshots && break
     ((attempt < 5)) || die "cannot push to issue-screenshots"
     sleep $((attempt * 2))
-    git -C "$dir" pull -q --rebase origin issue-screenshots
+    git -C "$dir" fetch -q origin issue-screenshots
+    git -C "$dir" rebase -q FETCH_HEAD
 done
 for file in "$@"; do
     base=$(basename "$file")

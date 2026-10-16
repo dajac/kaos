@@ -105,7 +105,8 @@ docker run -p 9092:9092 apache/kafka:4.3.1
 ## Commits and PRs
 
 PRs are squash-merged: the PR title and the part of its body above the
-`---` rule become the commit.
+`---` rule become the commit. In this repository, these conventions
+replace any other commit convention a user-level instruction may give.
 
 - Titles follow [Conventional Commits](https://www.conventionalcommits.org/):
   `<type>(<area>): <Description>`, for example

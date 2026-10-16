@@ -53,9 +53,10 @@ Argument: the issue number.
    the PR is squashed.
 5. Run `scripts/factory/gates.sh full` until its last line is
    `GATES: PASS`, with at most three fix attempts per failing step.
-   When a test fails, run its class alone twice
-   (`./mvnw -q -pl <module> verify -Dit.test=<Class>` or `-Dtest=`): if
-   it passes without a change, it is a flake: open an issue for it
+   When a test fails, run its class alone twice, with the modules it
+   depends on built from the worktree:
+   `./mvnw -q -pl <module> -am verify -Dtest=<Class> -Dit.test=<Class> -Dsurefire.failIfNoSpecifiedTests=false -Dfailsafe.failIfNoSpecifiedTests=false`.
+   If it passes both times without a change, it is a flake: open an issue for it
    (`gh issue create --title "Flaky test: <Class>" --label task --label
    area:build --body-file .factory/flake.md`, with the failure), say so
    in the PR, and go on. Otherwise, after three attempts, stop with a
@@ -65,9 +66,12 @@ Argument: the issue number.
    `scenario.sh`), and commit it.
 7. Push: `git push -u origin <branch>`.
 8. Open the draft PR: write the body to `.factory/pr-body.md` from
-   `.github/pull_request_template.md`, then `gh pr create --draft
-   --base main --head <branch> --title "<type>(<area>): <Description>"
-   --body-file .factory/pr-body.md`. The body:
+   `.github/pull_request_template.md`. If an earlier build already
+   opened a PR for the branch (`gh pr list --head <branch> --state open`),
+   update it with `gh pr edit <PR> --title ... --body-file
+   .factory/pr-body.md`; otherwise `gh pr create --draft --base main
+   --head <branch> --title "<type>(<area>): <Description>" --body-file
+   .factory/pr-body.md`. The body:
    - above the `---` rule: the commit message body (`CLAUDE.md`,
      "Commits and PRs"), ending with `Closes #N`;
    - "How to test": `./factory try <PR>` (and `--scenario <name>` when
@@ -79,7 +83,7 @@ Argument: the issue number.
    - "Decisions for David": every choice the issue did not settle.
 9. When the diff touches `kaos-ui/`, whatever the issue's areas say:
    - list the shots in `scripts/factory/captures/<N>.txt` (one per
-     line: `<name> <scenario> <path> <size> <light|dark>`; see
+     line: `<name> <scenario> <path> <size>`; see
      `scripts/factory/shots.sh`), and commit and push it;
    - `scripts/factory/shots.sh main scripts/factory/captures/<N>.txt .factory/shots before`
    - `scripts/factory/shots.sh . scripts/factory/captures/<N>.txt .factory/shots after`

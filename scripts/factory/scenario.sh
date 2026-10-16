@@ -22,7 +22,7 @@ if [[ -n $include ]]; then
     "$0" "$url" "$(dirname "$file")/$include"
 fi
 
-jq -c '.steps[]' "$file" | while IFS= read -r step; do
+jq -c '.steps[]?' "$file" | while IFS= read -r step; do
     if jq -e 'has("request")' <<<"$step" >/dev/null; then
         read -r method path <<<"$(jq -r .request <<<"$step")"
         body=$(jq -c '.body // empty' <<<"$step")

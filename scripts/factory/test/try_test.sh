@@ -40,8 +40,13 @@ test_scenario_times_out_on_a_wait() {
 test_the_shipped_scenarios_are_valid() {
     for file in "$FACTORY_TEST_SCRIPTS"/scenarios/*.json; do
         jq -e '.steps | type == "array"' "$file" >/dev/null || fail "$file has no steps"
-        jq -e '[.steps[] | keys[0]] - ["request", "wait", "sleep_s", "body"] | length == 0' "$file" >/dev/null ||
-            fail "$file has an unknown step"
+        jq -e 'all(.steps[]; (has("request") and (keys - ["request", "body"] | length == 0))
+            or (has("wait") and (.wait | has("path") and has("jq")) and (keys == ["wait"]))
+            or (keys == ["sleep_s"]))' "$file" >/dev/null || fail "$file has an invalid step"
+        jq -e '.include == null or (.include | type == "string")' "$file" >/dev/null || fail "$file has an invalid include"
+        jq -r '.steps[]? | .wait.jq // empty' "$file" | while IFS= read -r filter; do
+            jq -n "null | try ($filter) catch true" >/dev/null 2>&1 || fail "$file: invalid jq $filter"
+        done
     done
 }
 
@@ -51,6 +56,8 @@ test_publish_commits_the_shots_and_prints_markdown() {
     git -C seed checkout -q --orphan issue-screenshots
     git -C seed commit -q --allow-empty -m "README only"
     git -C seed push -q ../remote.git issue-screenshots
+    git -C seed commit -q --allow-empty -m "someone else's shots"
+    git -C seed push -q ../remote.git HEAD:refs/heads/issue-screenshots
     git clone -q remote.git home
     git -C home commit -q --allow-empty -m main
     export FACTORY_HOME=$PWD/home
@@ -58,4 +65,6 @@ test_publish_commits_the_shots_and_prints_markdown() {
     out=$("$FACTORY_TEST_SCRIPTS/publish-shots.sh" 81 rows-after.png)
     assert_eq "$out" "![rows-after](https://github.com/dajac/kaos/blob/issue-screenshots/pr-81/rows-after.png?raw=true)"
     assert_eq "$(git -C remote.git show issue-screenshots:pr-81/rows-after.png)" png
+    assert_contains "$(git -C remote.git log --format=%s issue-screenshots)" "someone else's shots"
+    ! git -C home show-ref --quiet refs/heads/issue-screenshots || fail "a local issue-screenshots branch was created"
 }
