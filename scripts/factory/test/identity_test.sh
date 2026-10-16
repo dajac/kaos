@@ -182,3 +182,12 @@ test_pre_push_refuses_commits_not_by_the_bot() {
     git commit -q --amend --allow-empty --no-edit --reset-author
     git push -q local HEAD:refs/heads/bad
 }
+
+test_session_hook_sources_identity_before_every_command() {
+    git init -q project
+    export CLAUDE_ENV_FILE=$PWD/env CLAUDE_PROJECT_DIR=$PWD/project
+    mkdir -p project/scripts/factory
+    touch project/scripts/factory/identity.sh
+    "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/session-identity.sh"
+    assert_eq "$(cat env)" ". $(pwd -P)/project/scripts/factory/identity.sh"
+}
