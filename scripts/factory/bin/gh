@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# gh as the bot: runs the real gh with the bot's installation token.
-# identity.sh puts this directory first in PATH.
+# gh as the bot: runs the real gh with a fresh installation token of the
+# bot. identity.sh puts this directory first in PATH. Other copies of
+# this wrapper (another checkout's) are skipped when looking for the
+# real gh.
 set -euo pipefail
-self=$(cd "$(dirname "$0")" && pwd)
 real=
 IFS=: read -ra dirs <<<"$PATH"
 for dir in "${dirs[@]}"; do
-    [[ $dir == "$self" ]] && continue
+    [[ $dir == */scripts/factory/bin ]] && continue
     if [[ -x $dir/gh ]]; then
         real=$dir/gh
         break
     fi
 done
 [[ -n $real ]] || { echo "factory: gh not found in PATH" >&2; exit 1; }
-token=$("$self/../token.sh")
+token=$("$(cd "$(dirname "$0")" && pwd)/../token.sh") || { echo "factory: no token for the bot" >&2; exit 1; }
 GH_TOKEN=$token exec "$real" "$@"

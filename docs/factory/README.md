@@ -245,32 +245,47 @@ and PRs show as `kaos-agent[bot]`.
   sessions in the repository alike, so Claude can never fall back to
   David's credentials:
   - All of it is set by `scripts/factory/identity.sh`, sourced into
-    the shell. It changes nothing until the bot exists.
-  - `gh` runs with `GH_CONFIG_DIR` set to an empty directory, through
-    a wrapper (`scripts/factory/bin/gh`) that sets `GH_TOKEN` to the
-    bot's token.
+    the shell. It changes nothing until the bot is installed.
+  - `GH_TOKEN` is the bot's installation token, exported before every
+    command. When no token can be minted, it is set to an invalid
+    value, so `gh` fails rather than falling back to David's login:
+    the real `gh` holds David's token in the Keychain and hands it to
+    any caller that has no `GH_TOKEN`. `GH_CONFIG_DIR` points to an
+    empty directory, and `gh` goes through a wrapper
+    (`scripts/factory/bin/gh`) that refreshes the token for scripts
+    that outlive one.
   - `git` runs with `credential.helper` reset and replaced by a helper
     that prints the bot token. Otherwise the macOS Keychain helper,
     which holds David's credentials, answers first.
   - The `git@github.com:` remotes are rewritten to HTTPS, and
     `GIT_SSH_COMMAND` refuses to run, so David's SSH key is never used.
+    A `pushInsteadOf` of David's that sent pushes back to SSH would
+    make them fail, not go out as David.
+  - A `pre-push` hook (`scripts/factory/git-hooks/`, through
+    `core.hooksPath`) refuses any commit not yet on the remote that is
+    not authored and committed by the bot: a rebase, a cherry-pick or
+    `--author` keeps the original author.
   - `git` author and committer are the bot
     (`kaos-agent[bot] <<app-user-id>+kaos-agent[bot]@users.noreply.github.com>`),
     through `GIT_AUTHOR_*` and `GIT_COMMITTER_*`, so the local
     `user.name` (David) is never used.
-  - Jobs and ticks get this environment from `job.sh` (planned).
-    Interactive sessions get it from a `SessionStart` hook in the
-    committed `.claude/settings.json` (planned), which writes a
-    `source …/identity.sh` line to `CLAUDE_ENV_FILE`, so that it runs
-    before every Bash command.
-  - The guard hook (planned) refuses any `gh` or `git push` command
-    when the environment does not carry the bot's identity, so a
-    missing token makes the command fail; it does not fall back to
-    `dajac`.
+  - Every Claude session in the repository gets this environment from
+    the `SessionStart` hook of the committed `.claude/settings.json`
+    (`.claude/hooks/session-identity.sh`), which writes a line sourcing
+    the main checkout's `identity.sh` to `CLAUDE_ENV_FILE`: Claude Code
+    runs it before every Bash command. Jobs and ticks get it the same
+    way, from `factory-job.json` (planned).
+  - The guard hook (`.claude/hooks/factory-guard.sh`, see
+    "Guardrails") refuses the commands that would undo it: setting
+    `GH_TOKEN`, `GIT_CONFIG_*`, `GIT_AUTHOR_*` or `PATH`, `unset` or
+    `env -u`, calling another `gh` by its path, `gh auth`, `git -c` or
+    `git config` on credentials, URLs, hooks or identity, `--author`,
+    `--no-verify`, and `ssh`.
   - `./factory setup` and `./factory whoami` check it in that
-    environment: the bot's installation covers `dajac/kaos` only, `git`
-    reads and dry-run pushes `origin` as the bot, and commits would be
-    authored and committed by the bot.
+    environment: the bot's installation covers `dajac/kaos` only, `git
+    credential fill` returns the bot's token and runs no other helper,
+    `origin` is read and dry-run pushed over HTTPS, and commits would
+    be authored and committed by the bot.
 
   David's own terminal, outside Claude, keeps his login: his merges,
   approvals and comments are his.
@@ -751,13 +766,15 @@ The orchestrator does the cleanup either way, after it sees the merge:
 
 `Closes #N` closes the issue.
 
-## Guardrails (planned)
+## Guardrails
 
 A `PreToolUse` hook, `.claude/hooks/factory-guard.sh`, refuses these
-commands. It is registered twice: in `.claude/factory-job.json`, which
-jobs load from the main checkout, and in the committed
-`.claude/settings.json`, for interactive sessions. The refused
-commands are:
+commands. It is registered in the committed `.claude/settings.json`,
+for every session, and will be registered again in
+`.claude/factory-job.json` (planned), which jobs load from the main
+checkout. It checks each simple command of the line on its own, so
+that `git push origin x && git checkout main` is not mistaken for a
+push to `main`. The refused commands are:
 
 - `gh pr merge`, `./factory merge`, `git push` to `main`, and any
   force-push to `main` or to `issue-screenshots`;
@@ -765,15 +782,18 @@ commands are:
   …/labels`;
 - `gh issue close`, the `resolveReviewThread` GraphQL mutation, and
   `gh pr review --approve`;
-- deleting the `issue-screenshots` branch.
+- deleting the `issue-screenshots` branch;
+- once the bot exists, the ways around its identity listed in
+  "Identity".
 
-It matches these exact subcommands, so `Closes #N` in a PR body stays
+Its tests are in `scripts/factory/test/guard_test.sh`. It matches these
+exact subcommands, so `Closes #N` in a PR body stays
 allowed. Hooks are a guardrail, not a security boundary: the job
 instructions state the same rules, `factory-job.json` repeats them as
-deny rules, and the orchestrator checks the `accepted` gate against the
-timeline. Before every job, the orchestrator also checks that the main
-checkout's `factory-job.json` and hook match `main`, and refuses to
-start a job if they do not. Changes to the factory itself
+deny rules (planned), and the orchestrator checks the `accepted` gate
+against the timeline (planned). Before every job, the orchestrator
+also checks that the main checkout's `factory-job.json` and hook match
+`main`, and refuses to start a job if they do not (planned). Changes to the factory itself
 (`factory`, `.claude/`, `scripts/factory/`, `docs/factory/`,
 `.github/`) always go through a spec, and the `rules` reviewer flags
 them.
@@ -789,8 +809,12 @@ scripts/factory/create-app.sh         creates and installs the bot
 scripts/factory/token.sh              the bot's installation token (openssl + curl)
 scripts/factory/identity.sh           the bot's gh, git and author environment
 scripts/factory/bin/                  the gh wrapper, the git credential helper, no-ssh
+scripts/factory/git-hooks/pre-push    refuses commits not by the bot
 scripts/factory/labels.sh             the labels and their migration
 scripts/factory/test/                 the tests of the scripts (test/run.sh)
+.claude/settings.json                 the SessionStart and guard hooks, for every session
+.claude/hooks/session-identity.sh     sources identity.sh before every command
+.claude/hooks/factory-guard.sh        the guard
 .github/ISSUE_TEMPLATE/{bug,feature,task}.yml, config.yml
 .github/pull_request_template.md
 docs/factory/README.md                this document
@@ -808,8 +832,6 @@ scripts/factory/{gates,try-pr,capture,merge}.sh
 scripts/factory/scenarios/*.json
 scripts/factory/captures/<N>.txt      the shots of a PR
 .claude/factory-job.json              settings of the jobs: allowlist, deny rules, hook
-.claude/settings.json                 the SessionStart and guard hooks, for interactive sessions
-.claude/hooks/factory-guard.sh
 .claude/skills/factory/SKILL.md       /factory in an interactive session
 .claude/skills/factory-tick/SKILL.md  the transitions and the choice of the next job
 .claude/skills/factory-{triage,spec,build,review,address}/SKILL.md
@@ -875,12 +897,12 @@ Bootstrap exception: until step 1 has created `kaos-agent` and
 `dajac`, as David allowed. From then on, the rule in "Identity"
 applies to everything, the remaining rollout steps included.
 
-1. Built. The bot: create the App, `token.sh`, `./factory setup`; the
-   labels and their migration; issue forms; PR template;
-   `docs/factory/README.md`; the `.gitignore` changes and the
-   `CLAUDE.md` pointer.
-2. `factory-job.json`, `.claude/settings.json`, the guard hook,
-   `gates.sh`, `./factory merge`.
+1. Built. The bot: create the App, `token.sh`, `./factory setup`, the
+   identity of every session (`identity.sh`, the `SessionStart` hook)
+   and the guard hook; the labels and their migration; issue forms;
+   PR template; `docs/factory/README.md`; the `.gitignore` changes and
+   the `CLAUDE.md` pointer.
+2. `factory-job.json`, `gates.sh`, `./factory merge`.
 3. The loop, `status.sh`, `stage.sh` and their tests, `job.sh`, the
    Pipeline issue, `./factory up/down/status/logs/run`, the `tick` and
    `triage` skills. Pilot on the open issues.

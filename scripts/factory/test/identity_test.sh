@@ -97,3 +97,88 @@ test_gh_wrapper_runs_the_real_gh_with_the_bot_token() {
     assert_eq "$(gh pr list)" "token=ghs_cached args=pr list"
     assert_eq "$GH_CONFIG_DIR" "$FACTORY_HOME/.factory/gh-config"
 }
+
+test_identity_stays_off_until_the_bot_is_installed() {
+    git init -q home
+    mkdir -p home/.factory
+    printf 'FACTORY_APP_ID=42\nFACTORY_APP_SLUG=kaos-agent\n' >home/.factory/bot.env
+    export FACTORY_HOME=$PWD/home
+    . "$FACTORY_TEST_SCRIPTS/identity.sh"
+    assert_eq "${FACTORY_IDENTITY:-}" ""
+    assert_eq "${GH_TOKEN:-}" ""
+}
+
+test_gh_token_is_exported_so_no_gh_binary_falls_back_to_davids_login() {
+    fake_home
+    . "$FACTORY_TEST_SCRIPTS/identity.sh"
+    assert_eq "$GH_TOKEN" ghs_cached
+}
+
+test_gh_token_is_invalid_when_no_bot_token_can_be_minted() {
+    fake_home
+    rm home/.factory/token
+    mkdir fakebin
+    printf '#!/bin/sh\nexit 1\n' >fakebin/curl
+    printf '#!/bin/sh\nexit 1\n' >fakebin/security
+    chmod +x fakebin/*
+    PATH=$PWD/fakebin:$PATH
+    . "$FACTORY_TEST_SCRIPTS/identity.sh"
+    assert_eq "$GH_TOKEN" invalid-no-bot-token
+}
+
+test_token_is_minted_when_the_cache_is_about_to_expire() {
+    fake_home
+    echo "$(($(date +%s) + 300)) ghs_old" >home/.factory/token
+    openssl genrsa -out key.pem 2048 2>/dev/null
+    mkdir fakebin
+    printf '#!/bin/sh\nopenssl base64 -A -in %s\n' "$PWD/key.pem" >fakebin/security
+    cat >fakebin/curl <<'CURL'
+#!/bin/sh
+echo "$*" >>"$CURL_LOG"
+echo '{"token": "ghs_new", "expires_at": "2099-01-01T00:00:00Z"}'
+CURL
+    chmod +x fakebin/*
+    export CURL_LOG=$PWD/curl.log
+    PATH=$PWD/fakebin:$PATH
+    assert_eq "$("$FACTORY_TEST_SCRIPTS/token.sh")" ghs_new
+    assert_contains "$(cat curl.log)" "/app/installations/7/access_tokens"
+    assert_eq "$(cut -d' ' -f2 home/.factory/token)" ghs_new
+    assert_eq "$(stat -f %Lp home/.factory/token)" 600
+}
+
+test_existing_git_config_entries_are_kept() {
+    fake_home
+    export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=foo.bar GIT_CONFIG_VALUE_0=baz
+    . "$FACTORY_TEST_SCRIPTS/identity.sh"
+    cd home
+    assert_eq "$(git config foo.bar)" baz
+    assert_eq "$(git config core.hooksPath)" "$FACTORY_TEST_SCRIPTS/git-hooks"
+}
+
+test_two_wrappers_in_path_do_not_loop() {
+    fake_home
+    mkdir -p realbin other/scripts/factory/bin
+    printf '#!/usr/bin/env bash\necho "real $GH_TOKEN"\n' >realbin/gh
+    cp "$FACTORY_TEST_SCRIPTS/bin/gh" other/scripts/factory/bin/gh
+    chmod +x realbin/gh
+    PATH=$PWD/other/scripts/factory/bin:$PWD/realbin:$PATH
+    . "$FACTORY_TEST_SCRIPTS/identity.sh"
+    assert_eq "$(gh)" "real ghs_cached"
+}
+
+test_pre_push_refuses_commits_not_by_the_bot() {
+    fake_home
+    git init -q --bare remote.git
+    . "$FACTORY_TEST_SCRIPTS/identity.sh"
+    cd home
+    git remote add local ../remote.git
+    git commit -q --allow-empty -m "by the bot"
+    git push -q local HEAD:refs/heads/ok
+    git commit -q --allow-empty --author="David <david@example.com>" -m "as David"
+    if git push -q local HEAD:refs/heads/bad 2>../push.err; then
+        fail "a commit authored by David was pushed"
+    fi
+    assert_contains "$(cat ../push.err)" "not authored and committed by the bot"
+    git commit -q --amend --allow-empty --no-edit --reset-author
+    git push -q local HEAD:refs/heads/bad
+}

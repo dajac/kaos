@@ -1,35 +1,25 @@
 #!/usr/bin/env bash
 # Runs the tests of the factory scripts: every function named test_* in
-# test/*_test.sh, each in its own subshell and temporary directory.
+# test/*_test.sh, each in its own bash with "set -e", in its own
+# temporary directory, so that any failing command fails the test.
 # Usage: scripts/factory/test/run.sh [file ...]
 set -uo pipefail
 cd "$(dirname "$0")"
 TEST_DIR=$(pwd)
 export FACTORY_TEST_SCRIPTS=$(cd .. && pwd)
-
-fail() {
-    echo "    $*" >&2
-    exit 1
-}
-
-assert_eq() {
-    [[ $1 == "$2" ]] || fail "expected '$2', got '$1'${3:+ ($3)}"
-}
-
-assert_contains() {
-    [[ $1 == *"$2"* ]] || fail "expected '$1' to contain '$2'"
-}
+# The tests must not see the caller's bot or identity.
+unset FACTORY_HOME FACTORY_IDENTITY FACTORY_SCRIPTS GH_TOKEN GIT_CONFIG_COUNT FACTORY_GIT_CONFIG_BASE \
+    GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_SSH_COMMAND
 
 passed=0
 failed=0
 files=("$@")
 ((${#files[@]})) || files=(*_test.sh)
 for file in "${files[@]}"; do
-    for test in $(bash -c ". '$TEST_DIR/$file' && declare -F" | awk '$3 ~ /^test_/ {print $3}'); do
+    for test in $(bash -c ". '$TEST_DIR/helpers.sh' && . '$TEST_DIR/$file' && declare -F" | awk '$3 ~ /^test_/ {print $3}'); do
         tmp=$(mktemp -d)
-        if (
-            cd "$tmp" && . "$TEST_DIR/$file" && set -e && "$test"
-        ) >"$tmp.log" 2>&1; then
+        bash -c 'set -eo pipefail; cd "$1"; . "$2/helpers.sh"; . "$2/$3"; "$4"' _ "$tmp" "$TEST_DIR" "$file" "$test" >"$tmp.log" 2>&1
+        if (($? == 0)); then
             passed=$((passed + 1))
         else
             failed=$((failed + 1))

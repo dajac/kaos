@@ -69,7 +69,10 @@ write_bot_env() {
 }
 
 create_app() {
-    local state page escaped request code got_state app
+    local state page escaped request code got_state app pem
+    if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+        die "port $port is in use; set FACTORY_SETUP_PORT to a free port"
+    fi
     state=$(openssl rand -hex 16)
     page=$FACTORY_STATE/create-app.html
     escaped=$(manifest | sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' -e 's/</\&lt;/g')
@@ -97,9 +100,15 @@ create_app() {
         "https://api.github.com/app-manifests/$code/conversions")
     FACTORY_APP_ID=$(jq -r .id <<<"$app")
     FACTORY_APP_SLUG=$(jq -r .slug <<<"$app")
-    security add-generic-password -U -s "$FACTORY_KEYCHAIN_SERVICE" -a "$FACTORY_REPO" \
-        -l "$FACTORY_APP_SLUG private key" -w "$(jq -r .pem <<<"$app" | openssl base64 -A)"
     write_bot_env
+    # The key is on the command line of "security" for an instant: it has
+    # no other way to take a value without prompting.
+    pem=$(jq -r .pem <<<"$app")
+    if ! security add-generic-password -U -s "$FACTORY_KEYCHAIN_SERVICE" -a "$FACTORY_REPO" \
+        -l "$FACTORY_APP_SLUG private key" -w "$(openssl base64 -A <<<"$pem")"; then
+        (umask 077 && echo "$pem" >"$FACTORY_STATE/$FACTORY_APP_SLUG.pem")
+        die "could not store the private key in the Keychain; it is in .factory/$FACTORY_APP_SLUG.pem, store it and rerun"
+    fi
     info "created the App $FACTORY_APP_SLUG (id $FACTORY_APP_ID), private key in the Keychain"
 }
 
@@ -107,9 +116,11 @@ install_app() {
     info "opening the browser: install $FACTORY_APP_SLUG on ${FACTORY_REPO%%/*}, choosing \"Only select repositories\" and ${FACTORY_REPO#*/}"
     open "https://github.com/apps/$FACTORY_APP_SLUG/installations/new"
     FACTORY_INSTALLATION_ID=
+    local deadline=$(($(date +%s) + 900))
     while [[ -z $FACTORY_INSTALLATION_ID ]]; do
+        (($(date +%s) < deadline)) || die "no installation after 15 minutes; rerun ./factory setup once installed"
         sleep 3
-        FACTORY_INSTALLATION_ID=$(app_api GET /app/installations |
+        FACTORY_INSTALLATION_ID=$( (app_api GET /app/installations || echo '[]') |
             jq -r --arg owner "${FACTORY_REPO%%/*}" '.[] | select(.account.login == $owner) | .id' | head -n 1)
     done
     FACTORY_BOT_LOGIN="$FACTORY_APP_SLUG[bot]"
