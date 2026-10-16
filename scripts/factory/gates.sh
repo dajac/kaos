@@ -7,9 +7,11 @@
 # Jobs quote that line, so that a skipped step can never read as a pass.
 #
 # Usage: scripts/factory/gates.sh [quick|full]
-#   quick  format, then ./mvnw verify without the integration tests
-#   full   format, then ./mvnw verify with the integration tests (Docker);
-#          required before a PR leaves draft
+#   quick  the format check, then ./mvnw verify without the integration tests
+#   full   the format check, then ./mvnw verify with the integration tests
+#          (Docker); required before a PR leaves draft
+# The format step only checks: a job runs ./mvnw spotless:apply and commits
+# the result, so that the verdict is about the tree it pushes.
 # The factory's script tests run in both. Each step's output goes to
 # .factory/logs/gates-<step>.log in the worktree; a failing step prints
 # its last lines.
@@ -37,7 +39,8 @@ misconfigured() {
     exit 2
 }
 
-java_major=$(java -XshowSettings:properties -version 2>&1 | awk -F'= ' '/java.specification.version/ {print $2}')
+# ./mvnw runs the JDK of JAVA_HOME when it is set, the one on PATH otherwise.
+java_major=$("${JAVA_HOME:+$JAVA_HOME/bin/}java" -XshowSettings:properties -version 2>&1 | awk -F'= ' '/java.specification.version/ {print $2}')
 [[ -n $java_major ]] || misconfigured "java not found"
 ((java_major >= 21)) || misconfigured "JDK $java_major, the build needs 21 or later"
 if [[ $level == full ]]; then
@@ -55,7 +58,7 @@ step() {
     fi
 }
 
-step format ./mvnw -B -ntp -q spotless:apply
+step format ./mvnw -B -ntp -q spotless:check
 step factory-tests scripts/factory/test/run.sh
 if [[ $level == quick ]]; then
     step verify ./mvnw -B -ntp verify -DskipITs
