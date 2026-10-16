@@ -1,5 +1,5 @@
 {
-  "description": "A start that creates 40 topics of 200 partitions and is still STARTING when the UI loads: the start button shows its transient label.",
+  "description": "A start that creates 20 topics of 100 partitions and is still STARTING when the UI loads: the start button shows its transient label.",
   "steps": [
     {
       "request": "POST /api/v1/simulator",
@@ -7,163 +7,83 @@
         "topics": [
           {
             "name": "load-0",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-1",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-2",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-3",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-4",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-5",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-6",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-7",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-8",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-9",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-10",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-11",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-12",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-13",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-14",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-15",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-16",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-17",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-18",
-            "partitions": 200
+            "partitions": 100
           },
           {
             "name": "load-19",
-            "partitions": 200
-          },
-          {
-            "name": "load-20",
-            "partitions": 200
-          },
-          {
-            "name": "load-21",
-            "partitions": 200
-          },
-          {
-            "name": "load-22",
-            "partitions": 200
-          },
-          {
-            "name": "load-23",
-            "partitions": 200
-          },
-          {
-            "name": "load-24",
-            "partitions": 200
-          },
-          {
-            "name": "load-25",
-            "partitions": 200
-          },
-          {
-            "name": "load-26",
-            "partitions": 200
-          },
-          {
-            "name": "load-27",
-            "partitions": 200
-          },
-          {
-            "name": "load-28",
-            "partitions": 200
-          },
-          {
-            "name": "load-29",
-            "partitions": 200
-          },
-          {
-            "name": "load-30",
-            "partitions": 200
-          },
-          {
-            "name": "load-31",
-            "partitions": 200
-          },
-          {
-            "name": "load-32",
-            "partitions": 200
-          },
-          {
-            "name": "load-33",
-            "partitions": 200
-          },
-          {
-            "name": "load-34",
-            "partitions": 200
-          },
-          {
-            "name": "load-35",
-            "partitions": 200
-          },
-          {
-            "name": "load-36",
-            "partitions": 200
-          },
-          {
-            "name": "load-37",
-            "partitions": 200
-          },
-          {
-            "name": "load-38",
-            "partitions": 200
-          },
-          {
-            "name": "load-39",
-            "partitions": 200
+            "partitions": 100
           }
         ],
         "groups": [
