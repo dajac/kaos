@@ -5,6 +5,8 @@
 # scripts live there.
 
 FACTORY_REPO=dajac/kaos
+# David's GitHub login: his reviews, labels and merges are the gates.
+FACTORY_DAVID=dajac
 FACTORY_KEYCHAIN_SERVICE=kaos-agent-private-key
 
 if [[ -z ${FACTORY_HOME:-} ]]; then
@@ -75,4 +77,11 @@ app_api() {
         -H "Accept: application/vnd.github+json" \
         -H "X-GitHub-Api-Version: 2022-11-28" \
         "$@" "https://api.github.com$path"
+}
+
+# Reads a PR body on stdin and prints the squash commit message: the part
+# above the first "---" line, without HTML comments or trailing blank
+# lines.
+commit_message() {
+    tr -d '\r' | awk '/^---[[:space:]]*$/ {exit} {print}' | perl -0pe 's/<!--.*?-->\n?//gs; s/\s+\z/\n/'
 }
