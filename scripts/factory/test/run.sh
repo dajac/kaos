@@ -13,6 +13,9 @@ unset FACTORY_HOME FACTORY_IDENTITY FACTORY_IDENTITY_DIR FACTORY_SCRIPTS FACTORY
     GIT_CONFIG_COUNT FACTORY_GIT_CONFIG_BASE GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL \
     GIT_SSH_COMMAND CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
 PATH=$(tr ':' '\n' <<<"$PATH" | grep -v '/scripts/factory/bin$' | paste -sd: -)
+# Commits made by the tests need an identity, which CI's runners lack.
+export GIT_AUTHOR_NAME=factory-test GIT_AUTHOR_EMAIL=factory-test@example.com
+export GIT_COMMITTER_NAME=factory-test GIT_COMMITTER_EMAIL=factory-test@example.com
 
 passed=0
 failed=0
