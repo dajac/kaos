@@ -53,7 +53,7 @@ line_has 'event[^a-zA-Z]*APPROVE' && refuse "approving a PR is David's"
 line_has '/issues/[0-9]+[^ ]* .*state[^a-z]*closed' && refuse "closing an issue is David's"
 line_has '/labels' && line_has 'accepted' && refuse "the accepted label is David's"
 
-for s in "${segments[@]}"; do
+for s in ${segments[@]+"${segments[@]}"}; do
     case $s in
     gh\ * | */gh\ *)
         [[ $s =~ (^|/)gh\ +pr\ +merge ]] && refuse "merging a PR is David's"

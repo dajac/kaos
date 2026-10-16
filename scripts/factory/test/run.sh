@@ -7,9 +7,12 @@ set -uo pipefail
 cd "$(dirname "$0")"
 TEST_DIR=$(pwd)
 export FACTORY_TEST_SCRIPTS=$(cd .. && pwd)
-# The tests must not see the caller's bot or identity.
-unset FACTORY_HOME FACTORY_IDENTITY FACTORY_SCRIPTS GH_TOKEN GIT_CONFIG_COUNT FACTORY_GIT_CONFIG_BASE \
-    GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_SSH_COMMAND
+# The tests must not see the caller's bot or identity: a Claude session
+# runs them with the bot's environment.
+unset FACTORY_HOME FACTORY_IDENTITY FACTORY_IDENTITY_DIR FACTORY_SCRIPTS FACTORY_TRUSTED GH_TOKEN GH_CONFIG_DIR \
+    GIT_CONFIG_COUNT FACTORY_GIT_CONFIG_BASE GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL \
+    GIT_SSH_COMMAND CLAUDE_ENV_FILE CLAUDE_PROJECT_DIR
+PATH=$(tr ':' '\n' <<<"$PATH" | grep -v '/scripts/factory/bin$' | paste -sd: -)
 
 passed=0
 failed=0

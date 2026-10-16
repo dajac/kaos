@@ -126,3 +126,8 @@ test_other_tools_pass() {
     jq -n '{tool_name: "Edit", tool_input: {file_path: "x"}}' |
         "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/factory-guard.sh" || fail "Edit refused"
 }
+
+test_an_empty_command_passes() {
+    without_bot
+    allowed '' ';'
+}
