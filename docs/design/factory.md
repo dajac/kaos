@@ -215,7 +215,11 @@ and PRs show as `kaos-agent[bot]`.
   - `setup` checks both: `gh api user` and a `git push --dry-run` from
     a job environment must authenticate as the bot.
 - **Commits** are authored by the bot, with
-  `Co-Authored-By: Claude <noreply@anthropic.com>`.
+  `Co-Authored-By: Claude <noreply@anthropic.com>`, and so is the
+  squash commit that lands on `main`: David merges, the bot is the
+  author. `./factory merge` passes the bot as the author of the squash
+  commit, and the orchestrator's audit of `main` flags a factory commit
+  with another author.
 
 What the bot makes simpler:
 
@@ -783,14 +787,21 @@ configs, core bug), #76 (remove the auto-pilot, likely a spec).
 
 ## Open questions
 
-1. Should small bugs that David files himself be accepted
-   automatically? This design says no: `accepted` is always his.
-2. Playwright as a `kaos-ui` dev dependency, or headless Chrome driven
-   from a script with no new dependency?
-3. Should the part of the PR body below `---` be dropped at merge? It
-   changes the current style: the "Checks" section of #53 landed in
-   the commit.
-4. Should the bot author the commits, or should David be the author
-   with the bot as committer?
-5. The `kafka` reviewer runs only on the consumer, group, proxy and
-   fault paths of `kaos-core`. Is that the right scope?
+1. Screenshots need a tool that opens the UI in a browser by itself,
+   clicks through the scenario and saves the images. Playwright, a
+   standard tool added to the dev dependencies of `kaos-ui` (never
+   shipped), or a small script of our own driving the local Chrome
+   (no new dependency, but more code to maintain)? The design assumes
+   Playwright.
+2. The `kafka` reviewer checks that the simulator behaves like real
+   Kafka (epochs, revocation, static membership) against the Kafka
+   sources, which makes it the most expensive reviewer. It runs only
+   when a PR touches the code that simulates Kafka (consumers, groups,
+   assignment, proxy, faults in `kaos-core`), not on UI, server or
+   docs changes. Is that the right trigger?
+
+Settled: David always accepts issues himself, small bugs included;
+the PR body's review material (below `---`) is dropped at merge; the
+bot authors every commit, the squash commit included; the bot is the
+GitHub App `kaos-agent`; the repository stays `dajac/kaos` on GitHub
+Free.
