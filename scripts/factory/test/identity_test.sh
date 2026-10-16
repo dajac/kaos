@@ -143,7 +143,7 @@ CURL
     assert_eq "$("$FACTORY_TEST_SCRIPTS/token.sh")" ghs_new
     assert_contains "$(cat curl.log)" "/app/installations/7/access_tokens"
     assert_eq "$(cut -d' ' -f2 home/.factory/token)" ghs_new
-    assert_eq "$(stat -f %Lp home/.factory/token)" 600
+    assert_eq "$(ls -l home/.factory/token | cut -c1-10)" -rw-------
 }
 
 test_existing_git_config_entries_are_kept() {

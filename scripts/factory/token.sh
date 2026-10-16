@@ -17,7 +17,7 @@ fi
 
 response=$(app_api POST "/app/installations/$FACTORY_INSTALLATION_ID/access_tokens")
 token=$(jq -r .token <<<"$response")
-expires=$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$(jq -r .expires_at <<<"$response")" +%s)
+expires=$(jq -r '.expires_at | fromdateiso8601' <<<"$response")
 
 umask 077
 tmp=$(mktemp "$cache.XXXXXX")
