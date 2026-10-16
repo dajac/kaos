@@ -188,9 +188,9 @@ without changing the job contract.
 
 ## Identity: the bot
 
-The factory acts as a GitHub App, `kaos-factory`, owned by David and
+The factory acts as a GitHub App, `kaos-agent`, owned by David and
 installed on `dajac/kaos` only. Its comments, reviews, pushes, labels
-and PRs show as `kaos-factory[bot]`.
+and PRs show as `kaos-agent[bot]`.
 
 - **Creation:** `./factory setup` creates the App with GitHub's App
   manifest flow (one browser confirmation), installs it on the repo and
@@ -272,8 +272,8 @@ with a second token: a classic token of David's with the `project` and
 in the Keychain. `repo` is broad, so this token is used by the board
 sync only, in the orchestrator process, and never reaches a job.
 Writing a field on a board notifies no one and shows no authorship on
-the repo. If the repository moves to an organization, the board moves
-with it and the bot's token covers both.
+the repo. The repository stays under David's account, so this second
+token stays.
 
 GitHub already offers two other views without the board: the labels,
 as saved issue searches, and David's review queue
@@ -325,7 +325,7 @@ stage label for the new one):
 | `reviewing` | `review` handoff with only `minor` and `nit` left, CI green | `in-review`: PR ready, review requested from David |
 | `reviewing` | round 2 with an open `blocker` or `major` | `blocked` |
 | `reviewing`, `in-review` | CI red, or not done after 30 minutes | `in-progress`, start `address` on the CI failure |
-| `in-review` | David requests changes, opens a review thread, or mentions `@kaos-factory` | `changes-requested` |
+| `in-review` | David requests changes, opens a review thread, or mentions `@kaos-agent` | `changes-requested` |
 | `changes-requested` | a slot is free | `in-progress`, start `address` |
 | `in-review` (child of a stack) | the parent PR is merged | `in-progress`, start `address` to rebase onto `main` |
 | any | a job fails, times out or reports `blocked` | `blocked` |
@@ -335,7 +335,7 @@ stage label for the new one):
 
 When several events land in the same poll, David's decisions win, in
 this order: closing, `accepted`, then comments. A plain comment on a
-ready PR is not a request for changes; David mentions `@kaos-factory`
+ready PR is not a request for changes; David mentions `@kaos-agent`
 when he wants an answer or a change without a formal review.
 
 Review rounds are counted in the `review` handoff (`round: 1` or `2`),
@@ -637,7 +637,7 @@ coordinator view, screenshots on UI issues, the independent review.
 ### 6. `address`, David's review and the merge
 
 David reviews the ready PR on GitHub. "Request changes", a review
-thread, or a comment mentioning `@kaos-factory` moves the issue to
+thread, or a comment mentioning `@kaos-agent` moves the issue to
 `changes-requested`, and an `address` job:
 
 1. fixes;
@@ -742,15 +742,14 @@ added.
   browser for the UX review, every run pays a cold Maven and npm
   build, and it needs an API key in the repo. Still possible later for
   triage only, since the job contract is the same.
-- **A machine user** (a second GitHub account, e.g. `kaos-bot`) instead
-  of an App. It can reach a user-owned board and needs no token
+- **A machine user** (a second GitHub account) instead of an App. It can reach a user-owned board and needs no token
   minting, but it is a full account with a long-lived token, counts as
   a collaborator, and its actions look like a person's. The App is the
   real bot, with short-lived tokens scoped to one repo.
 - **Moving `kaos` to a free organization.** It would let the App own
   the board and drop David's classic token, but it changes the repo's
-  URLs and still gives no ruleset on a private repo. It is left as an
-  open question, together with GitHub Pro.
+  URLs and still gives no ruleset on a private repo. Rejected: the repo
+  stays `dajac/kaos`.
 - **A local job directory as state** (zazencodes' factory). Invisible
   on GitHub and tied to one machine.
 - **An agent approver that merges low-risk PRs** (zazencodes).
@@ -782,15 +781,10 @@ configs, core bug), #76 (remove the auto-pilot, likely a spec).
 
 ## Open questions
 
-1. Close the two gaps that GitHub Free leaves?
-   - GitHub Pro ($4/month, same URLs) adds a ruleset on `main` that
-     the bot cannot bypass.
-   - A free organization lets the bot own the board, which removes
-     David's classic `repo` token from the factory, at the cost of new
-     URLs.
-
-   Both together close both gaps. Without either, the guard hook and
-   David's token remain.
+1. GitHub Pro ($4/month, same repo) adds a ruleset on `main` that the
+   bot cannot bypass. Without it, the guard hook and the deny rules
+   are the only barrier against a push or a merge by the bot. Worth
+   it?
 2. Should small bugs that David files himself be accepted
    automatically? This design says no: `accepted` is always his.
 3. Playwright as a `kaos-ui` dev dependency, or headless Chrome driven
