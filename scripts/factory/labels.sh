@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Creates or updates the factory's labels and migrates the issues that
-# carry the old "ready" label. Idempotent; run by "factory setup", as the
+# Creates or updates the factory's labels, migrates the issues that
+# carry the old "ready" label, and deletes the unused labels outside the
+# factory's set. Idempotent; run by "factory setup", as the
 # bot.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
@@ -50,3 +51,18 @@ if gh label list --repo "$FACTORY_REPO" --json name --jq '.[].name' | grep -qx r
     gh label delete ready --repo "$FACTORY_REPO" --yes >/dev/null
     info "deleted the label ready"
 fi
+
+# The labels outside this set are removed, but only while no issue or PR
+# carries them, so that no issue ever loses a label.
+keep=$(cut -d'|' -f1 <<<"$labels" | sed '/^$/d')
+gh label list --repo "$FACTORY_REPO" --limit 200 --json name --jq '.[].name' | while IFS= read -r name; do
+    grep -qxF -- "$name" <<<"$keep" && continue
+    used=$(gh issue list --repo "$FACTORY_REPO" --state all --label "$name" --limit 1 --json number --jq length)
+    used_by_prs=$(gh pr list --repo "$FACTORY_REPO" --state all --label "$name" --limit 1 --json number --jq length)
+    if ((used + used_by_prs > 0)); then
+        info "kept the label $name: issues or PRs carry it"
+    else
+        gh label delete "$name" --repo "$FACTORY_REPO" --yes >/dev/null
+        info "deleted the unused label $name"
+    fi
+done
