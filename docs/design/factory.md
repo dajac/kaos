@@ -236,10 +236,12 @@ What it does not fix: on GitHub Free, private repositories have no
 branch protection or rulesets, for personal accounts and free
 organizations alike. The App needs Contents write to push branches, so
 it could also merge or push to `main`. The guard hook and the deny
-rules remain the only barrier. GitHub Pro (personal, same URLs) or
-making the repository public would allow a ruleset on `main` that
-blocks direct pushes and requires David's approval to merge, which
-closes that hole server side.
+rules are the barrier, and the orchestrator detects a breach after the
+fact: on every poll it checks that each new commit on `main` comes
+from a PR merged by David. If one does not, it stops starting jobs,
+kills the running ones and alerts David. GitHub Pro would allow a
+ruleset on `main` that closes the hole server side; it is left out for
+now and can be added later without changing the design.
 
 ## The board: GitHub Projects
 
@@ -781,18 +783,14 @@ configs, core bug), #76 (remove the auto-pilot, likely a spec).
 
 ## Open questions
 
-1. GitHub Pro ($4/month, same repo) adds a ruleset on `main` that the
-   bot cannot bypass. Without it, the guard hook and the deny rules
-   are the only barrier against a push or a merge by the bot. Worth
-   it?
-2. Should small bugs that David files himself be accepted
+1. Should small bugs that David files himself be accepted
    automatically? This design says no: `accepted` is always his.
-3. Playwright as a `kaos-ui` dev dependency, or headless Chrome driven
+2. Playwright as a `kaos-ui` dev dependency, or headless Chrome driven
    from a script with no new dependency?
-4. Should the part of the PR body below `---` be dropped at merge? It
+3. Should the part of the PR body below `---` be dropped at merge? It
    changes the current style: the "Checks" section of #53 landed in
    the commit.
-5. Should the bot author the commits, or should David be the author
+4. Should the bot author the commits, or should David be the author
    with the bot as committer?
-6. The `kafka` reviewer runs only on the consumer, group, proxy and
+5. The `kafka` reviewer runs only on the consumer, group, proxy and
    fault paths of `kaos-core`. Is that the right scope?
