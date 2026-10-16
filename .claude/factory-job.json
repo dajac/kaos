@@ -1,0 +1,125 @@
+{
+  "disableAllHooks": false,
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit(./**)",
+      "Write(./**)",
+      "Glob",
+      "Grep",
+      "Agent",
+      "Skill",
+      "TodoWrite",
+      "WebSearch",
+      "WebFetch",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(./mvnw *)",
+      "Bash(./run.sh *)",
+      "Bash(./factory *)",
+      "Bash(scripts/factory/*)",
+      "Bash(./scripts/factory/*)",
+      "Bash(bash scripts/factory/*)",
+      "Bash(bash ./scripts/factory/*)",
+      "Bash(npm *)",
+      "Bash(docker ps*)",
+      "Bash(docker logs *)",
+      "Bash(docker stop *)",
+      "Bash(docker rm *)",
+      "Bash(docker inspect *)",
+      "Bash(java *)",
+      "Bash(jar *)",
+      "Bash(javap *)",
+      "Bash(curl *)",
+      "Bash(jq *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(find *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(wc *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(diff *)",
+      "Bash(cut *)",
+      "Bash(tr *)",
+      "Bash(xargs *)",
+      "Bash(tee *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(rm *)",
+      "Bash(touch *)",
+      "Bash(chmod *)",
+      "Bash(echo *)",
+      "Bash(printf *)",
+      "Bash(test *)",
+      "Bash(sleep *)",
+      "Bash(date *)",
+      "Bash(kill *)",
+      "Bash(lsof *)",
+      "Bash(ps *)",
+      "Bash(pwd)",
+      "Bash(cd *)",
+      "Bash(bash -n *)",
+      "Bash(which *)",
+      "Bash(command -v *)",
+      "Bash(mktemp*)",
+      "Bash(basename *)",
+      "Bash(dirname *)",
+      "Bash(realpath *)",
+      "Bash(true)",
+      "Bash(false)"
+    ],
+    "deny": [
+      "Bash(gh pr merge*)",
+      "Bash(gh issue close*)",
+      "Bash(gh auth*)",
+      "Bash(gh pr review*--approve*)",
+      "Bash(gh pr review*-a *)",
+      "Bash(git push*main)",
+      "Bash(git push*:main*)",
+      "Bash(git push*+main*)",
+      "Bash(git push*refs/heads/main*)",
+      "Bash(git push*--no-verify*)",
+      "Bash(./factory merge*)",
+      "Bash(*merge.sh*)",
+      "Bash(ssh *)",
+      "Edit(./.claude/settings.local.json)",
+      "Write(./.claude/settings.local.json)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.netrc)",
+      "Read(~/.git-credentials)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$FACTORY_TRUSTED\"/.claude/hooks/session-identity.sh",
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$FACTORY_TRUSTED\"/.claude/hooks/factory-guard.sh",
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

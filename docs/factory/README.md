@@ -175,21 +175,44 @@ always passes one:
   `--permission-prompts none` tells Claude not to retry a denied call.
   A job that needs something not allowed fails cleanly, and its issue
   goes to `blocked`; it never hangs on a prompt.
-- `factory-job.json` holds the allowlist (`./mvnw`, `npm`, `git`, `gh`,
-  `docker`, the factory scripts, edits in the worktree), the deny rules
-  and the guard hook (see "Guardrails"). It is read from the **main
-  checkout**, not from the job's worktree. A job can edit its own
-  branch's `.claude/`, but not the rules that bind it: deny rules win
-  over any allow rule the branch adds, and the hook from the main
-  checkout runs whatever the branch's copy says.
+- `.claude/factory-job.json` holds the allowlist, the deny rules,
+  `"disableAllHooks": false`, and the `SessionStart` and guard hooks
+  (see "Guardrails"). It is read from the trusted checkout (planned:
+  `.claude/worktrees/factory-main`, kept at `origin/main` by the loop),
+  not from the job's worktree, and finds the hooks through
+  `$FACTORY_TRUSTED`, which `job.sh` exports. Both hooks have
+  `"onFailure": "block"`: a hook that cannot run blocks the command
+  rather than letting it through without the bot's identity.
+  - Allowed: reads anywhere but the credentials (`~/.config/gh`,
+    `~/.ssh`, `~/.netrc`, `~/.git-credentials` are denied), edits and
+    writes under the job's worktree only (`Edit(./**)`), subagents,
+    skills, and Bash for `git`, `gh`, `./mvnw`, `npm`, `curl`, `jq`,
+    `java`, the read-only `docker` commands, the factory scripts of the
+    worktree, and the usual file tools. Not allowed: `node`, `npx`,
+    `docker run`, and a bare `Bash`, `Edit` or `Write`.
+  - In `dontAsk`, a compound command runs only when each part is
+    allowed, and Claude Code refuses `cd` inside a compound, `$(...)`
+    in an assignment, and `for` loops: the job skills use `git -C`,
+    paths and one command per call instead. A job does not write a
+    script to run it: the guard checks the commands it sees, not the
+    contents of a file.
+  - The project settings of the job's worktree still load, with their
+    hooks: Claude Code drops their allow rules in `-p` runs, but a
+    project hook could answer "allow". `--setting-sources user` would
+    exclude them, but also the project's `CLAUDE.md` and skills, and
+    keep David's user `CLAUDE.md`, so it is not used. Instead the deny
+    rules and the guard refuse `.claude/settings.local.json`, and
+    `job.sh` refuses to start a job whose worktree has one (planned).
+    A branch that changes `.claude/settings.json` is factory work,
+    which goes through a spec and David's review.
 - The `stream-json` log, `.factory/logs/<N>-<kind>.jsonl`, is what
   `./factory logs` follows and what the `blocked` comment quotes.
 
 ## Running it
 
 One script at the root of the repository, `./factory`. `setup` (bot,
-identity check, labels) and `whoami` are built; the other commands are
-planned.
+identity check, labels), `whoami` and `merge` are built; the other
+commands are planned.
 
 | Command | Does |
 |---|---|
@@ -202,7 +225,7 @@ planned.
 | `./factory run <kind> <N>` | Queues one job, e.g. `./factory run triage 76` |
 | `./factory pause` / `resume` | Stop or restart new jobs without stopping the loop |
 | `./factory try <PR>` | Builds and runs the PR locally with its scenario (see "Try it") |
-| `./factory merge <PR>` | David's merge (see stage 6) |
+| `./factory merge <PR>` | David's merge, in his own terminal (see stage 6) |
 
 `./factory up --at-login` installs a launchd agent instead, so the
 loop survives reboots. launchd does not inherit the shell's `PATH`,
@@ -274,7 +297,7 @@ and PRs show as `kaos-agent[bot]`.
     (`.claude/hooks/session-identity.sh`), which writes a line sourcing
     the main checkout's `identity.sh` to `CLAUDE_ENV_FILE`: Claude Code
     runs it before every Bash command. Jobs and ticks get it the same
-    way, from `factory-job.json` (planned).
+    way, from the `SessionStart` hook of `factory-job.json`.
   - The guard hook (`.claude/hooks/factory-guard.sh`, see
     "Guardrails") refuses the commands that would undo it: setting
     `GH_TOKEN`, `GIT_CONFIG_*`, `GIT_AUTHOR_*` or `PATH`, `unset` or
@@ -627,9 +650,20 @@ one verdict line: `GATES: PASS`, `GATES: FAIL <step>` or
 `GATES: MISCONFIGURED <why>` (Docker missing, wrong JDK). Jobs quote
 that line, so a skipped step can never read as a pass.
 
-- `quick`: `./mvnw spotless:apply`, then `./mvnw verify -DskipITs`.
-- `full`: `./mvnw verify`, integration tests included (needs Docker).
-  Required before a PR leaves draft.
+It runs from the root of the worktree it is called in, and checks the
+JDK (21 or later, the one of `JAVA_HOME` when set, as `./mvnw` does)
+and, for `full`, Docker, before anything else. Then:
+
+- `format`: `./mvnw spotless:check`; it only checks, so that the
+  verdict is about the tree the job pushes: a job runs
+  `./mvnw spotless:apply` and commits the result first;
+- `factory-tests`: `scripts/factory/test/run.sh`;
+- `verify`: `./mvnw verify -DskipITs` for `quick`, `./mvnw verify`
+  with the integration tests for `full`, which is required before a PR
+  leaves draft.
+
+Each step logs to `.factory/logs/gates-<step>.log` in the worktree; a
+failing step prints its last 60 lines before the verdict.
 
 CI keeps running `./mvnw verify` on every PR. The orchestrator moves a
 PR to `in-review` only once CI is green, and waits at most 30 minutes.
@@ -734,7 +768,7 @@ The review guides (what each angle checks, with Kaos examples) live in
 Lessons that today sit in one user's local memory move there: the
 coordinator view, screenshots on UI issues, the independent review.
 
-### 6. `address`, David's review and the merge (planned)
+### 6. `address` (planned), David's review and the merge
 
 David reviews the ready PR on GitHub. "Request changes", a review
 thread, or a comment mentioning `@kaos-agent` moves the issue to
@@ -751,12 +785,21 @@ the touched paths) before the PR comes back to David.
 Approval is David's GitHub "Approve" with every thread resolved and CI
 green. Only David merges, in one of two ways:
 
-- `./factory merge <PR>`: it runs with David's own `gh` login, checks
-  the approval, the threads and CI, and squashes with the part of the
-  body above `---`.
+- `./factory merge <PR>` (`scripts/factory/merge.sh`), in his own
+  terminal. It refuses to run with the bot's identity or with a `gh`
+  logged in as anyone else, and merges only a PR that is open, not a
+  draft, based on `main`, whose last review by David approves its
+  current head, with no unresolved thread and every check green. It
+  squashes with the PR title and `(#N)` (once), and the body above
+  the `---` rule without its HTML comments, prints the author GitHub
+  recorded, and deletes the branch, which makes GitHub retarget the PRs
+  based on it to `main`. GitHub does not let anyone approve their own
+  PR, so the bootstrap PRs, opened under David's handle, are merged
+  with the button.
 - The "Squash and merge" button, after trimming the message himself.
 
-The orchestrator does the cleanup either way, after it sees the merge:
+The orchestrator (planned) does the rest of the cleanup either way,
+after it sees the merge:
 
 - deletes the branch, and the spec branch with the last PR of the
   issue;
@@ -770,9 +813,8 @@ The orchestrator does the cleanup either way, after it sees the merge:
 
 A `PreToolUse` hook, `.claude/hooks/factory-guard.sh`, refuses these
 commands. It is registered in the committed `.claude/settings.json`,
-for every session, and will be registered again in
-`.claude/factory-job.json` (planned), which jobs load from the main
-checkout. It checks each simple command of the line on its own, so
+for every session, and again in `.claude/factory-job.json`, which jobs
+load from the main checkout. It checks each simple command of the line on its own, so
 that `git push origin x && git checkout main` is not mistaken for a
 push to `main`. The refused commands are:
 
@@ -789,8 +831,10 @@ push to `main`. The refused commands are:
 Its tests are in `scripts/factory/test/guard_test.sh`. It matches these
 exact subcommands, so `Closes #N` in a PR body stays
 allowed. Hooks are a guardrail, not a security boundary: the job
-instructions state the same rules, `factory-job.json` repeats them as
-deny rules (planned), and the orchestrator checks the `accepted` gate
+instructions state the same rules, `factory-job.json` repeats the
+plainest forms as deny rules (the guard is the real check: a deny
+pattern cannot tell `git push origin main` from every way to write it),
+and the orchestrator checks the `accepted` gate
 against the timeline (planned). Before every job, the orchestrator
 also checks that the main checkout's `factory-job.json` and hook match
 `main`, and refuses to start a job if they do not (planned). Changes to the factory itself
@@ -815,6 +859,9 @@ scripts/factory/test/                 the tests of the scripts (test/run.sh)
 .claude/settings.json                 the SessionStart and guard hooks, for every session
 .claude/hooks/session-identity.sh     sources identity.sh before every command
 .claude/hooks/factory-guard.sh        the guard
+.claude/factory-job.json              settings of the jobs: allowlist, deny rules, hooks
+scripts/factory/gates.sh              the checks, with one verdict line
+scripts/factory/merge.sh              David's merge
 .github/ISSUE_TEMPLATE/{bug,feature,task}.yml, config.yml
 .github/pull_request_template.md
 docs/factory/README.md                this document
@@ -828,10 +875,9 @@ scripts/factory/status.sh             the snapshot (gh + jq)
 scripts/factory/stage.sh              legal stage transitions, nothing else
 scripts/factory/pipeline.sh           renders the Pipeline issue (gh + jq)
 scripts/factory/job.sh                runs one job or tick headless, with limits
-scripts/factory/{gates,try-pr,capture,merge}.sh
+scripts/factory/{try-pr,capture}.sh
 scripts/factory/scenarios/*.json
 scripts/factory/captures/<N>.txt      the shots of a PR
-.claude/factory-job.json              settings of the jobs: allowlist, deny rules, hook
 .claude/skills/factory/SKILL.md       /factory in an interactive session
 .claude/skills/factory-tick/SKILL.md  the transitions and the choice of the next job
 .claude/skills/factory-{triage,spec,build,review,address}/SKILL.md
@@ -902,7 +948,7 @@ applies to everything, the remaining rollout steps included.
    and the guard hook; the labels and their migration; issue forms;
    PR template; `docs/factory/README.md`; the `.gitignore` changes and
    the `CLAUDE.md` pointer.
-2. `factory-job.json`, `gates.sh`, `./factory merge`.
+2. Built. `factory-job.json`, `gates.sh`, `./factory merge`.
 3. The loop, `status.sh`, `stage.sh` and their tests, `job.sh`, the
    Pipeline issue, `./factory up/down/status/logs/run`, the `tick` and
    `triage` skills. Pilot on the open issues.

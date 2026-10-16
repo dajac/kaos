@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# A fake gh for the tests. It answers from files in $FAKE_GH and logs
+# every call to $FAKE_GH/calls:
+#   issue view N         -> issue-N.json
+#   pr view N            -> pr-N.json
+#   pr checks N          -> checks-N.json (or [])
+#   issue list / pr list -> issues.json / prs.json (or [])
+#   api [-X M] PATH      -> api/PATH with every / turned into _, or
+#                           api/M_PATH for a method other than GET (or [])
+#   anything else        -> nothing, success
+# --jq is applied to the answer, as gh does.
+echo "$*" >>"$FAKE_GH/calls"
+jq_filter=
+method=GET
+path=
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+    case ${args[i]} in
+    --jq) jq_filter=${args[i + 1]}; i=$((i + 1)) ;;
+    -X | --method) method=${args[i + 1]}; i=$((i + 1)) ;;
+    -f | -F | --field | --raw-field | -H | --header | --repo | -R | --json | --search | --state | --limit | --base | --label)
+        i=$((i + 1)) ;;
+    esac
+done
+answer() {
+    if [[ -n $jq_filter ]]; then jq -r "$jq_filter"; else cat; fi
+}
+case "$1 $2" in
+"issue view") answer <"$FAKE_GH/issue-$3.json" ;;
+"pr view") answer <"$FAKE_GH/pr-$3.json" ;;
+"pr checks") (cat "$FAKE_GH/checks-$3.json" 2>/dev/null || echo '[]') | answer ;;
+"issue list") (cat "$FAKE_GH/issues.json" 2>/dev/null || echo '[]') | answer ;;
+"pr list") (cat "$FAKE_GH/prs.json" 2>/dev/null || echo '[]') | answer ;;
+api\ *)
+    for ((i = 1; i < ${#args[@]}; i++)); do
+        case ${args[i]} in
+        --jq | -X | --method | -f | -F | --field | --raw-field | -H | --header) i=$((i + 1)) ;;
+        -*) ;;
+        *) path=${args[i]}; break ;;
+        esac
+    done
+    file=$FAKE_GH/api/${path//\//_}
+    [[ $method != GET ]] && file=$FAKE_GH/api/${method}_${path//\//_}
+    if [[ -f $file ]]; then answer <"$file"; else echo '[]' | answer; fi
+    ;;
+esac
