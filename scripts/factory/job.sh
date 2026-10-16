@@ -3,7 +3,7 @@
 # issue, or a tick. Called by the loop, one at a time.
 #
 # Usage: scripts/factory/job.sh <triage|spec|build|review|address> <issue>
-#        scripts/factory/job.sh tick <snapshot.json> <previous-snapshot.json> last-job=<kind:N:status|none> [<kind:N>...]
+#        scripts/factory/job.sh tick <snapshot.json> <previous-snapshot.json> last-job=<kind:N:status:log|none> [<kind:N>...]
 #
 # It prepares the worktree of the job (see docs/factory/README.md,
 # "Architecture"), runs "claude -p /factory-<kind> <issue>" there with
@@ -54,10 +54,16 @@ slug() {
 }
 
 # A worktree on <branch>, created from <start> unless the branch already
-# exists on origin, in which case it continues from there.
+# exists on origin, in which case it continues from there. An existing
+# worktree is fast-forwarded to origin's branch.
 branch_worktree() {
     local dir=$1 branch=$2 start=$3
     if [[ -d $dir ]]; then
+        if git -C "$FACTORY_HOME" ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git -C "$dir" fetch -q origin "$branch"
+            git -C "$dir" merge -q --ff-only FETCH_HEAD ||
+                die "$dir has diverged from origin/$branch; fix it by hand"
+        fi
         return
     fi
     if git -C "$FACTORY_HOME" ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
@@ -81,8 +87,14 @@ git -C "$FACTORY_HOME" fetch -q origin
 cleanup_dir=
 case $kind in
 tick)
+    # The tick runs in the trusted checkout and reads its inputs from
+    # there, under .factory/ (gitignored).
     dir=$trusted
-    prompt="/factory-tick $arg $*"
+    mkdir -p "$dir/.factory/tick"
+    cp "$arg" "$dir/.factory/tick/snapshot.json"
+    cp "${1:?previous snapshot}" "$dir/.factory/tick/previous.json"
+    shift
+    prompt="/factory-tick .factory/tick/snapshot.json .factory/tick/previous.json $*"
     ;;
 triage)
     dir=$worktrees/triage-$arg
@@ -132,7 +144,14 @@ flags=(-p "$prompt"
     --max-budget-usd "$budget"
     --output-format stream-json --verbose)
 if [[ $kind == tick ]]; then
-    flags+=(--json-schema "$(cat "$FACTORY_SCRIPTS/tick-schema.json")")
+    # The tick reads untrusted issue text in the checkout whose scripts
+    # guard it: it may write its comment files under .factory/ and
+    # nothing else.
+    flags+=(--json-schema "$(cat "$FACTORY_SCRIPTS/tick-schema.json")" --disallowedTools)
+    for path in ./scripts/** ./.claude/** ./.github/** ./docs/** ./config/** ./kaos-core/** ./kaos-server/** ./kaos-ui/** \
+        ./factory ./pom.xml ./mvnw ./run.sh ./CLAUDE.md ./README.md; do
+        flags+=("Edit($path)" "Write($path)")
+    done
 fi
 
 start=$(date +%s)
@@ -149,6 +168,8 @@ while kill -0 "$pid" 2>/dev/null; do
         kill -INT "$pid" 2>/dev/null || true
         sleep 10
         kill -TERM "$pid" 2>/dev/null || true
+        sleep 10
+        kill -KILL "$pid" 2>/dev/null || true
         break
     fi
     sleep 5
@@ -157,6 +178,15 @@ code=0
 wait "$pid" || code=$?
 [[ $status == ok && $code != 0 ]] && status=failed
 rm -f "$FACTORY_STATE/job.json"
+
+# The tick may write under .factory/ only; anything else it changed in
+# the trusted checkout is reverted, and reported.
+if [[ $kind == tick && -n $(git -C "$trusted" status --porcelain) ]]; then
+    info "the tick changed the trusted checkout: $(git -C "$trusted" status --porcelain | tr '\n' ' '); reverting"
+    git -C "$trusted" checkout -q --force HEAD
+    git -C "$trusted" clean -q -fd -e .factory
+    status=failed
+fi
 
 if [[ -n $cleanup_dir ]]; then
     git -C "$FACTORY_HOME" worktree remove --force "$cleanup_dir" 2>/dev/null || true

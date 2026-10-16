@@ -173,8 +173,11 @@ Below, "the orchestrator" means the loop and its ticks together.
   overridable with `FACTORY_LIMIT_MINUTES` and `FACTORY_BUDGET_USD`:
   tick 10 minutes and $1, triage 30 and $3, spec 45 and $8, build 90
   and $20, review 45 and $12, address 60 and $12. A job that hits
-  one is stopped and its issue goes to `blocked` with the tail of its
-  log.
+  one is stopped (interrupt, then terminate, then kill), and the next
+  tick blocks its issue, naming the job's log in `.factory/logs/`.
+- After a failed job, the next tick waits for the next poll, so that a
+  job failing at start cannot spin; the tick then blocks the issue
+  rather than retrying.
 
 ### Permissions of a job
 
@@ -184,8 +187,14 @@ always passes one:
 
     claude -p "/factory-build 75" \
       --permission-mode dontAsk --permission-prompts none \
-      --settings <main checkout>/.claude/factory-job.json \
+      --settings .claude/worktrees/factory-main/.claude/factory-job.json \
       --max-budget-usd <cap> --output-format stream-json --verbose
+
+The tick also gets `--json-schema` and `--disallowedTools` rules that
+deny it any edit outside `.factory/` of the trusted checkout, where it
+runs: it reads text anyone can write and sits next to the scripts that
+guard it. `job.sh` reverts and reports any other change it finds after
+the tick.
 
 - `dontAsk` denies every call that no allow rule covers, and
   `--permission-prompts none` tells Claude not to retry a denied call.
@@ -193,8 +202,8 @@ always passes one:
   goes to `blocked`; it never hangs on a prompt.
 - `.claude/factory-job.json` holds the allowlist, the deny rules,
   `"disableAllHooks": false`, and the `SessionStart` and guard hooks
-  (see "Guardrails"). It is read from the trusted checkout (planned:
-  `.claude/worktrees/factory-main`, kept at `origin/main` by the loop),
+  (see "Guardrails"). It is read from the trusted checkout
+  (`.claude/worktrees/factory-main`, kept at `origin/main` by the loop),
   not from the job's worktree, and finds the hooks through
   `$FACTORY_TRUSTED`, which `job.sh` exports. Both hooks have
   `"onFailure": "block"`: a hook that cannot run blocks the command
@@ -437,27 +446,32 @@ the old stage label for the new one):
 
 | From | Event | To |
 |---|---|---|
-| none | issue opened, or any open issue without a stage label | `needs-triage`, start `triage` |
-| `needs-triage` | `triage` handoff | `triaged` or `needs-info` |
+| none | issue opened, or any open issue without a stage label | `needs-triage` |
+| `needs-triage` | a `triage` handoff, nothing from David after it | `triaged`, or `needs-info` |
+| `needs-triage` | otherwise | start `triage` |
 | `needs-info` | a new comment from anyone but the bot | `needs-triage` |
 | `triaged` | David adds `accepted` | `queued` |
 | `triaged` | a new comment from David, no `accepted` | `needs-triage` |
-| `queued` + `needs-spec` | a slot is free | `spec-review`, start `spec` |
-| `spec-review` | David requests changes or comments | start `spec` again |
-| `spec-review` | David approves the spec PR | `queued`, `needs-spec` removed |
-| `queued`, no `needs-spec` | a build slot is free | `in-progress`, start `build` |
-| `in-progress` | `build` or `address` handoff, PR pushed | `reviewing`, start `review` (full after `build`, light after `address`) |
-| `reviewing` | `review` handoff with open `blocker` or `major` findings, round 1 | `in-progress`, start `address` |
-| `reviewing` | `review` handoff with only `minor` and `nit` left, CI green | `in-review`: PR ready, review requested from David |
+| `queued` + `needs-spec` | the job is chosen | `spec-review`, start `spec` |
+| `spec-review` | no spec PR yet, or David requests changes or comments | start `spec` again |
+| `spec-review` | David approves the spec PR on its head | `queued`, `needs-spec` removed, spec PR closed |
+| `queued`, no `needs-spec` | the job is chosen, fewer than two PRs wait for David | `in-progress`, start `build` |
+| `in-progress` | a `build` or `address` handoff, PR pushed | `reviewing`, start `review` |
+| `reviewing` | a `review` handoff with open `blocker` or `major` findings, round 1; or CI red; or CI not done 30 minutes after the review | `in-progress`, start `address` |
+| `reviewing` | a `review` handoff with only `minor` and `nit` left, CI green | `in-review`: PR ready, review requested from David |
 | `reviewing` | round 2 with an open `blocker` or `major` | `blocked` |
-| `reviewing`, `in-review` | CI red, or not done after 30 minutes | `in-progress`, start `address` on the CI failure |
 | `in-review` | David requests changes, opens a review thread, or mentions `@kaos-agent` | `changes-requested` |
-| `changes-requested` | a slot is free | `in-progress`, start `address` |
-| `in-review` (child of a stack) | the parent PR is merged | `in-progress`, start `address` to rebase onto `main` |
-| any | a job fails, times out or reports `blocked` | `blocked` |
-| `blocked` | a new comment from David | the stage named in the blocking comment |
-| `in-review` | David merges | issue closed by `Closes #N`, cleanup |
-| any | David closes the issue, or closes the PR without merging | running job killed, worktree and branch removed, issue closed or back to `triaged` |
+| `in-review` | CI red | `in-progress`, start `address` |
+| `changes-requested` | the job is chosen | `in-progress`, start `address` |
+| `in-review` (child of a stack, planned) | the parent PR is merged | `in-progress`, start `address` to rebase onto `main` |
+| any | a job fails, times out, ends without a handoff, or reports `blocked` | `blocked` |
+| `blocked` | a new comment from David | the stage it was blocked from (`stage.sh` allows nothing else but `needs-triage`) |
+| `in-review` | David merges | issue closed by `Closes #N`; the next tick removes the local worktree and branch |
+| `in-progress`, `reviewing`, `in-review` | the PR is closed without merging | `blocked` |
+
+The table is the summary; the rules the tick applies, with their exact
+conditions and their order, are in `.claude/skills/factory-tick/SKILL.md`.
+`stage.sh` refuses any transition outside this table.
 
 When several events land in the same poll, David's decisions win, in
 this order: closing, `accepted`, then comments. A plain comment on a
@@ -816,14 +830,13 @@ green. Only David merges, in one of two ways:
   with the button.
 - The "Squash and merge" button, after trimming the message himself.
 
-The orchestrator (planned) does the rest of the cleanup either way,
-after it sees the merge:
-
-- deletes the branch, and the spec branch with the last PR of the
-  issue;
-- removes the worktree;
-- rebases the child of a stacked PR;
-- updates the Pipeline issue.
+The orchestrator does the rest of the cleanup either way, after it
+sees the merge: the next tick removes the local worktree and branch of
+a merged bot PR (`scripts/factory/cleanup.sh`, which touches only
+`<N>-<slug>` and `spec/<N>-<slug>` branches and keeps a worktree with
+uncommitted changes), and the Pipeline issue drops the issue. Deleting
+the spec branch with the last PR of the issue and rebasing the child of
+a stacked PR are planned.
 
 `Closes #N` closes the issue.
 

@@ -103,6 +103,20 @@ log() {
     echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"
 }
 
+# True when issue N is in the stage the tick must have moved it to before
+# choosing the job: the loop runs no job the stage machine did not allow.
+stage_fits() {
+    local kind=$1 issue=$2 stage
+    stage=$(gh issue view "$issue" --repo "$FACTORY_REPO" --json labels --jq '[.labels[].name] | join(" ")')
+    case $kind in
+    triage) [[ " $stage " == *" needs-triage "* ]] ;;
+    spec) [[ " $stage " == *" spec-review "* ]] ;;
+    build | address) [[ " $stage " == *" in-progress "* ]] ;;
+    review) [[ " $stage " == *" reviewing "* ]] ;;
+    *) return 1 ;;
+    esac
+}
+
 # The loop: one orchestrator per repository, held by the lock. Every
 # poll it refreshes the trusted checkout, takes a snapshot and, when
 # something changed (or a job just ended, or David queued a request, or
@@ -123,7 +137,7 @@ cmd_loop() {
     . "$FACTORY_SCRIPTS/identity.sh"
     log "loop up (pid $$, poll ${poll}s)"
 
-    local snapshot=$FACTORY_STATE/snapshot.json last_hash= hash last_tick=0 job_ended=false last_job='none'
+    local snapshot=$FACTORY_STATE/snapshot.json last_hash= hash last_tick=0 job_ended=false last_job=none
     [[ -f $FACTORY_STATE/tick-snapshot.json ]] || echo '{"issues": [], "prs": [], "closed_prs": []}' >"$FACTORY_STATE/tick-snapshot.json"
     while [[ ! -f $FACTORY_STATE/stop ]]; do
         if ! FACTORY_TRUSTED=$("$FACTORY_SCRIPTS/trusted.sh"); then
@@ -140,10 +154,12 @@ cmd_loop() {
         fi
         mv "$snapshot.new" "$snapshot"
         hash=$(shasum <"$snapshot" | cut -d' ' -f1)
-        local requests=()
+        local requests=() request_files=()
         local request
         for request in "$FACTORY_STATE/requests"/*; do
-            [[ -f $request ]] && requests+=("$(cat "$request")")
+            [[ -f $request ]] || continue
+            requests+=("$(cat "$request")")
+            request_files+=("$request")
         done
 
         if [[ ! -f $FACTORY_STATE/paused ]] &&
@@ -152,30 +168,47 @@ cmd_loop() {
             job_ended=false
             local tick
             tick=$("$scripts/job.sh" tick "$snapshot" "$FACTORY_STATE/tick-snapshot.json" "last-job=$last_job" "${requests[@]}" | tail -n 1) || tick='{}'
-            cp "$snapshot" "$FACTORY_STATE/tick-snapshot.json"
-            rm -f "$FACTORY_STATE/requests"/*
+            jq -e . <<<"$tick" >/dev/null 2>&1 || tick='{"status": "failed"}'
             log "tick: $(jq -c '{status, cost, result}' <<<"$tick")"
+            if [[ $(jq -r .status <<<"$tick") == ok ]]; then
+                cp "$snapshot" "$FACTORY_STATE/tick-snapshot.json"
+                ((${#request_files[@]})) && rm -f "${request_files[@]}"
+            fi
+            last_job=none
             local kind issue
             kind=$(jq -r '.result.job // empty' <<<"$tick")
             issue=$(jq -r '.result.issue // empty' <<<"$tick")
+            if [[ -n $kind && -n $issue ]] && ! stage_fits "$kind" "$issue"; then
+                log "job: $kind #$issue skipped, the issue is not in the stage of that job"
+                kind=
+            fi
             if [[ -n $kind && -n $issue && ! -f $FACTORY_STATE/stop ]]; then
                 log "job: $kind #$issue"
+                echo "{\"kind\": \"$kind\", \"issue\": \"$issue\"}" >"$FACTORY_STATE/job.json"
+                "$scripts/pipeline.sh" update "$snapshot" || true
                 local done
                 done=$("$scripts/job.sh" "$kind" "$issue" | tail -n 1) || done='{"status": "failed"}'
+                jq -e . <<<"$done" >/dev/null 2>&1 || done='{"status": "failed"}'
+                rm -f "$FACTORY_STATE/job.json"
                 log "job: $kind #$issue: $(jq -c '{status, seconds, cost, log}' <<<"$done")"
-                last_job="$kind:$issue:$(jq -r '.status // "failed"' <<<"$done")"
-                job_ended=true
+                local status
+                status=$(jq -r '.status // "failed"' <<<"$done")
+                last_job="$kind:$issue:$status:$(basename "$(jq -r '.log // "none"' <<<"$done")")"
+                # After a success, the next tick comes at once to read the
+                # handoff; after a failure, it waits for the poll, so that a
+                # job failing on start cannot spin.
+                [[ $status == ok ]] && job_ended=true
+                [[ $status != ok ]] && last_tick=0
             fi
             "$scripts/status.sh" >"$snapshot" || true
             hash=$(shasum <"$snapshot" | cut -d' ' -f1)
         fi
         last_hash=$hash
-        $job_ended || last_job=none
         "$scripts/pipeline.sh" update "$snapshot" || log "cannot update the Pipeline issue"
         $job_ended && continue
         local slept=0
         while ((slept < poll)) && [[ ! -f $FACTORY_STATE/stop ]]; do
-            [[ -n $(ls -A "$FACTORY_STATE/requests" 2>/dev/null) ]] && break
+            [[ ! -f $FACTORY_STATE/paused && -n $(ls -A "$FACTORY_STATE/requests" 2>/dev/null) ]] && break
             sleep 5
             slept=$((slept + 5))
         done

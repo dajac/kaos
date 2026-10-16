@@ -9,8 +9,11 @@
 # - triaged -> queued, and queued -> spec-review or in-progress, need the
 #   accepted label, added by David (checked on the issue's timeline);
 # - queued -> in-progress needs no needs-spec;
-# - spec-review -> queued needs --spec-approved with a spec PR whose
-#   last review by David approves its head; it removes needs-spec.
+# - spec-review -> queued needs --spec-approved with the issue's spec PR
+#   (head spec/<issue>-...) whose last review by David approves its
+#   head; it removes needs-spec;
+# - blocked goes back only to the stage it was blocked from, or to
+#   needs-triage, so that blocking an issue never skips a gate.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
@@ -43,8 +46,7 @@ is_stage() {
 is_stage "$to" || die "unknown stage '$to'"
 
 # The legal transitions, "from to" pairs; "none" is an issue without a
-# stage label. Any stage may go to blocked, and blocked may go back to
-# any stage but needs-triage's predecessor "none".
+# stage label. Any stage may go to blocked; blocked is checked below.
 legal() {
     local from=$1 to=$2
     [[ $to == blocked && $from != blocked ]] && return 0
@@ -92,6 +94,22 @@ accepted_by_david() {
     [[ $actor == "$FACTORY_DAVID" ]]
 }
 
+# The stage an issue was blocked from: the stage label removed by the
+# same edit that added blocked, the last time it was added.
+blocked_from() {
+    gh api "repos/$FACTORY_REPO/issues/$issue/timeline" --paginate | jq -rs --argjson stages "$(printf '%s\n' "${stages[@]}" | jq -R . | jq -s .)" '
+        [.[][] | select(.event == "labeled" or .event == "unlabeled")] as $events
+        | ([$events[] | select(.event == "labeled" and .label.name == "blocked")] | last | .created_at) as $at
+        | if $at == null then "none" else
+            ([$events[] | select(.event == "unlabeled" and .created_at == $at and (.label.name as $l | $stages | index($l)))] | last | .label.name) // "none"
+          end'
+}
+
+if [[ $from == blocked && $to != needs-triage ]]; then
+    origin=$(blocked_from)
+    [[ $to == "$origin" ]] || die "#$issue was blocked from $origin; it goes back there or to needs-triage, not to $to"
+fi
+
 remove=("$from")
 case "$from $to" in
 "triaged queued" | "queued spec-review" | "queued in-progress")
@@ -107,7 +125,9 @@ case "$from $to" in
     ;;
 "spec-review queued")
     [[ -n $spec_pr ]] || die "#$issue: spec-review -> queued needs --spec-approved <PR>"
-    head=$(gh pr view "$spec_pr" --repo "$FACTORY_REPO" --json headRefOid | jq -r .headRefOid)
+    spec=$(gh pr view "$spec_pr" --repo "$FACTORY_REPO" --json headRefOid,headRefName)
+    [[ $(jq -r .headRefName <<<"$spec") == spec/"$issue"-* ]] || die "#$spec_pr is not the spec PR of #$issue"
+    head=$(jq -r .headRefOid <<<"$spec")
     review=$(gh api "repos/$FACTORY_REPO/pulls/$spec_pr/reviews" --paginate |
         jq -s --arg david "$FACTORY_DAVID" '[.[][] | select(.user.login == $david and (.state == "APPROVED" or .state == "CHANGES_REQUESTED"))] | last // empty')
     [[ -n $review && $(jq -r .state <<<"$review") == APPROVED && $(jq -r .commit_id <<<"$review") == "$head" ]] ||

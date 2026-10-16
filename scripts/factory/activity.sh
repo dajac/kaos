@@ -54,7 +54,7 @@ jq -n --argjson issue "$issue" --arg bot "$bot" --arg david "$FACTORY_DAVID" \
     --argjson comments "$comments" --argjson timeline "$timeline" --argjson prs "$prs" --argjson details "$pr_details" '
     def checks:
         if (. // []) | length == 0 then "none"
-        elif any(.[]; (.conclusion // .state) as $s | $s == "FAILURE" or $s == "ERROR" or $s == "CANCELLED" or $s == "TIMED_OUT" or $s == "ACTION_REQUIRED") then "fail"
+        elif any(.[]; (.conclusion // .state) as $s | $s == "FAILURE" or $s == "ERROR" or $s == "CANCELLED" or $s == "TIMED_OUT" or $s == "ACTION_REQUIRED" or $s == "STARTUP_FAILURE" or $s == "STALE") then "fail"
         elif any(.[]; (.status // "COMPLETED") != "COMPLETED" or .state == "PENDING" or .state == "EXPECTED") then "pending"
         else "pass" end;
     def handoff_of:

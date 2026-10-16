@@ -19,8 +19,7 @@ render() {
     [[ -f $FACTORY_STATE/job.json ]] && job=$(cat "$FACTORY_STATE/job.json")
     [[ -f $FACTORY_STATE/paused ]] && paused=yes
     jq -r --arg loop "$loop" --arg paused "$paused" --argjson job "$job" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
-        def ago($t): ((($now | fromdateiso8601) - ($t | fromdateiso8601)) / 60 | floor) as $m
-            | if $m < 60 then "\($m) min" elif $m < 2880 then "\($m / 60 | floor) h" else "\($m / 1440 | floor) d" end;
+        def ago($t): $t | fromdateiso8601 | strftime("%b %d %H:%M");
         def link: "#\(.number) \(.title | gsub("\\|"; "/"))";
         def what:
             if .stage == "triaged" then "triage proposal to accept, comment on or close"

@@ -25,7 +25,7 @@ test_render_groups_the_issues_by_who_they_wait_for() {
     out=$("$FACTORY_TEST_SCRIPTS/pipeline.sh" render snapshot.json)
     assert_contains "$out" "running: build #75"
     assert_contains "$out" "## Waiting for David (1)"
-    assert_contains "$out" "| #73 Ellipses / dots | triage proposal to accept, comment on or close |"
+    assert_contains "$out" "| #73 Ellipses / dots | triage proposal to accept, comment on or close |  | Oct 16 08:00 |"
     assert_contains "$out" "| #75 Session timeout | in-progress (running) | #89 (draft), CI pending |"
     assert_contains "$out" "| #76 Remove the auto-pilot | spec first | high |"
     assert_contains "$out" "## To triage (1)"

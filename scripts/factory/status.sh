@@ -16,12 +16,12 @@ issues=$(gh issue list --repo "$FACTORY_REPO" --state open --limit 500 \
 prs=$(gh pr list --repo "$FACTORY_REPO" --state open --limit 200 \
     --json number,title,author,headRefName,baseRefName,isDraft,updatedAt,closingIssuesReferences,statusCheckRollup,reviewDecision)
 done_prs=$(gh pr list --repo "$FACTORY_REPO" --state all --limit 100 --search "closed:>=$since" \
-    --json number,title,headRefName,baseRefName,state,mergedAt,closedAt,closingIssuesReferences)
+    --json number,title,author,headRefName,baseRefName,state,mergedAt,closedAt,closingIssuesReferences)
 
 jq -n --argjson issues "$issues" --argjson prs "$prs" --argjson done "$done_prs" --argjson stages "$stages" '
     def checks:
         if (. // []) | length == 0 then "none"
-        elif any(.[]; (.conclusion // .state) as $s | $s == "FAILURE" or $s == "ERROR" or $s == "CANCELLED" or $s == "TIMED_OUT" or $s == "ACTION_REQUIRED") then "fail"
+        elif any(.[]; (.conclusion // .state) as $s | $s == "FAILURE" or $s == "ERROR" or $s == "CANCELLED" or $s == "TIMED_OUT" or $s == "ACTION_REQUIRED" or $s == "STARTUP_FAILURE" or $s == "STALE") then "fail"
         elif any(.[]; (.status // "COMPLETED") != "COMPLETED" or .state == "PENDING" or .state == "EXPECTED") then "pending"
         else "pass" end;
     {
@@ -51,7 +51,7 @@ jq -n --argjson issues "$issues" --argjson prs "$prs" --argjson done "$done_prs"
             updated_at: .updatedAt
         }] | sort_by(.number),
         closed_prs: [$done[] | select(.state != "OPEN") | {
-            number, head: .headRefName, base: .baseRefName,
+            number, author: .author.login, head: .headRefName, base: .baseRefName,
             merged: (.mergedAt != null),
             closed_at: .closedAt,
             closes: [.closingIssuesReferences[]?.number]
