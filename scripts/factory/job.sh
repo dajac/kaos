@@ -132,6 +132,15 @@ review)
     # from the PR under review. The PR's own versions stay in its
     # commits (git diff origin/main...HEAD).
     git -C "$dir" checkout -q --no-overlay "$base" -- .claude CLAUDE.md scripts/factory
+    # The other files Claude Code loads from a working directory: main's,
+    # or none.
+    for file in $(git -C "$dir" diff --name-only "$base" -- CLAUDE.local.md .mcp.json ':(glob)**/CLAUDE.md' ':(glob)**/CLAUDE.local.md'); do
+        if git -C "$dir" cat-file -e "$base:$file" 2>/dev/null; then
+            git -C "$dir" checkout -q "$base" -- "$file"
+        else
+            rm -f "$dir/$file"
+        fi
+    done
     cleanup_dir=$dir
     prompt="/factory-review $arg $pr"
     ;;
@@ -153,11 +162,13 @@ refuse_job() {
 # them would change the rules of its own job. The factory does not build
 # its own changes: David does. The branch's changes are measured from
 # where it forked from main, not against today's main.
+factory_paths=(.claude CLAUDE.md CLAUDE.local.md .mcp.json scripts/factory factory
+    ':(glob)**/CLAUDE.md' ':(glob)**/CLAUDE.local.md')
 if [[ $kind == spec || $kind == build || $kind == address ]]; then
     fork=$(git -C "$dir" merge-base "$base" HEAD)
-    if ! git -C "$dir" diff --quiet "$fork" HEAD -- .claude CLAUDE.md scripts/factory factory ||
-        ! git -C "$dir" diff --quiet HEAD -- .claude CLAUDE.md scripts/factory factory; then
-        refuse_job "the branch changes the factory itself (.claude/, CLAUDE.md, scripts/factory/ or ./factory): David builds it by hand"
+    if ! git -C "$dir" diff --quiet "$fork" HEAD -- "${factory_paths[@]}" ||
+        [[ -n $(git -C "$dir" status --porcelain -uall -- "${factory_paths[@]}") ]]; then
+        refuse_job "the branch changes the factory itself (.claude/, a CLAUDE.md, .mcp.json, scripts/factory/ or ./factory): David builds it by hand"
     fi
 fi
 

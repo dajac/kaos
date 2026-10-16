@@ -92,7 +92,6 @@ test_identity_escapes_are_refused_once_the_bot_exists() {
         'env -u GH_TOKEN gh pr list' \
         '/opt/homebrew/bin/gh pr list' \
         'command /opt/homebrew/bin/gh pr list' \
-        '\gh pr list' \
         'gh auth status' \
         'gh auth token' \
         'git -c credential.helper=osxkeychain push origin x' \

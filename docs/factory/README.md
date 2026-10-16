@@ -934,13 +934,23 @@ and `job.sh` reverts any change a tick makes there. Changes to the factory itsel
 them. Claude Code loads the hooks, skills, agents and `CLAUDE.md` of a
 job's worktree, and the job runs the worktree's scripts, so a branch
 that changes `.claude/`, `CLAUDE.md`, `scripts/factory/` or `./factory`
-would change the rules of its own jobs: `job.sh` refuses to run a spec,
+would change the rules of its own jobs (so would a `CLAUDE.local.md`,
+a nested `CLAUDE.md` or a `.mcp.json`, committed or not): `job.sh`
+refuses to run a spec,
 build or address job on such a branch (measured from where the branch
 forked from `main`, so a branch older than a change of main's is not
 taken for one), the tick blocks the issue with the reason, and David
 builds those changes himself. The review job replaces them with main's
 (`git checkout --no-overlay`, which also removes the files a PR adds
-there).
+there). A branch cut from an older `main` keeps the skills of that
+`main` in its own jobs, with today's trusted scripts and hooks.
+
+The guard reads command lines; it does not stop what it cannot see: a
+script the job writes and then runs, a payload in a file (`gh api
+--input`, `-F query=@file`), or a build that runs code. These are
+written by the bot's own jobs and reviewed in their PRs, and `main` has
+no server-side protection on GitHub Free: the guard and the
+instructions keep honest mistakes out, not a determined attacker.
 
 Sessions in a worktree whose branch predates the factory (or the frozen
 `initial-setup` branch) have no `.claude/settings.json`, hence no guard

@@ -68,3 +68,43 @@ test_quote_and_case_tricks_and_aliases_are_refused() {
         "gh api -X PATCH repos/dajac/kaos/issues/75 -f 'labels[]=in-review'" \
         'scripts/factory/stage.sh 75 queued; gh issue edit 75 --add-label in-review'
 }
+
+test_substitutions_and_escapes_are_refused() {
+    with_bot
+    refused 'git commit -m "fix $(gh issue close 75)"' \
+        'echo "$(gh pr merge 81)"' \
+        '"$(gh pr review 81 --approve)"' \
+        'echo "`gh pr merge 81`"' \
+        'echo "$(GH_TOKEN=x gh pr list)"' \
+        "echo \"it's\"; gh pr merge 81; echo \"ok's\"" \
+        'gh pr mer\ge 81' \
+        'gh issue clo\se 75' \
+        'git credential-osx\keychain get' \
+        'git push origin HEAD:mai\n' \
+        "git rebase -x 'gh pr merge 81' main" \
+        "git difftool -x 'sh x' HEAD" \
+        'git filter-branch --tree-filter x' \
+        "git -c core.editor='sh x' commit" \
+        'gh -R dajac/kaos pr merge 81' \
+        'gh --repo dajac/kaos issue close 75' \
+        'gh pr review 81 -ab ok' \
+        'git push origin --all' \
+        'git push origin --mirror' \
+        "git push origin 'refs/heads/*:refs/heads/*'" \
+        'git config remote.origin.push HEAD:main'
+    local hidden
+    hidden=$(printf 'echo "<<EOF"\ngh pr merge 81\nEOF' )
+    refused "$hidden"
+    hidden=$(printf 'cat <<<word\ngh issue close 75')
+    refused "$hidden"
+}
+
+test_reads_and_patterns_pass() {
+    with_bot
+    allowed "grep -rn 'GH_TOKEN=' scripts" \
+        'grep -rn "PATH=" scripts/factory' \
+        'git config user.name' \
+        'git config --get remote.origin.url' \
+        "jq -r '.[] | select(.name == \"x\")' f.json" \
+        'git push -u origin 75-fix-cells'
+}
