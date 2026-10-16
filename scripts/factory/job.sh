@@ -42,7 +42,7 @@ tick) limit=10 budget=1 ;;
 triage) limit=30 budget=3 ;;
 spec) limit=45 budget=8 ;;
 build) limit=90 budget=20 ;;
-review) limit=45 budget=12 ;;
+review) limit=60 budget=20 ;;
 address) limit=60 budget=12 ;;
 esac
 limit=${FACTORY_LIMIT_MINUTES:-$limit}
@@ -127,6 +127,11 @@ review)
     git -C "$FACTORY_HOME" fetch -q origin "pull/$pr/head"
     dir=$worktrees/review-$arg
     detached_worktree "$dir" FETCH_HEAD
+    # Claude Code loads the agents, skills and CLAUDE.md of its working
+    # directory: the reviewers and their rules come from main, never
+    # from the PR under review. The PR's own versions stay in its
+    # commits (git diff origin/main...HEAD).
+    git -C "$dir" checkout -q "$base" -- .claude CLAUDE.md
     cleanup_dir=$dir
     prompt="/factory-review $arg $pr"
     ;;
