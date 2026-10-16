@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "properties": {
+    "job": {
+      "description": "The job to run next, or null when there is none",
+      "enum": ["triage", "spec", "build", "review", "address", null]
+    },
+    "issue": {
+      "description": "The issue of the job, or null",
+      "type": ["integer", "null"]
+    },
+    "transitions": {
+      "description": "The stage changes the tick made, as printed by stage.sh",
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "notes": {
+      "description": "One line for the loop's log",
+      "type": "string"
+    }
+  },
+  "required": ["job", "issue", "transitions"],
+  "additionalProperties": false
+}

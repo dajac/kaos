@@ -62,7 +62,7 @@ Three human gates, all David's: acceptance at triage, the spec approval
 and the PR approval with the merge. Everything between them is
 automatic, but each job stops at a gate rather than guessing.
 
-## Architecture (planned)
+## Architecture
 
 The factory is skills first: what the agents do is a set of Claude
 Code skills and subagents, and the plumbing that runs them is a few
@@ -74,24 +74,37 @@ Three pieces:
 
 - **The loop**, `./factory up`, a bash script. It holds a lock, so
   there is a single orchestrator, and every two minutes it:
-  1. runs `scripts/factory/status.sh`, which reads the open issues and
+  1. refreshes the trusted checkout (`scripts/factory/trusted.sh`,
+     `.claude/worktrees/factory-main` detached at `origin/main`), whose
+     scripts, hooks and settings the ticks and jobs use;
+  2. runs `scripts/factory/status.sh`, which reads the open issues and
      PRs with `gh` and prints one JSON snapshot: stages, flags, PRs,
      CI, the newest activity per issue;
-  2. when the snapshot differs from the previous one, or a job just
-     ended, runs one **tick**;
-  3. runs the job the tick chose, if any, and waits for it;
-  4. re-renders the Pipeline issue from the labels
+  3. when the snapshot differs from the previous one, a job just
+     ended, David queued a request, or 30 minutes went by, runs one
+     **tick**;
+  4. runs the job the tick chose, if any, and waits for it;
+  5. re-renders the Pipeline issue from the labels
      (`scripts/factory/pipeline.sh`, no model).
 - **The tick**, `claude -p "/factory-tick"`, a short headless session
-  and the brain of the orchestrator. It gets the snapshot, applies the
-  transitions of the tables below, and returns the next job to run as
-  structured output (`--json-schema`: `{job, issue}` or nothing). It
-  changes stages only through `scripts/factory/stage.sh <N> <to>`,
-  which knows the legal transitions and refuses any other, so a
+  and the brain of the orchestrator (`.claude/skills/factory-tick/`).
+  It gets the snapshot, the previous tick's snapshot, the last job's
+  status and David's requests; reads what it needs about each issue
+  with `scripts/factory/activity.sh <N>` (the last handoff and its
+  fields, what David and others wrote since, who added `accepted`,
+  when each label was added, the issue's PRs with their CI, David's
+  last review and the unresolved threads); applies the transitions of
+  the tables below; and returns the next job as structured output
+  (`--json-schema scripts/factory/tick-schema.json`: `{job, issue,
+  transitions, notes}`). It changes stages only through
+  `scripts/factory/stage.sh <N> <to>`, which knows the legal
+  transitions and David's gates and refuses anything else, so a
   mistaken tick cannot jump a gate. Each tick starts from a fresh
-  context: nothing accumulates from one issue to the next.
-- **Jobs**, one per piece of model work: `triage`, `spec`, `build`,
-  `review`, `address`. A job is a skill run headless by
+  context: nothing accumulates from one issue to the next. It also
+  removes the local worktrees and branches of merged PRs
+  (`scripts/factory/cleanup.sh`).
+- **Jobs**, one per piece of model work: `triage` (built), `spec`,
+  `build`, `review`, `address` (planned). A job is a skill run headless by
   `scripts/factory/job.sh <kind> <N>` (`claude -p "/factory-<kind>
   <N>"`) in the issue's worktree. It does its work, posts its result
   on GitHub with a `yaml` handoff block, and exits. It never changes a
@@ -155,8 +168,11 @@ Below, "the orchestrator" means the loop and its ticks together.
 - One job at a time.
 - No new `build` while two PRs wait for David, so the factory does not
   pile work up in front of him.
-- Each job has a time limit (`build` 90 minutes, others 30), enforced
-  by `job.sh`, and a budget cap passed to `claude -p`. A job that hits
+- Each session has a time limit and a budget cap passed to
+  `claude -p --max-budget-usd`, both enforced by `job.sh` and
+  overridable with `FACTORY_LIMIT_MINUTES` and `FACTORY_BUDGET_USD`:
+  tick 10 minutes and $1, triage 30 and $3, spec 45 and $8, build 90
+  and $20, review 45 and $12, address 60 and $12. A job that hits
   one is stopped and its issue goes to `blocked` with the tail of its
   log.
 
@@ -210,24 +226,23 @@ always passes one:
 
 ## Running it
 
-One script at the root of the repository, `./factory`. `setup` (bot,
-identity check, labels), `whoami` and `merge` are built; the other
-commands are planned.
+One script at the root of the repository, `./factory`. Everything is
+built but `try` and `up --at-login` (planned).
 
 | Command | Does |
 |---|---|
-| `./factory setup` | One-time: checks `claude`, `gh`, `jq`, Docker and Chrome, creates the bot, the labels and the Pipeline issue (planned), stores the bot key in the macOS Keychain, checks that every GitHub action comes out as the bot. Safe to run again |
+| `./factory setup` | One-time: checks `claude`, `gh`, `jq`, Docker and Chrome, creates the bot, the labels and the Pipeline issue, stores the bot key in the macOS Keychain, checks that every GitHub action comes out as the bot. Safe to run again |
 | `./factory whoami` | Checks the bot's identity, as `setup` does |
-| `./factory up` | Starts the loop in the background; `--foreground` to watch it |
+| `./factory up` | Starts the loop in the background, logging to `.factory/logs/loop.log`; `--foreground` to watch it |
 | `./factory down` | Stops the loop; the running job finishes, or `--now` stops it |
 | `./factory status` | The pipeline in the terminal: what waits for David, the running job, blocked issues |
-| `./factory logs [N]` | Follows the loop log, or the log of the job of issue N |
-| `./factory run <kind> <N>` | Queues one job, e.g. `./factory run triage 76` |
+| `./factory logs [N]` | Follows the loop log, or the text and tool calls of the last job of issue N |
+| `./factory run <kind> <N>` | Queues one job for the next tick, e.g. `./factory run triage 76`; the tick runs it if the transition is legal |
 | `./factory pause` / `resume` | Stop or restart new jobs without stopping the loop |
 | `./factory try <PR>` | Builds and runs the PR locally with its scenario (see "Try it") |
 | `./factory merge <PR>` | David's merge, in his own terminal (see stage 6) |
 
-`./factory up --at-login` installs a launchd agent instead, so the
+`./factory up --at-login` (planned) installs a launchd agent instead, so the
 loop survives reboots. launchd does not inherit the shell's `PATH`,
 so `setup` records the absolute paths of `claude`, `gh`, `jq` and
 `docker`, and runs a dry tick under launchd to check that the Keychain
@@ -348,10 +363,13 @@ kills the running ones and alerts David. GitHub Pro would allow a
 ruleset on `main` that closes the hole server side; it is left out for
 now and can be added later without changing the design.
 
-## The overview: the Pipeline issue (planned)
+## The overview: the Pipeline issue
 
-A pinned issue, **Pipeline**, opened by the bot, shows the whole
-pipeline. The orchestrator rewrites its body when the state changes.
+A pinned issue, **Pipeline**, opened by the bot with the label
+`pipeline` (which keeps it out of the snapshot), shows the whole
+pipeline. `scripts/factory/pipeline.sh update` rewrites its body at the
+end of every poll when anything but its time line changed;
+`./factory status` prints the same text in the terminal.
 Editing an issue body notifies no one, so the issue does not spam
 David.
 
@@ -414,7 +432,7 @@ The stage is a separate label, and an open issue has **exactly one**:
 | `changes-requested` | David asked for changes | Changes requested |
 | `blocked` | Waiting on a decision, see the last bot comment | Blocked |
 
-The orchestrator (planned) applies every transition (an arrow swaps
+The orchestrator applies every transition (an arrow swaps
 the old stage label for the new one):
 
 | From | Event | To |
@@ -471,7 +489,7 @@ and David re-accepts them from the proposals. `in-progress`,
 `in-review`, `blocked` and `changes-requested` keep their names, with
 new descriptions.
 
-### Handoffs (planned)
+### Handoffs
 
 A job ends with one comment whose last part is a fenced `yaml` block.
 The orchestrator parses it to move the stage, so the next job does not
@@ -506,7 +524,7 @@ orchestrator gives every unlabeled issue `needs-triage`.
 UI issues carry annotated screenshots on the orphan `issue-screenshots`
 branch, as today. `gh` cannot upload attachments to a private repo.
 
-### 2. `triage` (planned)
+### 2. `triage`
 
 The job:
 
@@ -862,6 +880,17 @@ scripts/factory/test/                 the tests of the scripts (test/run.sh)
 .claude/factory-job.json              settings of the jobs: allowlist, deny rules, hooks
 scripts/factory/gates.sh              the checks, with one verdict line
 scripts/factory/merge.sh              David's merge
+scripts/factory/trusted.sh            the trusted checkout, .claude/worktrees/factory-main
+scripts/factory/status.sh             the snapshot (gh + jq)
+scripts/factory/activity.sh           what the tick needs about one issue
+scripts/factory/stage.sh              legal stage transitions and David's gates
+scripts/factory/job.sh                runs one job or tick headless, with limits
+scripts/factory/tick-schema.json      the tick's structured output
+scripts/factory/pipeline.sh           renders and updates the Pipeline issue
+scripts/factory/cleanup.sh            removes the local worktree and branch of a merged PR
+.claude/skills/factory/SKILL.md       /factory in an interactive session
+.claude/skills/factory-tick/SKILL.md  the transitions and the choice of the next job
+.claude/skills/factory-triage/SKILL.md
 .github/ISSUE_TEMPLATE/{bug,feature,task}.yml, config.yml
 .github/pull_request_template.md
 docs/factory/README.md                this document
@@ -871,16 +900,10 @@ docs/factory/README.md                this document
 Planned:
 
 ```
-scripts/factory/status.sh             the snapshot (gh + jq)
-scripts/factory/stage.sh              legal stage transitions, nothing else
-scripts/factory/pipeline.sh           renders the Pipeline issue (gh + jq)
-scripts/factory/job.sh                runs one job or tick headless, with limits
 scripts/factory/{try-pr,capture}.sh
 scripts/factory/scenarios/*.json
 scripts/factory/captures/<N>.txt      the shots of a PR
-.claude/skills/factory/SKILL.md       /factory in an interactive session
-.claude/skills/factory-tick/SKILL.md  the transitions and the choice of the next job
-.claude/skills/factory-{triage,spec,build,review,address}/SKILL.md
+.claude/skills/factory-{spec,build,review,address}/SKILL.md
 .claude/agents/reviewer-{code,tests,rules,api,ux,kafka}.md
 .claude/agents/review-verifier.md
 docs/factory/review/<angle>.md        review guides
@@ -949,8 +972,9 @@ applies to everything, the remaining rollout steps included.
    PR template; `docs/factory/README.md`; the `.gitignore` changes and
    the `CLAUDE.md` pointer.
 2. Built. `factory-job.json`, `gates.sh`, `./factory merge`.
-3. The loop, `status.sh`, `stage.sh` and their tests, `job.sh`, the
-   Pipeline issue, `./factory up/down/status/logs/run`, the `tick` and
+3. Built. The loop, `status.sh`, `stage.sh`, `activity.sh` and their
+   tests, `job.sh`, the trusted checkout, the Pipeline issue,
+   `./factory up/down/status/logs/run/pause/resume`, the `tick` and
    `triage` skills. Pilot on the open issues.
 4. `./factory try`, the scenarios, `capture.sh`, and the `build`
    skill.

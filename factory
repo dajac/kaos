@@ -12,6 +12,14 @@ Usage: ./factory <command>
              it, check that every GitHub action comes out as the bot, and
              create the labels. Safe to run again.
   whoami     Check the bot's identity, as setup does.
+  up         Start the loop in the background (--foreground to watch it).
+  down       Stop the loop once the running job ends (--now stops it too).
+  status     The pipeline in the terminal.
+  logs [N]   Follow the loop's log, or the log of the last job of issue N.
+  run <job> <N>
+             Ask the loop to run a job now: triage, spec, build, review or
+             address. The next tick decides whether the transition is legal.
+  pause      Start no new job; resume undoes it.
   merge <PR> David's merge, in his own terminal: squash an approved,
              green PR with the part of its body above the --- rule.
   help       This help.
@@ -72,6 +80,7 @@ cmd_setup() {
     (
         . "$FACTORY_SCRIPTS/identity.sh"
         "$FACTORY_SCRIPTS/labels.sh"
+        info "Pipeline issue: #$("$FACTORY_SCRIPTS/pipeline.sh" ensure)"
     )
     info "setup done"
 }
@@ -81,9 +90,180 @@ cmd_whoami() {
     check_identity
 }
 
+poll=${FACTORY_POLL_SECONDS:-120}
+lock=$FACTORY_STATE/lock
+
+loop_pid() {
+    local pid
+    pid=$(cat "$lock/pid" 2>/dev/null) || return 1
+    kill -0 "$pid" 2>/dev/null && echo "$pid"
+}
+
+log() {
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"
+}
+
+# The loop: one orchestrator per repository, held by the lock. Every
+# poll it refreshes the trusted checkout, takes a snapshot and, when
+# something changed (or a job just ended, or David queued a request, or
+# 30 minutes went by), runs one tick, then the job the tick chose, and
+# updates the Pipeline issue. See docs/factory/README.md.
+cmd_loop() {
+    load_bot
+    mkdir -p "$FACTORY_STATE/logs" "$FACTORY_STATE/requests"
+    if ! mkdir "$lock" 2>/dev/null; then
+        loop_pid >/dev/null && die "the loop is already running (pid $(cat "$lock/pid"))"
+        rm -rf "$lock"
+        mkdir "$lock"
+    fi
+    echo $$ >"$lock/pid"
+    trap 'rm -rf "$lock"' EXIT
+    trap 'log "stopping"; exit 0' TERM INT
+    rm -f "$FACTORY_STATE/stop"
+    . "$FACTORY_SCRIPTS/identity.sh"
+    log "loop up (pid $$, poll ${poll}s)"
+
+    local snapshot=$FACTORY_STATE/snapshot.json last_hash= hash last_tick=0 job_ended=false last_job='none'
+    [[ -f $FACTORY_STATE/tick-snapshot.json ]] || echo '{"issues": [], "prs": [], "closed_prs": []}' >"$FACTORY_STATE/tick-snapshot.json"
+    while [[ ! -f $FACTORY_STATE/stop ]]; do
+        if ! FACTORY_TRUSTED=$("$FACTORY_SCRIPTS/trusted.sh"); then
+            log "cannot refresh the trusted checkout"
+            sleep "$poll"
+            continue
+        fi
+        export FACTORY_TRUSTED
+        local scripts=$FACTORY_TRUSTED/scripts/factory
+        if ! "$scripts/status.sh" >"$snapshot.new"; then
+            log "cannot take a snapshot"
+            sleep "$poll"
+            continue
+        fi
+        mv "$snapshot.new" "$snapshot"
+        hash=$(shasum <"$snapshot" | cut -d' ' -f1)
+        local requests=()
+        local request
+        for request in "$FACTORY_STATE/requests"/*; do
+            [[ -f $request ]] && requests+=("$(cat "$request")")
+        done
+
+        if [[ ! -f $FACTORY_STATE/paused ]] &&
+            { [[ $hash != "$last_hash" ]] || $job_ended || ((${#requests[@]})) || (($(date +%s) - last_tick > 1800)); }; then
+            last_tick=$(date +%s)
+            job_ended=false
+            local tick
+            tick=$("$scripts/job.sh" tick "$snapshot" "$FACTORY_STATE/tick-snapshot.json" "last-job=$last_job" "${requests[@]}" | tail -n 1) || tick='{}'
+            cp "$snapshot" "$FACTORY_STATE/tick-snapshot.json"
+            rm -f "$FACTORY_STATE/requests"/*
+            log "tick: $(jq -c '{status, cost, result}' <<<"$tick")"
+            local kind issue
+            kind=$(jq -r '.result.job // empty' <<<"$tick")
+            issue=$(jq -r '.result.issue // empty' <<<"$tick")
+            if [[ -n $kind && -n $issue && ! -f $FACTORY_STATE/stop ]]; then
+                log "job: $kind #$issue"
+                local done
+                done=$("$scripts/job.sh" "$kind" "$issue" | tail -n 1) || done='{"status": "failed"}'
+                log "job: $kind #$issue: $(jq -c '{status, seconds, cost, log}' <<<"$done")"
+                last_job="$kind:$issue:$(jq -r '.status // "failed"' <<<"$done")"
+                job_ended=true
+            fi
+            "$scripts/status.sh" >"$snapshot" || true
+            hash=$(shasum <"$snapshot" | cut -d' ' -f1)
+        fi
+        last_hash=$hash
+        $job_ended || last_job=none
+        "$scripts/pipeline.sh" update "$snapshot" || log "cannot update the Pipeline issue"
+        $job_ended && continue
+        local slept=0
+        while ((slept < poll)) && [[ ! -f $FACTORY_STATE/stop ]]; do
+            [[ -n $(ls -A "$FACTORY_STATE/requests" 2>/dev/null) ]] && break
+            sleep 5
+            slept=$((slept + 5))
+        done
+    done
+    log "loop down"
+}
+
+cmd_up() {
+    load_bot
+    if loop_pid >/dev/null; then
+        info "the loop is already running (pid $(cat "$lock/pid"))"
+        return
+    fi
+    if [[ ${1:-} == --foreground ]]; then
+        cmd_loop
+        return
+    fi
+    mkdir -p "$FACTORY_STATE/logs"
+    nohup "$FACTORY_HOME/factory" loop >>"$FACTORY_STATE/logs/loop.log" 2>&1 &
+    disown
+    sleep 1
+    loop_pid >/dev/null || die "the loop did not start, see .factory/logs/loop.log"
+    info "the loop is up (pid $(cat "$lock/pid")); ./factory logs to follow it"
+}
+
+cmd_down() {
+    local pid
+    pid=$(loop_pid) || { info "the loop is not running"; return; }
+    touch "$FACTORY_STATE/stop"
+    if [[ ${1:-} == --now ]]; then
+        [[ -f $FACTORY_STATE/job.json ]] && kill -INT "$(jq -r .pid "$FACTORY_STATE/job.json")" 2>/dev/null || true
+        kill -TERM "$pid" 2>/dev/null || true
+        info "stopped the loop and its job"
+    else
+        info "the loop stops once the running job ends"
+    fi
+}
+
+cmd_status() {
+    local snapshot=$FACTORY_STATE/snapshot.json
+    if ! loop_pid >/dev/null || [[ ! -f $snapshot ]]; then
+        load_bot
+        . "$FACTORY_SCRIPTS/identity.sh"
+        "$FACTORY_SCRIPTS/status.sh" >"$snapshot"
+    fi
+    "$FACTORY_SCRIPTS/pipeline.sh" render "$snapshot"
+}
+
+cmd_logs() {
+    if [[ -z ${1:-} ]]; then
+        exec tail -n 50 -F "$FACTORY_STATE/logs/loop.log"
+    fi
+    local file=$FACTORY_STATE/logs/latest-$1.jsonl
+    [[ -e $file ]] || die "no job log for #$1"
+    tail -n +1 -F "$file" | jq --unbuffered -r '
+        select(.type == "assistant") | .message.content[]?
+        | if .type == "text" then .text
+          elif .type == "tool_use" then "> \(.name): \(.input.command // .input.file_path // .input.description // "")"
+          else empty end'
+}
+
+cmd_run() {
+    local kind=${1:-} issue=${2:-}
+    [[ $kind =~ ^(triage|spec|build|review|address)$ && $issue =~ ^[0-9]+$ ]] || die "usage: ./factory run <triage|spec|build|review|address> <issue>"
+    mkdir -p "$FACTORY_STATE/requests"
+    echo "$kind:$issue" >"$FACTORY_STATE/requests/$(date +%s)-$kind-$issue"
+    loop_pid >/dev/null || info "queued, but the loop is not running: ./factory up"
+    info "queued $kind #$issue for the next tick"
+}
+
 case ${1:-help} in
 setup) cmd_setup ;;
 whoami) cmd_whoami ;;
+loop) cmd_loop ;;
+up) cmd_up "${2:-}" ;;
+down) cmd_down "${2:-}" ;;
+status) cmd_status ;;
+logs) cmd_logs "${2:-}" ;;
+run) cmd_run "${2:-}" "${3:-}" ;;
+pause)
+    mkdir -p "$FACTORY_STATE"
+    touch "$FACTORY_STATE/paused"
+    info "paused: no new job starts"
+    ;;
+resume)
+    rm -f "$FACTORY_STATE/paused"
+    info "resumed"
+    ;;
 merge)
     shift
     exec "$FACTORY_SCRIPTS/merge.sh" "$@"
