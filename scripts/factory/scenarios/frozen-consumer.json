@@ -1,0 +1,12 @@
+{
+  "description": "The default scenario, then consumer-0 frozen for a minute: it stops polling and heartbeating.",
+  "include": "default.json",
+  "steps": [
+    {
+      "request": "PUT /api/v1/simulator/groups/orders-app/consumers/consumer-0/faults/freeze"
+    },
+    {
+      "sleep_s": 60
+    }
+  ]
+}
