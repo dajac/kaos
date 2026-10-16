@@ -64,7 +64,8 @@ Arguments: `<snapshot.json> <previous.json> last-job=<kind:N:status:log|none> [<
 3. For each issue to look at, run `scripts/factory/activity.sh <N>` and
    apply the first matching rule of the table below. An issue moves at
    most once per tick, except `none` → `needs-triage`, which may be
-   followed by the choice of a triage job.
+   followed by the next rule (to `queued`, or the choice of a triage
+   job).
 4. For each PR of `closed_prs` that is merged, authored by the bot
    (`author` is `app/kaos-agent`) and whose head matches
    `^(spec/)?[0-9]+-`: `scripts/factory/cleanup.sh <head>`. For one
@@ -88,6 +89,7 @@ blocked`.
 | any | `last-job` is a `failed` or `timeout` job of N | block, quoting the status and the log name; `resume` is the current stage |
 | any | a blocked handoff newer than the stage | `stage.sh N blocked` (no comment: the job wrote it) |
 | `none` | always | `stage.sh N needs-triage` |
+| `needs-triage` | `accepted` is on the issue, there is a `triage` handoff (of any age), and David wrote nothing after it | `stage.sh N queued`: David accepted it, maybe while removing `triaged`; it checks that he added `accepted` |
 | `needs-triage` | a `triage` handoff newer than the stage, and David wrote nothing after it | `stage.sh N triaged`, or `needs-info` when its `route` is `needs-info` |
 | `needs-triage` | otherwise | candidate for a `triage` job |
 | `needs-info` | David wrote, or `A.others` is not empty | `stage.sh N needs-triage` |

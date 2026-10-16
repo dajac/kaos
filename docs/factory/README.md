@@ -451,6 +451,7 @@ the old stage label for the new one):
 | `needs-triage` | otherwise | start `triage` |
 | `needs-info` | a new comment from anyone but the bot | `needs-triage` |
 | `triaged` | David adds `accepted` | `queued` |
+| `needs-triage` | David has added `accepted` (for example in place of `triaged`), and the triage proposal is there | `queued` |
 | `triaged` | a new comment from David, no `accepted` | `needs-triage` |
 | `queued` + `needs-spec` | the job is chosen | `spec-review`, start `spec` |
 | `spec-review` | no spec PR yet, or David requests changes or comments | start `spec` again |

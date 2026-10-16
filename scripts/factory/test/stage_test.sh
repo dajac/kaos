@@ -67,6 +67,16 @@ test_accepting_needs_david() {
     assert_eq "$(stage 5 queued)" "#5: triaged -> queued"
 }
 
+test_an_issue_david_accepted_before_its_proposal_is_queued() {
+    setup_fake
+    issue 5 needs-triage accepted
+    accepted_by 5 dajac
+    assert_eq "$(stage 5 queued)" "#5: needs-triage -> queued"
+    issue 6 needs-triage
+    out=$(stage 6 queued 2>&1) && fail "queued without accepted"
+    assert_contains "$out" "needs the accepted label"
+}
+
 test_building_needs_no_spec() {
     setup_fake
     issue 5 queued accepted needs-spec

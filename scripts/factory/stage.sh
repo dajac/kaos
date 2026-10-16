@@ -6,7 +6,9 @@
 # Usage: scripts/factory/stage.sh <issue> <stage> [--spec-approved <PR>]
 #
 # The gates:
-# - triaged -> queued, and queued -> spec-review or in-progress, need the
+# - triaged -> queued, needs-triage -> queued (David accepted before or
+#   without the triage's proposal: his acceptance is the gate, the triage
+#   only advice), and queued -> spec-review or in-progress, need the
 #   accepted label, added by David (checked on the issue's timeline);
 # - queued -> in-progress needs no needs-spec;
 # - spec-review -> queued needs --spec-approved with the issue's spec PR
@@ -55,7 +57,7 @@ legal() {
     "none needs-triage" | \
         "needs-triage triaged" | "needs-triage needs-info" | \
         "needs-info needs-triage" | \
-        "triaged queued" | "triaged needs-triage" | \
+        "triaged queued" | "triaged needs-triage" | "needs-triage queued" | \
         "queued spec-review" | "queued in-progress" | \
         "spec-review queued" | \
         "in-progress reviewing" | \
@@ -112,7 +114,7 @@ fi
 
 remove=("$from")
 case "$from $to" in
-"triaged queued" | "queued spec-review" | "queued in-progress")
+"triaged queued" | "needs-triage queued" | "queued spec-review" | "queued in-progress")
     accepted_by_david || die "#$issue: $from -> $to needs the accepted label, added by $FACTORY_DAVID"
     ;;
 esac
