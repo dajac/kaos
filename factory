@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# The software factory of Kaos. See docs/factory/README.md.
+# Usage: ./factory <command> [args]; ./factory help lists the commands.
+set -euo pipefail
+. "$(cd "$(dirname "$0")" && pwd)/scripts/factory/lib.sh"
+
+usage() {
+    cat <<'EOF'
+Usage: ./factory <command>
+
+  setup      One-time: create the bot (the GitHub App kaos-agent), install
+             it, check that every GitHub action comes out as the bot, and
+             create the labels. Safe to run again.
+  whoami     Check the bot's identity, as setup does.
+  help       This help.
+EOF
+}
+
+require_tools() {
+    local missing=() tool
+    for tool in claude gh jq git openssl curl nc docker security; do
+        command -v "$tool" >/dev/null || missing+=("$tool")
+    done
+    [[ -d "/Applications/Google Chrome.app" ]] || missing+=("Google Chrome")
+    ((${#missing[@]} == 0)) || die "missing: ${missing[*]}"
+}
+
+# Checks, in the environment Claude sessions and jobs get, that gh, git
+# and commits all come out as the bot and never as David.
+check_identity() {
+    (
+        # shellcheck source=scripts/factory/identity.sh
+        . "$FACTORY_SCRIPTS/identity.sh"
+        [[ ${FACTORY_IDENTITY:-} == "$FACTORY_BOT_LOGIN" ]] || die "identity.sh did not load the bot"
+
+        local repos
+        repos=$(gh api /installation/repositories --jq '[.repositories[].full_name] | join(",")')
+        [[ $repos == "$FACTORY_REPO" ]] ||
+            die "the bot is installed on '$repos'; it must be installed on $FACTORY_REPO only"
+        info "gh: the bot's token, installed on $repos only"
+
+        git -C "$FACTORY_HOME" ls-remote origin HEAD >/dev/null || die "git cannot read origin as the bot"
+        git -C "$FACTORY_HOME" push --dry-run --quiet origin "HEAD:refs/heads/factory-identity-check" ||
+            die "git cannot push to origin as the bot"
+        info "git: origin over HTTPS with the bot's token, SSH disabled"
+
+        local author
+        author=$(git -C "$FACTORY_HOME" var GIT_AUTHOR_IDENT)
+        [[ $author == "$FACTORY_BOT_LOGIN <$FACTORY_BOT_EMAIL>"* ]] || die "commits would be authored by: $author"
+        author=$(git -C "$FACTORY_HOME" var GIT_COMMITTER_IDENT)
+        [[ $author == "$FACTORY_BOT_LOGIN <$FACTORY_BOT_EMAIL>"* ]] || die "commits would be committed by: $author"
+        info "commits: authored and committed by $FACTORY_BOT_LOGIN"
+    )
+}
+
+cmd_setup() {
+    require_tools
+    "$FACTORY_SCRIPTS/create-app.sh"
+    load_bot
+    check_identity
+    (
+        . "$FACTORY_SCRIPTS/identity.sh"
+        "$FACTORY_SCRIPTS/labels.sh"
+    )
+    info "setup done"
+}
+
+cmd_whoami() {
+    load_bot
+    check_identity
+}
+
+case ${1:-help} in
+setup) cmd_setup ;;
+whoami) cmd_whoami ;;
+help | -h | --help) usage ;;
+*)
+    usage >&2
+    exit 2
+    ;;
+esac

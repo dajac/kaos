@@ -101,3 +101,18 @@ A local broker for manual testing:
 ```sh
 docker run -p 9092:9092 apache/kafka:4.3.1
 ```
+
+## Factory
+
+Issues become merged PRs through the software factory, described in
+[`docs/factory/README.md`](docs/factory/README.md).
+
+- Every PR is developed in its own worktree,
+  `.claude/worktrees/<branch>`, branched from `main` or, for a stacked
+  PR, from its parent's branch. Never develop in the main checkout.
+- Claude never acts as David: no PR, comment, review, label, push or
+  commit under `dajac`. Once the bot `kaos-agent` exists (`./factory
+  setup`), every `gh` and `git` command runs with its identity, set by
+  `scripts/factory/identity.sh`.
+- The factory's scripts are bash; their tests run with
+  `scripts/factory/test/run.sh`.

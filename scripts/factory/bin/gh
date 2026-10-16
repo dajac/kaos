@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# gh as the bot: runs the real gh with the bot's installation token.
+# identity.sh puts this directory first in PATH.
+set -euo pipefail
+self=$(cd "$(dirname "$0")" && pwd)
+real=
+IFS=: read -ra dirs <<<"$PATH"
+for dir in "${dirs[@]}"; do
+    [[ $dir == "$self" ]] && continue
+    if [[ -x $dir/gh ]]; then
+        real=$dir/gh
+        break
+    fi
+done
+[[ -n $real ]] || { echo "factory: gh not found in PATH" >&2; exit 1; }
+token=$("$self/../token.sh")
+GH_TOKEN=$token exec "$real" "$@"

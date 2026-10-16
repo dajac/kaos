@@ -1,0 +1,23 @@
+name: Task
+description: Work that is neither a bug nor a feature (refactor, build, docs, tests)
+labels: [task, needs-triage]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: The work to do.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What it improves.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Optional. How to tell the work is finished.
