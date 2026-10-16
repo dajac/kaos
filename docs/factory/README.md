@@ -101,8 +101,8 @@ Three pieces:
   context: nothing accumulates from one issue to the next. It also
   removes the local worktrees and branches of merged PRs
   (`scripts/factory/cleanup.sh`).
-- **Jobs**, one per piece of model work: `triage` (built), `spec`,
-  `build`, `review`, `address` (planned). A job is a skill run headless by
+- **Jobs**, one per piece of model work: `triage` and `build` (built),
+  `spec`, `review`, `address` (planned). A job is a skill run headless by
   `scripts/factory/job.sh <kind> <N>` (`claude -p "/factory-<kind>
   <N>"`) in the issue's worktree. It does its work, posts its result
   on GitHub with a `yaml` handoff block, and exits. It never changes a
@@ -224,7 +224,7 @@ the tick.
     exclude them, but also the project's `CLAUDE.md` and skills, and
     keep David's user `CLAUDE.md`, so it is not used. Instead the deny
     rules and the guard refuse `.claude/settings.local.json`, and
-    `job.sh` refuses to start a job whose worktree has one (planned).
+    `job.sh` refuses to start a job whose worktree has one.
     A branch that changes `.claude/settings.json` is factory work,
     which goes through a spec and David's review.
 - The `stream-json` log, `.factory/logs/<N>-<kind>.jsonl`, is what
@@ -233,7 +233,7 @@ the tick.
 ## Running it
 
 One script at the root of the repository, `./factory`. Everything is
-built but `try` and `up --at-login` (planned).
+built but `up --at-login` (planned).
 
 | Command | Does |
 |---|---|
@@ -245,7 +245,7 @@ built but `try` and `up --at-login` (planned).
 | `./factory logs [N]` | Follows the loop log, or the text and tool calls of the last job of issue N |
 | `./factory run <kind> <N>` | Queues one job for the next tick, e.g. `./factory run triage 76`; the tick runs it if the transition is legal |
 | `./factory pause` / `resume` | Stop or restart new jobs without stopping the loop |
-| `./factory try <PR>` | Builds and runs the PR locally with its scenario (see "Try it") |
+| `./factory try <PR> [--scenario <name>]` | Builds and runs the PR on its own broker, in the state of a scenario (see "Try it") |
 | `./factory merge <PR>` | David's merge, in his own terminal (see stage 6) |
 
 `./factory up --at-login` (planned) installs a launchd agent instead, so the
@@ -585,7 +585,7 @@ is closed. A spec that turns out wrong during the build goes back to
 David: the build job comments on the spec PR and reports `blocked`,
 rather than quietly departing from the spec.
 
-### 4. `build` (planned)
+### 4. `build`
 
 The job:
 
@@ -694,39 +694,50 @@ flake rule as the local gates.
 
 #### Try it and screenshots
 
-`./factory try <PR|branch> [--scenario <file>]`
+`./factory try <PR|branch|main|.> [--scenario <name>]`
 (`scripts/factory/try-pr.sh`) does four things:
 
-1. creates or reuses a worktree for the branch and builds the shaded
-   jar (`-DskipTests`);
-2. starts its own `apache/kafka:4.3.1` container on a free port, so
+1. creates or reuses a worktree `.claude/worktrees/try-<name>` at the
+   PR's head (`.` runs the current worktree as it is) and builds the
+   shaded jar (`-DskipTests`; `--no-build` reuses an earlier one);
+2. starts its own `apache/kafka:4.3.1` container on a free port, with
+   the KRaft settings of a single node and the port it advertises, so
    that parallel runs never share topics or groups (for example David
-   trying one PR while a review job runs another); `--bootstrap-server`
-   reuses an existing broker instead;
-3. runs the server with `--port 0` and a free proxy port and, with
-   `--scenario`, drives it to a known state through the HTTP API
-   (create the topic, start the group, freeze a consumer...); a PR's
-   own scenario is the default;
+   trying one PR while a job takes screenshots of another);
+3. runs the server on free ports and, unless `--scenario none`, drives
+   it to a known state through the HTTP API with a scenario, the
+   tree's `default.json` unless `--scenario` names another;
 4. prints the URL, then stops everything, the container included, on
-   Ctrl-C or with `--stop`.
+   Ctrl-C; with `--detach` it returns and `try-pr.sh --stop <name>`
+   stops it.
 
-Scenarios are small JSON files under `scripts/factory/scenarios/`: a
-list of HTTP calls and waits. David, the build job and the UX reviewer
-all see the same state.
+Scenarios are small JSON files under `scripts/factory/scenarios/`, run
+by `scripts/factory/scenario.sh`: requests, waits on a `jq` filter of a
+`GET`, and sleeps, with an optional `include` of another scenario.
+`default.json` makes one topic of 6 partitions, a producer and a group
+of 3 consumers, and waits until the coordinator has assigned every
+partition; `frozen-consumer.json` then freezes `consumer-0` for a
+minute. David, the build job and the UX reviewer all see the same
+state.
 
-Screenshots add no dependency and no code: the scenario puts the
-server in the state to show (freeze a consumer, add a group, wait for
-the lag), then `scripts/factory/capture.sh` runs Chrome's own headless
-screenshot:
+Screenshots add no dependency and no code to maintain:
+`scripts/factory/capture.sh <url> <out.png> [--size WxH] [--wait-ms N]
+[--dark]` runs the local Chrome's own headless screenshot, with a
+profile of its own:
 
-    "Google Chrome" --headless --screenshot=<file> \
-      --window-size=1440,900 --virtual-time-budget=5000 <url>
+    "Google Chrome" --headless=new --screenshot=<file> \
+      --window-size=1440,900 --timeout=6000 <url>
 
-`--virtual-time-budget` lets the UI receive its first snapshot over
-SSE before the shot, and `--force-dark-mode` gives the dark theme. A
-PR lists its shots in `scripts/factory/captures/<N>.txt`, one line
-each: the scenario, the URL, the window size, the theme and the file
-name.
+`--timeout` lets the UI receive its first snapshot over SSE before
+Chrome stops the page and takes the shot. (Chrome's
+`--virtual-time-budget` would wait forever on the open SSE stream.)
+
+A PR lists its shots in `scripts/factory/captures/<issue>.txt`, one
+per line: `<name> <scenario> <path> <size> <light|dark>`.
+`scripts/factory/shots.sh <tree> <list> <out-dir> <suffix>` takes them
+for one tree, building it once and running a fresh server per shot;
+the scenarios come from the PR's `scenarios/` directory, so that the
+shots of `main` show the same state, even with a scenario the PR adds.
 
 The limit is that a shot shows a state, not an interaction: hover
 states, open menus and keyboard focus cannot be captured. The PR's
@@ -734,12 +745,13 @@ states, open menus and keyboard focus cannot be captured. The PR's
 about states (cells, badges, contrast, stale data), so this covers
 most of them; a CDP driver can be added later if it does not.
 
-The build job runs the capture twice, against `main` and against the
-branch. It commits the images to the `issue-screenshots` branch under
-`pr-<N>/` and links them in the body. Each PR writes only its own
-directory, so a push rejected by a concurrent one is simply retried
-after a fetch and rebase; it never conflicts. Both light and dark
-themes are captured when the change affects colors.
+The build job takes the shots twice, of `main` (suffix `before`) and of
+its worktree (`after`), checks them, and publishes them with
+`scripts/factory/publish-shots.sh <PR> <file>...`: it commits them to
+the `issue-screenshots` branch under `pr-<PR>/` and prints the Markdown
+images for the body. Each PR writes only its own directory, so a push
+rejected by a concurrent one is simply retried after a rebase; it
+never conflicts.
 
 ### 5. `review` (planned)
 
@@ -855,10 +867,10 @@ allowed. Hooks are a guardrail, not a security boundary: the job
 instructions state the same rules, `factory-job.json` repeats the
 plainest forms as deny rules (the guard is the real check: a deny
 pattern cannot tell `git push origin main` from every way to write it),
-and the orchestrator checks the `accepted` gate
-against the timeline (planned). Before every job, the orchestrator
-also checks that the main checkout's `factory-job.json` and hook match
-`main`, and refuses to start a job if they do not (planned). Changes to the factory itself
+and `stage.sh` checks the `accepted` gate against
+the timeline. The jobs' `factory-job.json` and hooks come from the
+trusted checkout, which the loop resets to `origin/main` on every poll,
+and `job.sh` reverts any change a tick makes there. Changes to the factory itself
 (`factory`, `.claude/`, `scripts/factory/`, `docs/factory/`,
 `.github/`) always go through a spec, and the `rules` reviewer flags
 them.
@@ -894,6 +906,14 @@ scripts/factory/cleanup.sh            removes the local worktree and branch of a
 .claude/skills/factory/SKILL.md       /factory in an interactive session
 .claude/skills/factory-tick/SKILL.md  the transitions and the choice of the next job
 .claude/skills/factory-triage/SKILL.md
+.claude/skills/factory-build/SKILL.md
+scripts/factory/try-pr.sh             ./factory try: a tree on its own broker, in a scenario's state
+scripts/factory/scenario.sh           runs a scenario against a server
+scripts/factory/scenarios/*.json      the scenarios
+scripts/factory/capture.sh            one headless Chrome screenshot
+scripts/factory/shots.sh              the shots a PR lists, for one tree
+scripts/factory/publish-shots.sh      the shots, on the issue-screenshots branch
+scripts/factory/captures/<issue>.txt  the shots of a PR (added by its build)
 .github/ISSUE_TEMPLATE/{bug,feature,task}.yml, config.yml
 .github/pull_request_template.md
 docs/factory/README.md                this document
@@ -903,10 +923,7 @@ docs/factory/README.md                this document
 Planned:
 
 ```
-scripts/factory/{try-pr,capture}.sh
-scripts/factory/scenarios/*.json
-scripts/factory/captures/<N>.txt      the shots of a PR
-.claude/skills/factory-{spec,build,review,address}/SKILL.md
+.claude/skills/factory-{spec,review,address}/SKILL.md
 .claude/agents/reviewer-{code,tests,rules,api,ux,kafka}.md
 .claude/agents/review-verifier.md
 docs/factory/review/<angle>.md        review guides
@@ -979,8 +996,9 @@ applies to everything, the remaining rollout steps included.
    tests, `job.sh`, the trusted checkout, the overview,
    `./factory up/down/status/logs/run/pause/resume`, the `tick` and
    `triage` skills. Pilot on the open issues.
-4. `./factory try`, the scenarios, `capture.sh`, and the `build`
-   skill.
+4. Built. `./factory try`, the scenarios, `capture.sh`, `shots.sh`,
+   `publish-shots.sh`, the `build` skill, and the commit and PR
+   conventions in `CLAUDE.md`.
 5. The reviewers, the verifier, the review guides, and the `review`
    skill.
 6. The `spec` and `address` skills, and stacked PRs with sub-issues.

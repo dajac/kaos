@@ -20,6 +20,9 @@ Usage: ./factory <command>
              Ask the loop to run a job now: triage, spec, build, review or
              address. The next tick decides whether the transition is legal.
   pause      Start no new job; resume undoes it.
+  try <PR|branch|main> [--scenario <name>]
+             Build and run a PR on its own broker, in the state of a
+             scenario; Ctrl-C stops it.
   merge <PR> David's merge, in his own terminal: squash an approved,
              green PR with the part of its body above the --- rule.
   help       This help.
@@ -293,6 +296,10 @@ pause)
 resume)
     rm -f "$FACTORY_STATE/paused"
     info "resumed"
+    ;;
+try)
+    shift
+    exec "$FACTORY_SCRIPTS/try-pr.sh" "$@"
     ;;
 merge)
     shift

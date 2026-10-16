@@ -102,6 +102,30 @@ A local broker for manual testing:
 docker run -p 9092:9092 apache/kafka:4.3.1
 ```
 
+## Commits and PRs
+
+PRs are squash-merged: the PR title and the part of its body above the
+`---` rule become the commit.
+
+- Titles follow [Conventional Commits](https://www.conventionalcommits.org/):
+  `<type>(<area>): <Description>`, for example
+  `fix(ui): Keep row text readable over high-lag cells`.
+  - `type`: `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`,
+    `perf` or `chore`; a `!` before the colon marks a breaking change of
+    the public Java API or of the HTTP API. The triage's type maps to
+    it: `bug` to `fix`, `enhancement` to `feat`, `documentation` to
+    `docs`, `task` to whichever of the others fits.
+  - `area`: the issue's area, one of `core`, `server`, `api`, `ui`,
+    `build`, `protocol` or `factory`.
+  - The description is a capitalized imperative, without a final
+    period. GitHub appends `(#PR)` at the merge.
+- The body: the context or the problem in a sentence or two, what the
+  change does, then for larger changes a `Changes:` list; then
+  `Closes #N`. Lines wrap at 72 columns, code is in backticks, the
+  present tense is used.
+- Below the `---` rule: the review material (how to test, screenshots,
+  checks, decisions for David), dropped at the merge.
+
 ## Factory
 
 Issues become merged PRs through the software factory, described in
