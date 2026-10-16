@@ -60,11 +60,15 @@ Argument: the issue number.
    nothing to change (a flake on CI's side), push nothing and stop with
    a blocked handoff that quotes the failure: the bot cannot rerun CI,
    David can.
-4. When the change touches `kaos-ui/`, take the shots again
-   (`scripts/factory/shots.sh`, as in the build skill) and update the
-   PR body's screenshots: `gh pr edit <PR> --body-file
+4. When the change touches `kaos-ui/`, take the shots again, as in the
+   build skill, from the list and the scenarios the build kept in
+   `.factory/pr/` (fetch them from `pr-<PR>/` of the `issue-screenshots`
+   branch if the worktree lost them: `git show
+   origin/issue-screenshots:pr-<PR>/shots.txt`), publish them, and
+   update the PR body's screenshots: `gh pr edit <PR> --body-file
    .factory/pr-body.md`, from the current body (`gh pr view <PR> --json
-   body`). Update its "Checks" and "Decisions for David" too.
+   body`). Update its "Checks" and "Decisions for David" too. Never
+   commit the list or the scenarios: the PR holds the change only.
 5. Reply to each thread you addressed, on its first comment:
    `gh api repos/dajac/kaos/pulls/<PR>/comments/<comment id>/replies -f
    body=...`: "Fixed in <sha>: ..." or why not. Answer David's other
