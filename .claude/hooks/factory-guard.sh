@@ -45,6 +45,10 @@ bot=false
 line_has 'pulls/[0-9]+/merge' && refuse "merging a PR is David's"
 line_has 'merge\.sh' && refuse "merging a PR is David's"
 line_has 'resolveReviewThread' && refuse "resolving a review thread is David's"
+line_has 'mergePullRequest|enablePullRequestAutoMerge' && refuse "merging a PR is David's"
+line_has 'addPullRequestReview' && line_has 'APPROVE' && refuse "approving a PR is David's"
+line_has '\.claude/settings\.local\.json' && line_has '(>|tee|cp|mv|ln|install|rsync)' &&
+    refuse "a local settings file would loosen the session's permissions"
 line_has 'event[^a-zA-Z]*APPROVE' && refuse "approving a PR is David's"
 line_has '/issues/[0-9]+[^ ]* .*state[^a-z]*closed' && refuse "closing an issue is David's"
 line_has '/labels' && line_has 'accepted' && refuse "the accepted label is David's"

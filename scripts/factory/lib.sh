@@ -11,11 +11,14 @@ if [[ -z ${FACTORY_HOME:-} ]]; then
     FACTORY_HOME=$(dirname "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --path-format=absolute --git-common-dir)")
 fi
 FACTORY_STATE=$FACTORY_HOME/.factory
-# The scripts of the main checkout are the trusted ones. Until the
+# The trusted scripts: those of the factory's checkout of main for the
+# jobs (FACTORY_TRUSTED), of the main checkout otherwise. Until the
 # factory is merged, the main checkout has none, so the caller's own
 # copy stands in.
 if [[ -z ${FACTORY_SCRIPTS:-} ]]; then
-    if [[ -f $FACTORY_HOME/scripts/factory/lib.sh ]]; then
+    if [[ -n ${FACTORY_TRUSTED:-} && -f $FACTORY_TRUSTED/scripts/factory/lib.sh ]]; then
+        FACTORY_SCRIPTS=$FACTORY_TRUSTED/scripts/factory
+    elif [[ -f $FACTORY_HOME/scripts/factory/lib.sh ]]; then
         FACTORY_SCRIPTS=$FACTORY_HOME/scripts/factory
     else
         FACTORY_SCRIPTS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

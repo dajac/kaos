@@ -191,3 +191,12 @@ test_session_hook_sources_identity_before_every_command() {
     "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/session-identity.sh"
     assert_eq "$(cat env)" ". $(pwd -P)/project/scripts/factory/identity.sh"
 }
+
+test_session_hook_prefers_the_trusted_checkout() {
+    git init -q project
+    mkdir -p project/scripts/factory trusted/scripts/factory
+    touch project/scripts/factory/identity.sh trusted/scripts/factory/identity.sh
+    export CLAUDE_ENV_FILE=$PWD/env CLAUDE_PROJECT_DIR=$PWD/project FACTORY_TRUSTED=$PWD/trusted
+    "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/session-identity.sh"
+    assert_eq "$(cat env)" ". $PWD/trusted/scripts/factory/identity.sh"
+}

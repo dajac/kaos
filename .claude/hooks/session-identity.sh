@@ -8,9 +8,12 @@ set -euo pipefail
 [[ -n ${CLAUDE_ENV_FILE:-} ]] || exit 0
 project=${CLAUDE_PROJECT_DIR:-$PWD}
 home=$(dirname "$(git -C "$project" rev-parse --path-format=absolute --git-common-dir)")
-# The main checkout's copy is the trusted one; until the factory is
-# merged, it has none and the session's own copy stands in.
-identity=$home/scripts/factory/identity.sh
+# The trusted copy: the factory's checkout of main for the jobs
+# (FACTORY_TRUSTED), the main checkout otherwise; until the factory is
+# merged, the main checkout has none and the session's own copy stands
+# in.
+identity=${FACTORY_TRUSTED:+$FACTORY_TRUSTED/scripts/factory/identity.sh}
+[[ -n $identity && -f $identity ]] || identity=$home/scripts/factory/identity.sh
 [[ -f $identity ]] || identity=$project/scripts/factory/identity.sh
 [[ -f $identity ]] || exit 0
 printf '. %q\n' "$identity" >>"$CLAUDE_ENV_FILE"

@@ -48,6 +48,11 @@ test_davids_gates_are_refused() {
         'gh pr review 81 --approve' \
         'gh pr review 81 -a -b ok' \
         'gh api repos/dajac/kaos/pulls/81/reviews -f event=APPROVE' \
+        "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'" \
+        "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: \"x\"}) { clientMutationId } }'" \
+        "gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"x\", event: APPROVE}) { clientMutationId } }'" \
+        'echo {} > .claude/settings.local.json' \
+        'cp /tmp/x .claude/settings.local.json' \
         "gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: \"x\"}) { thread { id } } }'"
 }
 
