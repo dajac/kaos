@@ -101,8 +101,8 @@ Three pieces:
   context: nothing accumulates from one issue to the next. It also
   removes the local worktrees and branches of merged PRs
   (`scripts/factory/cleanup.sh`).
-- **Jobs**, one per piece of model work: `triage` and `build` (built),
-  `spec`, `review`, `address` (planned). A job is a skill run headless by
+- **Jobs**, one per piece of model work: `triage`, `build` and
+  `review` (built), `spec` and `address` (planned). A job is a skill run headless by
   `scripts/factory/job.sh <kind> <N>` (`claude -p "/factory-<kind>
   <N>"`) in the issue's worktree. It does its work, posts its result
   on GitHub with a `yaml` handoff block, and exits. It never changes a
@@ -772,12 +772,14 @@ on that branch. Each PR writes only its own directory, so a push
 rejected by a concurrent one is simply retried after a rebase; it
 never conflicts.
 
-### 5. `review` (planned)
+### 5. `review`
 
-A review job runs on every draft PR the orchestrator hands it, and
-again after each `address` round. It picks the reviewers from the
-changed paths and runs them in parallel as subagents in
-`.claude/agents/reviewer-*.md`.
+`.claude/skills/factory-review/SKILL.md`. A review job runs on every
+draft PR the orchestrator hands it, and again after each `address`
+round, in `.claude/worktrees/review-<N>`, a checkout of the PR head. It
+picks the reviewers from the changed paths and runs them in parallel
+as subagents, each defined in `.claude/agents/reviewer-<angle>.md`:
+what the angle checks, the severities, and the JSON it returns.
 
 | Reviewer | When | Looks at |
 |---|---|---|
@@ -794,10 +796,18 @@ does not trust the PR body's claims without checking them. It returns
 findings with a file, a line, a severity (`blocker`, `major`, `minor`,
 `nit`) and a failure scenario.
 
-A final `verifier` subagent drops the findings it cannot confirm and
-merges duplicates. The survivors are posted as one PR review per
-angle, with inline comments. On round 2, only the angles that had
-findings re-review, and only their threads and the new diff.
+A final `review-verifier` subagent checks each finding against the
+code, drops the ones it cannot confirm, merges duplicates and lowers
+overstated severities. The survivors are posted as one PR review per
+angle, with the event `COMMENT` and inline comments (findings on lines
+outside the diff go into the review's body). The round is counted from
+the issue's handoffs: 1, plus the `review` handoffs since the last
+build or David's last request for changes. On round 2, only the angles
+that had findings re-review, with their previous findings, the
+replies, and the diff since their previous review.
+
+The review job's handoff carries `round`, `blocking` (the `blocker` and
+`major` findings kept), `minor`, the angles and the head it reviewed.
 
 The `address` job replies to every thread (fixed in `<sha>`, or why
 not) and pushes new commits, never a force-push.
@@ -816,10 +826,10 @@ and `nit` may be left open with a reason.
 - **A `blocker` or `major` still open after round 2:** the PR stays a
   draft and the issue goes to `blocked` with the open question.
 
-The review guides (what each angle checks, with Kaos examples) live in
-`docs/factory/review/<angle>.md`, so they are versioned and shared.
-Lessons that today sit in one user's local memory move there: the
-coordinator view, screenshots on UI issues, the independent review.
+What each angle checks lives in its agent file, versioned with the
+code. Lessons that sat in one user's local memory moved there: the UX
+reviewer checks the rows against the coordinator's view, and the review
+is independent of the author.
 
 ### 6. `address` (planned), David's review and the merge
 
@@ -926,6 +936,9 @@ scripts/factory/cleanup.sh            removes the local worktree and branch of a
 .claude/skills/factory-tick/SKILL.md  the transitions and the choice of the next job
 .claude/skills/factory-triage/SKILL.md
 .claude/skills/factory-build/SKILL.md
+.claude/skills/factory-review/SKILL.md
+.claude/agents/reviewer-{code,tests,rules,api,ux,kafka}.md
+.claude/agents/review-verifier.md
 scripts/factory/try-pr.sh             ./factory try: a tree on its own broker, in a scenario's state
 scripts/factory/scenario.sh           runs a scenario against a server
 scripts/factory/scenarios/*.json      the scenarios
@@ -941,10 +954,7 @@ docs/factory/README.md                this document
 Planned:
 
 ```
-.claude/skills/factory-{spec,review,address}/SKILL.md
-.claude/agents/reviewer-{code,tests,rules,api,ux,kafka}.md
-.claude/agents/review-verifier.md
-docs/factory/review/<angle>.md        review guides
+.claude/skills/factory-{spec,address}/SKILL.md
 docs/specs/                           only on spec branches
 ```
 
@@ -1017,8 +1027,7 @@ applies to everything, the remaining rollout steps included.
 4. Built. `./factory try`, the scenarios, `capture.sh`, `shots.sh`,
    `publish-shots.sh`, the `build` skill, and the commit and PR
    conventions in `CLAUDE.md`.
-5. The reviewers, the verifier, the review guides, and the `review`
-   skill.
+5. Built. The reviewers, the verifier, and the `review` skill.
 6. The `spec` and `address` skills, and stacked PRs with sub-issues.
 
 Pilot candidates: #73 (ellipses, trivial UI), #75 (classic consumer
