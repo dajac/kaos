@@ -50,7 +50,7 @@ while IFS= read -r segment; do
         segment=${BASH_REMATCH[2]}
     done
     # gh takes its repository flag before the subcommand too.
-    while [[ $segment =~ ^(([^\ ]*/)?gh)\ +(-R|--repo)(=|\ +)[^\ ]+\ +(.*)$ ]]; do
+    while [[ $segment =~ ^(([^\ ]*/)?gh)\ +(-R|--repo)(=|\ +)?[^\ ]+\ +(.*)$ ]]; do
         segment="${BASH_REMATCH[1]} ${BASH_REMATCH[5]}"
     done
     [[ -n $segment ]] && segments+=("$segment")
@@ -82,19 +82,20 @@ line_has 'mergePullRequest|enablePullRequestAutoMerge' && refuse "merging a PR i
 line_has 'addPullRequestReview' && line_has 'APPROVE' && refuse "approving a PR is David's"
 line_has 'event[^a-z]*APPROVE' && refuse "approving a PR is David's"
 line_has '/issues/[0-9]+[^ ]* .*state[^a-z]*closed' && refuse "closing an issue is David's"
-line_has '(^|[^a-z-])gh +((-R|--repo)[= ][^ ]+ +)*pr +merge' && refuse "merging a PR is David's"
-line_has '(^|[^a-z-])gh +((-R|--repo)[= ][^ ]+ +)*issue +close' && refuse "closing an issue is David's"
-line_has '(^|[^a-z-])gh +((-R|--repo)[= ][^ ]+ +)*pr +review[^;&|]*(--approve| -[a-z]*a[a-z]*( |$))' && refuse "approving a PR is David's"
+line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*pr +merge' && refuse "merging a PR is David's"
+line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*issue +close' && refuse "closing an issue is David's"
+line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*pr +review[^;&|]*(--approve| -[a-z]*a[a-z]*( |$))' && refuse "approving a PR is David's"
 line_has '(^|[^a-z-])factory +merge' && refuse "merging a PR is David's"
 line_has '(^|[^a-z-])gh +alias' && refuse "gh aliases hide commands from the guard"
 line_has 'settings\.local\.json' && line_has '(>|tee|cp|mv|ln|install|rsync)' &&
     refuse "a local settings file would loosen the session's permissions"
 
-# Labels written through the API: the accepted label is David's, the
-# stage labels change through stage.sh only. Reading labels is fine.
+# Labels through the API: the accepted label is David's whatever the
+# call; the stage labels change through stage.sh only. Reading labels is
+# fine.
+line_has '(^|[^a-z-])gh +api' && line_has 'labels' && line_has 'accepted' && refuse "the accepted label is David's"
 if line_has '(^|[^a-z-])gh +api' && line_has 'labels' &&
-    line_has ' (-X|--method) *(POST|PUT|PATCH|DELETE)| (-f|-F|--field|--raw-field|--input)( |=)'; then
-    line_has 'accepted' && refuse "the accepted label is David's"
+    line_has ' -[fF]| --(field|raw-field|input)| (-X|--method)[ =]*(POST|PUT|PATCH|DELETE)'; then
     line_has 'needs-triage|triaged|needs-info|queued|spec-review|in-progress|reviewing|in-review|changes-requested|blocked' &&
         refuse "stage labels change through scripts/factory/stage.sh only"
 fi
@@ -106,6 +107,8 @@ if $bot; then
     # bot's identity, or of a program git runs (an editor, a pager).
     line_has "$at((env|export)( +-[a-z-]+)* +)?([A-Za-z_][A-Za-z_0-9]*=[^ ]* +)*(GH_TOKEN|GITHUB_TOKEN|GH_CONFIG_DIR|GH_HOST|GIT_CONFIG_[A-Z_0-9]*|GIT_AUTHOR_[A-Z]*|GIT_COMMITTER_[A-Z]*|GIT_SSH[A-Z_]*|GIT_ASKPASS|SSH_ASKPASS|GIT_EDITOR|GIT_SEQUENCE_EDITOR|EDITOR|VISUAL|GIT_PAGER|PAGER|GIT_EXTERNAL_DIFF|PATH)=" &&
         refuse "overriding the bot's identity, or a program git runs"
+    line_has '(^|[ ;&|(){}`])(GH_TOKEN|GITHUB_TOKEN|GH_CONFIG_DIR|GH_HOST|GIT_CONFIG_[A-Z_0-9]*|GIT_AUTHOR_[A-Z]*|GIT_COMMITTER_[A-Z]*|GIT_SSH[A-Z_]*|GIT_ASKPASS|SSH_ASKPASS)\+?=' &&
+        refuse "overriding the bot's identity"
     line_has 'protocol\.[a-z]*\.allow|ext::' && refuse "git's ext transport runs commands"
 
     line_has '(^|[;&|( ])(unset|env)( [^;&|]*)? -u|(^|[;&|( ])env [^;&|]*(-i|--ignore-environment|--unset)|(^|[;&|( ])unset [^;&|]*(GH_|GITHUB_TOKEN|GIT_)' &&
@@ -155,7 +158,7 @@ for s in ${segments[@]+"${segments[@]}"}; do
     if $bot; then
         [[ $s =~ ^(unset|export\ +-n)\ .*(GH_|GITHUB_TOKEN|GIT_|PATH) ]] && refuse "overriding the bot's identity"
         [[ $s =~ ^env\ .*(-u|-i|--unset|--ignore-environment) ]] && refuse "overriding the bot's identity"
-        [[ $s =~ ^(\\gh|/[^\ ]*/gh)(\ |$) && ! $s =~ ^/[^\ ]*/scripts/factory/bin/gh(\ |$) ]] &&
+        [[ $s =~ ^/[^\ ]*/gh(\ |$) && ! $s =~ ^/[^\ ]*/scripts/factory/bin/gh(\ |$) ]] &&
             refuse "bypassing the bot's gh wrapper"
         [[ $s =~ ^gh\ +auth ]] && refuse "gh auth reads or changes David's login"
         if [[ $s =~ ^git(\ |$) ]]; then

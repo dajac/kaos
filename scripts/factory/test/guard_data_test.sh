@@ -132,10 +132,22 @@ test_substitutions_and_escapes_are_refused() {
 
 test_reads_and_patterns_pass() {
     with_bot
-    allowed "grep -rn 'GH_TOKEN=' scripts" \
-        'grep -rn "PATH=" scripts/factory' \
+    allowed 'grep -rn "PATH=" scripts/factory' \
         'git config user.name' \
         'git config --get remote.origin.url' \
         "jq -r '.[] | select(.name == \"x\")' f.json" \
         'git push -u origin 75-fix-cells'
+}
+
+test_identity_assignments_anywhere_and_fused_flags_are_refused() {
+    with_bot
+    refused 'declare -x GH_TOKEN=x; gh pr list' \
+        'typeset -x GIT_AUTHOR_NAME=David' \
+        'export A GIT_CONFIG_GLOBAL=/tmp/x' \
+        'env -C / GH_TOKEN=x gh pr list' \
+        'case a in a) GH_TOKEN=x gh pr list;; esac' \
+        'GH_TOKEN+=x gh pr list' \
+        'gh api repos/dajac/kaos/issues/3/labels -flabels[]=accepted' \
+        'gh api --method=PUT repos/dajac/kaos/issues/3/labels -Flabels[]=queued' \
+        'gh -Rdajac/kaos pr merge 81'
 }
