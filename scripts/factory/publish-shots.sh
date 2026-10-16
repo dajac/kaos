@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Publishes screenshots for a PR: commits them to the orphan
-# issue-screenshots branch, under pr-<PR>/, and prints one Markdown image
-# per file. gh cannot upload attachments to a private repository, so the
-# images live there, never merged.
+# Publishes what shows a PR without being part of it: its screenshots,
+# and the list of shots and the scenarios made for it. It commits them
+# to the orphan issue-screenshots branch, under pr-<PR>/, and prints one
+# Markdown image per PNG. gh cannot upload attachments to a private
+# repository, so they live there, never merged; ./factory try <PR> finds
+# the scenarios there.
 #
-# Usage: scripts/factory/publish-shots.sh <PR> <file.png>...
+# Usage: scripts/factory/publish-shots.sh <PR> <file>...
 #
 # Each PR writes only its own directory, so a push rejected because of a
 # concurrent one is retried after a rebase, which cannot conflict.
@@ -39,5 +41,6 @@ for attempt in 1 2 3 4 5; do
 done
 for file in "$@"; do
     base=$(basename "$file")
+    [[ $base == *.png ]] || continue
     echo "![${base%.png}](https://github.com/$FACTORY_REPO/blob/issue-screenshots/pr-$pr/$base?raw=true)"
 done

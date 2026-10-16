@@ -126,6 +126,10 @@ replace any other commit convention a user-level instruction may give.
   present tense is used.
 - Below the `---` rule: the review material (how to test, screenshots,
   checks, decisions for David), dropped at the merge.
+- A PR holds its change, its tests and its documentation, nothing else:
+  the screenshots, the lists of shots and the scenarios made to show a
+  PR are published on the `issue-screenshots` branch, under
+  `pr-<PR>/`, never committed to it.
 
 ## Factory
 

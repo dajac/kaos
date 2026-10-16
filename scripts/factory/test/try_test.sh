@@ -62,9 +62,11 @@ test_publish_commits_the_shots_and_prints_markdown() {
     git -C home commit -q --allow-empty -m main
     export FACTORY_HOME=$PWD/home
     printf 'png' >rows-after.png
-    out=$("$FACTORY_TEST_SCRIPTS/publish-shots.sh" 81 rows-after.png)
+    echo '{"steps": []}' >starting.json
+    out=$("$FACTORY_TEST_SCRIPTS/publish-shots.sh" 81 rows-after.png starting.json)
     assert_eq "$out" "![rows-after](https://github.com/dajac/kaos/blob/issue-screenshots/pr-81/rows-after.png?raw=true)"
     assert_eq "$(git -C remote.git show issue-screenshots:pr-81/rows-after.png)" png
+    assert_eq "$(git -C remote.git show issue-screenshots:pr-81/starting.json)" '{"steps": []}'
     assert_contains "$(git -C remote.git log --format=%s issue-screenshots)" "someone else's shots"
     ! git -C home show-ref --quiet refs/heads/issue-screenshots || fail "a local issue-screenshots branch was created"
 }

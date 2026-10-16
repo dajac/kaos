@@ -24,7 +24,11 @@ Argument: the issue number.
   `docs/ARCHITECTURE.md` the change touches, and update them in the same
   PR.
 - Do what the issue and its accepted triage ask, and nothing else: no
-  unrelated refactoring, no drive-by fix. When the work turns out to
+  unrelated refactoring, no drive-by fix. The PR holds the change, its
+  tests and its documentation only: what you make to show it (a list of
+  shots, a scenario for the screenshots or for trying it) stays under
+  `.factory/pr/` and is published with the screenshots, never
+  committed. When the work turns out to
   need a product or design decision the issue does not settle, or a
   spec, stop with a blocked handoff that states the question.
 - One command per Bash call; no `cd`, no `for` loops, no `$(...)`
@@ -61,9 +65,11 @@ Argument: the issue number.
    area:build --body-file .factory/flake.md`, with the failure), say so
    in the PR, and go on. Otherwise, after three attempts, stop with a
    blocked handoff quoting the `GATES:` line.
-6. If the change needs a state the existing scenarios do not show, add
-   one under `scripts/factory/scenarios/` (see `default.json` and
-   `scenario.sh`), and commit it.
+6. If the change needs a state the factory's scenarios
+   (`scripts/factory/scenarios/`) do not show, write one in
+   `.factory/pr/<name>.json` (see `default.json` and `scenario.sh`).
+   Do not commit it: step 9 publishes it with the screenshots, and
+   `./factory try <PR> --scenario <name>` finds it there.
 7. Push: `git push -u origin <branch>`.
 8. Open the draft PR: write the body to `.factory/pr-body.md` from
    `.github/pull_request_template.md`. If an earlier build already
@@ -82,15 +88,16 @@ Argument: the issue number.
      failed before the fix, the flakes filed;
    - "Decisions for David": every choice the issue did not settle.
 9. When the diff touches `kaos-ui/`, whatever the issue's areas say:
-   - list the shots in `scripts/factory/captures/<N>.txt` (one per
-     line: `<name> <scenario> <path> <size>`; see
-     `scripts/factory/shots.sh`), and commit and push it;
-   - `scripts/factory/shots.sh main scripts/factory/captures/<N>.txt .factory/shots before`
-   - `scripts/factory/shots.sh . scripts/factory/captures/<N>.txt .factory/shots after`
+   - list the shots in `.factory/pr/shots.txt`, next to the scenarios of
+     step 6 (one per line: `<name> <scenario> <path> <size>`; see
+     `scripts/factory/shots.sh`), without committing it;
+   - `scripts/factory/shots.sh main .factory/pr/shots.txt .factory/shots before`
+   - `scripts/factory/shots.sh . .factory/pr/shots.txt .factory/shots after`
    - look at each image (Read the PNG) and check that it shows the
      change; adjust the scenario or the shot if not;
-   - `scripts/factory/publish-shots.sh <PR> .factory/shots/<name>-before.png .factory/shots/<name>-after.png ...`
-     prints one Markdown image per file: put them in a
+   - `scripts/factory/publish-shots.sh <PR> .factory/shots/<name>-before.png .factory/shots/<name>-after.png ... .factory/pr/shots.txt .factory/pr/<scenario>.json ...`
+     publishes the images, the list and the scenarios of step 6, and
+     prints one Markdown image per PNG: put them in a
      `| Before (main) | After |` table under "Screenshots", and update
      the PR: `gh pr edit <PR> --body-file .factory/pr-body.md`.
 10. Hand off: post one comment on the issue with `gh issue comment N

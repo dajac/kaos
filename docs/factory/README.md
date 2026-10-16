@@ -727,7 +727,8 @@ and removes the `try-*` worktrees.
 Scenarios are small JSON files under `scripts/factory/scenarios/`, run
 by `scripts/factory/scenario.sh`: requests, waits on a `jq` filter of a
 `GET`, and sleeps, with an optional `include` of another scenario.
-`default.json` makes one topic of 6 partitions, a producer and a group
+The factory's scenarios are the shared ones; a PR's own live with its
+screenshots (below). `default.json` makes one topic of 6 partitions, a producer and a group
 of 3 consumers, and waits until each consumer owns the partitions the
 coordinator targets for it; `frozen-consumer.json` then freezes
 `consumer-0` for a minute. David and the build job see the same state.
@@ -742,13 +743,16 @@ delay the shot). So Chrome loads a local wrapper page: the UI in a
 full-size frame, and a hidden image that a one-shot `nc` server answers
 only after `--wait-ms`. The load event, and the shot, wait for it.
 
-A PR lists its shots in `scripts/factory/captures/<issue>.txt`, one
-per line: `<name> <scenario> <path> <size>` (the UI has a dark theme
-only). `scripts/factory/shots.sh <tree> <list> <out-dir> <suffix>`
-takes them for one tree, building it once and running a fresh server
-per shot; the scenarios come from the PR's `scenarios/` directory, so
-that the shots of `main` show the same state, even with a scenario the
-PR adds.
+A PR holds its change, its tests and its documentation only. What is
+made just to show it stays out of it: the build job keeps the list of
+shots in `.factory/pr/shots.txt` of its worktree, one per line,
+`<name> <scenario> <path> <size>` (the UI has a dark theme only), and a
+scenario written for the PR next to it, in `.factory/pr/<name>.json`.
+`scripts/factory/shots.sh <tree> <list> <out-dir> <suffix>` takes the
+shots for one tree, building it once and running a fresh server per
+shot; a scenario comes from the list's directory, or else from the
+factory's `scripts/factory/scenarios/`, so that the shots of `main`
+show the same state as the PR's.
 
 The limit is that a shot shows a state, not an interaction: hover
 states, open menus and keyboard focus cannot be captured. The PR's
@@ -757,11 +761,14 @@ about states (cells, badges, contrast, stale data), so this covers
 most of them; a CDP driver can be added later if it does not.
 
 The build job takes the shots twice, of `main` (suffix `before`) and of
-its worktree (`after`), checks them, and publishes them with
-`scripts/factory/publish-shots.sh <PR> <file>...`: from a detached
-worktree of its own (`.claude/worktrees/factory-screenshots`), it
-commits them to the `issue-screenshots` branch under `pr-<PR>/` and
-prints the Markdown images for the body. Each PR writes only its own directory, so a push
+its worktree (`after`), checks them, and publishes them with the list
+and the PR's scenarios: `scripts/factory/publish-shots.sh <PR>
+<file>...`, from a detached worktree of its own
+(`.claude/worktrees/factory-screenshots`), commits them to the
+`issue-screenshots` branch under `pr-<PR>/` and prints the Markdown
+images for the body. `./factory try <PR> --scenario <name>` looks a
+scenario up in the PR's tree, then in the factory's, then in `pr-<PR>/`
+on that branch. Each PR writes only its own directory, so a push
 rejected by a concurrent one is simply retried after a rebase; it
 never conflicts.
 
@@ -925,7 +932,6 @@ scripts/factory/scenarios/*.json      the scenarios
 scripts/factory/capture.sh            one headless Chrome screenshot
 scripts/factory/shots.sh              the shots a PR lists, for one tree
 scripts/factory/publish-shots.sh      the shots, on the issue-screenshots branch
-scripts/factory/captures/<issue>.txt  the shots of a PR (added by its build)
 .github/ISSUE_TEMPLATE/{bug,feature,task}.yml, config.yml
 .github/pull_request_template.md
 docs/factory/README.md                this document

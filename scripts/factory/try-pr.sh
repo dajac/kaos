@@ -15,9 +15,12 @@
 # - It builds the shaded jar (-DskipTests; --no-build reuses an earlier
 #   one of the same head), starts apache/kafka:4.3.1 in its own
 #   container on a free port, runs the server on free ports, runs the
-#   scenario (the tree's default.json unless --scenario names another of
-#   its scenarios or a file; "none" for none), and prints the UI's URL
-#   on its last line.
+#   scenario (default.json unless --scenario names another, or a file;
+#   "none" for none), and prints the UI's URL on its last line. A
+#   scenario name is looked up in the tree's scenarios, then in the
+#   factory's, then, for a PR, among the files published for it on the
+#   issue-screenshots branch (pr-<PR>/): a PR does not commit the
+#   scenarios made only to show it.
 # - Without --detach it waits, and stops everything on Ctrl-C. With
 #   --detach it returns, leaving everything running: --stop <name> stops
 #   it. Its state is in .factory/try/<name>/ (url, logs, pids).
@@ -120,10 +123,20 @@ handed_over=false
 trap '$handed_over || stop "$name"' EXIT
 trap 'exit 130' INT TERM
 
-# A scenario is a file, or the name of one of the tree's scenarios.
+# A scenario is a file, or a name: the tree's, the factory's, or one
+# published for the PR.
 [[ -n $scenario ]] || scenario=default.json
 if [[ $scenario != none && ! -f $scenario ]]; then
-    scenario=$tree/scripts/factory/scenarios/$scenario
+    found=
+    for candidate in "$tree/scripts/factory/scenarios/$scenario" "$FACTORY_SCRIPTS/scenarios/$scenario"; do
+        [[ -f $candidate ]] && found=$candidate && break
+    done
+    if [[ -z $found && $target =~ ^[0-9]+$ ]] &&
+        git -C "$FACTORY_HOME" fetch -q origin "+issue-screenshots:refs/factory/issue-screenshots" 2>/dev/null &&
+        git -C "$FACTORY_HOME" show "refs/factory/issue-screenshots:pr-$target/$scenario" >"$dir/$scenario" 2>/dev/null; then
+        found=$dir/$scenario
+    fi
+    scenario=${found:-$scenario}
 fi
 [[ $scenario == none || -f $scenario ]] || die "no scenario $scenario"
 
