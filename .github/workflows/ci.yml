@@ -25,6 +25,8 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
+      - name: Factory script tests
+        run: scripts/factory/test/run.sh
       # The integration tests use the runner's Docker through Testcontainers.
       - run: ./mvnw -B -ntp verify
       - if: failure()

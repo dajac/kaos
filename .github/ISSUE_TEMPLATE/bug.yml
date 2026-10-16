@@ -1,0 +1,34 @@
+name: Bug
+description: Something does not work as it should
+labels: [bug, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happens? Quote the UI, the API response or the log.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Repro
+      description: The steps, the configuration and the broker used. Screenshots for UI issues.
+      placeholder: |
+        1. docker run -p 9092:9092 apache/kafka:4.3.1
+        2. ./run.sh
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What should happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Optional. Ideas for the fix, what is out of scope.

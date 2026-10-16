@@ -6,9 +6,17 @@ dependency-reduced-pom.xml
 node_modules/
 node/
 
-# Local tooling
-.claude/
+# Local tooling. The factory's Claude Code files are shared; the rest
+# of .claude/ (local settings, worktrees) is not.
+.claude/*
+!.claude/settings.json
+!.claude/factory-job.json
+!.claude/hooks/
+!.claude/skills/
+!.claude/agents/
 .review/
+# The factory's runtime state: bot ids, token cache, logs.
+.factory/
 
 # IDE files
 .idea/

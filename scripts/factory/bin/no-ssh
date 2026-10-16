@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# GIT_SSH_COMMAND of the bot's environment: git never uses SSH, so it
+# can never authenticate with David's SSH key.
+echo "factory: SSH is disabled for the bot; GitHub remotes go over HTTPS" >&2
+exit 1

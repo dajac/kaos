@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# pre-push hook of the bot's environment (identity.sh sets
+# core.hooksPath): refuses to push any commit that is not on the remote
+# yet and is not authored and committed by the bot. A rebase, a
+# cherry-pick or "commit --author" keeps the original author; such a
+# commit must be re-authored ("git commit --amend --reset-author" or
+# "git rebase --exec 'git commit --amend --no-edit --reset-author'").
+set -euo pipefail
+remote=$1
+bot_email=${GIT_AUTHOR_EMAIL:?}
+zero=0000000000000000000000000000000000000000
+bad=
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [[ $local_sha == "$zero" ]] && continue
+    while read -r sha author committer; do
+        [[ -z $sha ]] && continue
+        if [[ $author != "$bot_email" || $committer != "$bot_email" ]]; then
+            bad+="  $sha author <$author> committer <$committer>"$'\n'
+        fi
+    done < <(git log --format='%H %ae %ce' "$local_sha" --not --remotes="$remote")
+done
+if [[ -n $bad ]]; then
+    echo "factory: refused to push commits not authored and committed by the bot ($bot_email):" >&2
+    printf '%s' "$bad" >&2
+    echo "factory: re-author them with: git rebase --exec 'git commit --amend --no-edit --reset-author' <base>" >&2
+    exit 1
+fi
