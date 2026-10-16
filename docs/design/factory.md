@@ -70,10 +70,20 @@ Two kinds of processes, both local:
   is predictable, cheap and testable.
 - **Jobs**, one per piece of model work: `triage`, `spec`, `build`,
   `review`, `address`. A job is a headless Claude Code session
-  (`claude -p "/factory-<kind> <N>"`) in the issue's worktree. It does
-  its work, posts its result on GitHub with a `yaml` handoff block, and
-  exits. It never changes a stage label; the orchestrator reads the
-  handoff and moves the stage.
+  (`claude -p "/factory-<kind> <N>"`). It does its work, posts its
+  result on GitHub with a `yaml` handoff block, and exits. It never
+  changes a stage label; the orchestrator reads the handoff and moves
+  the stage.
+
+Each job runs in a worktree under `.claude/worktrees/`, which the
+orchestrator prepares:
+
+| Job | Worktree |
+|---|---|
+| `triage` | `triage-<N>`, detached at `main`, removed afterwards |
+| `spec` | `spec-<N>-<slug>` on branch `spec/<N>-<slug>` |
+| `build`, `address` | `<N>-<slug>` on branch `<N>-<slug>`, kept until the merge |
+| `review` | `review-<N>`, detached at the PR head, removed afterwards, so that the `tests` reviewer can revert the fix without touching the author's worktree |
 
 ```
            ┌──────────────────────────────┐
@@ -96,20 +106,22 @@ Why this split:
   start. Only the orchestrator starts jobs, including the ones David
   asks for by hand (`./factory run build 75` sends the request to it),
   so two jobs never race for one issue and no claim protocol is needed.
-- **Jobs are top-level sessions.** A Claude Code subagent cannot start
-  subagents. A review job is a top-level session, so it can fan out to
-  the six reviewer subagents.
-- **Review is its own job.** It starts from a fresh context with no
-  access to the build job's reasoning, which keeps the reviewers
-  independent of the author.
+- **Review is its own job.** It starts from a fresh context and a
+  fresh checkout, with no access to the build job's reasoning, which
+  keeps the reviewers independent of the author. It fans out to the
+  reviewer subagents itself.
 - **Small contexts.** Each job sees one issue and ends. Nothing
   accumulates across issues, unlike a long `/loop` session.
 
 The orchestrator keeps a little local runtime state in `.factory/`
 (gitignored): the lock, one file per running job (pid, kind, issue,
-start time, log path) and the job logs. GitHub stays the truth: after a
-crash or a reboot, the orchestrator rebuilds everything from the labels,
-the PRs and the timeline, and treats a job whose pid is gone as dead.
+start time, log path), the job logs and the current bot token. GitHub
+stays the truth: after a crash or a reboot, the orchestrator rebuilds
+everything from the labels, the PRs and the timeline. For an issue in
+`in-progress`, `reviewing` or `spec-review` with no live job, it looks
+for a valid handoff newer than the stage label: if there is one, the
+job finished while the orchestrator was down and the handoff is
+applied; otherwise the job died and the issue goes to `blocked`.
 
 ### Limits
 
@@ -124,12 +136,27 @@ the PRs and the timeline, and treats a job whose pid is gone as dead.
 
 ### Permissions of a job
 
-Headless jobs cannot ask for permission, so the committed
-`.claude/settings.json` allowlists what they need (`./mvnw`, `npm`,
-`git`, `gh`, `docker`, the factory scripts, edits in the worktree), and
-the guard hook (see "Guardrails") refuses what they must never do. A
-job that needs anything else fails cleanly and its issue goes to
-`blocked`. It never hangs on a prompt.
+Headless jobs cannot ask for permission. Without a mode, a `-p` run
+can start in `auto`, so the orchestrator always passes one:
+
+    claude -p "/factory-build 75" \
+      --permission-mode dontAsk --permission-prompts none \
+      --settings <main checkout>/.claude/factory-job.json \
+      --max-budget-usd <cap> --output-format stream-json --verbose
+
+- `dontAsk` denies every call that no allow rule covers, and
+  `--permission-prompts none` tells Claude not to retry a denied call.
+  A job that needs something not allowed fails cleanly, and its issue
+  goes to `blocked`; it never hangs on a prompt.
+- `factory-job.json` holds the allowlist (`./mvnw`, `npm`, `git`, `gh`,
+  `docker`, the factory scripts, edits in the worktree), the deny rules
+  and the guard hook (see "Guardrails"). It is read from the **main
+  checkout**, not from the job's worktree. A job can edit its own
+  branch's `.claude/`, but not the rules that bind it: deny rules win
+  over any allow rule the branch adds, and the hook from the main
+  checkout runs whatever the branch's copy says.
+- The `stream-json` log, `.factory/logs/<N>-<kind>.jsonl`, is what
+  `./factory logs` follows and what the `blocked` comment quotes.
 
 ## Running it
 
@@ -148,7 +175,10 @@ One script at the root of the repository, `./factory`:
 | `./factory merge <PR>` | David's merge (see stage 6) |
 
 `./factory up --at-login` installs a launchd agent instead, so the
-orchestrator survives reboots. Inside an interactive Claude Code
+orchestrator survives reboots. launchd does not inherit the shell's
+`PATH`, so `setup` records the absolute paths of `claude`, `gh`,
+`docker` and `node`, and runs a dry job under launchd to check that
+the Keychain items can be read without a prompt. Inside an interactive Claude Code
 session, `/factory` prints the same status and can call `./factory run`.
 
 Local first: builds and UX reviews need Docker, a broker and a browser,
@@ -162,14 +192,28 @@ The factory acts as a GitHub App, `kaos-factory`, owned by David and
 installed on `dajac/kaos` only. Its comments, reviews, pushes, labels
 and PRs show as `kaos-factory[bot]`.
 
+- **Creation:** `./factory setup` creates the App with GitHub's App
+  manifest flow (one browser confirmation), installs it on the repo and
+  stores the private key in the macOS Keychain.
 - **Permissions:** Contents, Issues and Pull requests read and write;
   Checks, Commit statuses and Actions read (to follow CI); Metadata
-  read. No administration, no workflows, nothing outside the repo.
-- **Credentials:** the App's private key lives in the macOS Keychain.
-  `scripts/factory/token.sh` signs a JWT and exchanges it for an
-  installation token, valid one hour and refreshed by the orchestrator.
-  Jobs get it as `GH_TOKEN` for `gh` and through a `GIT_ASKPASS` helper
-  for `git push`. David's own `gh` login is never used by a job.
+  read. No administration, nothing outside the repo, and no Workflows
+  permission: the bot cannot push a change under `.github/workflows/`.
+  Such a change is always factory work, which goes through a spec, and
+  the job hands David a patch to push himself.
+- **Tokens:** `scripts/factory/token.sh` signs a JWT and exchanges it
+  for an installation token, valid one hour. The orchestrator refreshes
+  it into `.factory/token` every 45 minutes, and jobs read it from
+  there on every call, since a build can outlive one token.
+- **Isolation from David's login.** A job must not be able to fall
+  back to David's credentials:
+  - `gh` runs with `GH_CONFIG_DIR` set to an empty directory, through
+    a wrapper that sets `GH_TOKEN` from `.factory/token`.
+  - `git` runs with `credential.helper` reset and replaced by a helper
+    that prints the bot token. Otherwise the macOS Keychain helper,
+    which holds David's credentials, answers first.
+  - `setup` checks both: `gh api user` and a `git push --dry-run` from
+    a job environment must authenticate as the bot.
 - **Commits** are authored by the bot, with
   `Co-Authored-By: Claude <noreply@anthropic.com>`.
 
@@ -188,20 +232,24 @@ What the bot makes simpler:
   ready, so it lands in his GitHub review queue and inbox. Before,
   his own actions did not notify him.
 
-What it does not fix: a free private repository has no branch
-protection or rulesets, so the App, which needs Contents write to push
-branches, could merge or push to `main` too. The guard hook remains the
-only barrier there. Moving the repository to a free organization, or
-going public, would allow a ruleset on `main` that blocks pushes and
-requires David's approval, which closes that hole server side.
+What it does not fix: on GitHub Free, private repositories have no
+branch protection or rulesets, for personal accounts and free
+organizations alike. The App needs Contents write to push branches, so
+it could also merge or push to `main`. The guard hook and the deny
+rules remain the only barrier. GitHub Pro (personal, same URLs) or
+making the repository public would allow a ruleset on `main` that
+blocks direct pushes and requires David's approval to merge, which
+closes that hole server side.
 
 ## The board: GitHub Projects
 
 A GitHub Project, **Kaos factory**, shows the whole pipeline.
 
-- **Items:** every open issue of `dajac/kaos`, added by the project's
-  built-in auto-add workflow. Closed issues move to Done through the
-  built-in workflow.
+- **Items:** every open issue of `dajac/kaos`. The project's built-in
+  auto-add workflow adds new ones (the free plan allows one such
+  workflow, which is all this needs). Auto-add does not backfill, so
+  `setup` adds the existing issues. Closed issues move to Done through
+  the built-in workflow.
 - **Status field**, one option per stage: Triage · Waiting for David ·
   Needs info · Queued · Spec · Building · Reviewing · Changes requested ·
   Blocked · Done.
@@ -217,11 +265,15 @@ The labels stay the source of truth, and the orchestrator mirrors them
 onto the board on every poll.
 
 GitHub Apps can only reach projects owned by an organization, not by a
-user. The board is David's (user-owned), so the orchestrator writes to
-it with a second token: David's own, with the `project` scope, also in
-the Keychain. Writing a field on a board notifies no one and shows no
-authorship on the repo. If the repository moves to an organization,
-the board moves with it and the bot's token covers both.
+user, and fine-grained tokens cannot reach user-owned projects either.
+The board is David's (user-owned), so the orchestrator writes to it
+with a second token: a classic token of David's with the `project` and
+`repo` scopes (a board with items from a private repo needs `repo`),
+in the Keychain. `repo` is broad, so this token is used by the board
+sync only, in the orchestrator process, and never reaches a job.
+Writing a field on a board notifies no one and shows no authorship on
+the repo. If the repository moves to an organization, the board moves
+with it and the bot's token covers both.
 
 GitHub already offers two other views without the board: the labels,
 as saved issue searches, and David's review queue
@@ -268,20 +320,33 @@ stage label for the new one):
 | `spec-review` | David requests changes or comments | start `spec` again |
 | `spec-review` | David approves the spec PR | `queued`, `needs-spec` removed |
 | `queued`, no `needs-spec` | a build slot is free | `in-progress`, start `build` |
-| `in-progress` | `build` or `address` handoff with a draft PR | `reviewing`, start `review` |
-| `reviewing` | `review` handoff with findings, round < 2 | `in-progress`, start `address` |
-| `reviewing` | `review` handoff clean, or round 2 without blockers | `in-review`: PR ready, review requested from David |
-| `reviewing` | round 2 with blockers | `blocked` |
-| `in-review` | David requests changes or comments | `changes-requested` |
+| `in-progress` | `build` or `address` handoff, PR pushed | `reviewing`, start `review` (full after `build`, light after `address`) |
+| `reviewing` | `review` handoff with open `blocker` or `major` findings, round 1 | `in-progress`, start `address` |
+| `reviewing` | `review` handoff with only `minor` and `nit` left, CI green | `in-review`: PR ready, review requested from David |
+| `reviewing` | round 2 with an open `blocker` or `major` | `blocked` |
+| `reviewing`, `in-review` | CI red, or not done after 30 minutes | `in-progress`, start `address` on the CI failure |
+| `in-review` | David requests changes, opens a review thread, or mentions `@kaos-factory` | `changes-requested` |
 | `changes-requested` | a slot is free | `in-progress`, start `address` |
+| `in-review` (child of a stack) | the parent PR is merged | `in-progress`, start `address` to rebase onto `main` |
 | any | a job fails, times out or reports `blocked` | `blocked` |
 | `blocked` | a new comment from David | the stage named in the blocking comment |
 | `in-review` | David merges | issue closed by `Closes #N`, cleanup |
+| any | David closes the issue, or closes the PR without merging | running job killed, worktree and branch removed, issue closed or back to `triaged` |
 
-A "new comment" means one newer than the last bot comment on the issue
-or its PR. The last bot comment is the watermark; the orchestrator
-keeps no other state for this. `./factory status` and the board flag
-any issue that breaks the one-stage invariant.
+When several events land in the same poll, David's decisions win, in
+this order: closing, `accepted`, then comments. A plain comment on a
+ready PR is not a request for changes; David mentions `@kaos-factory`
+when he wants an answer or a change without a formal review.
+
+Review rounds are counted in the `review` handoff (`round: 1` or `2`),
+and restart at 1 each time David sends the PR back.
+
+A "new" comment is one newer than the `seen_until` time of the last
+handoff, the moment its job read GitHub, so a comment posted while a
+job runs is not lost behind that job's own comments. The orchestrator
+reads issue comments, PR comments, reviews and inline review comments
+together. `./factory status` and the board flag any issue that breaks
+the one-stage invariant.
 
 Type labels stay (`bug`, `enhancement`, `task`, `documentation`).
 New area labels drive the reviewer selection: `area:core`,
@@ -315,6 +380,7 @@ factory:
   acceptance:
     - The ellipsis is "…" in both "Starting…" and "Stopping…"
   files: [kaos-ui/src/components/Toolbar.tsx]
+  seen_until: 2026-10-16T09:12:44Z
 ```
 ````
 
@@ -412,18 +478,24 @@ review requested, means it is David's turn.
 
 #### Stacked PRs
 
-When the spec plans a stack, the spec's PR list becomes a checklist on
-the issue:
+When the spec plans a stack, each planned PR becomes a GitHub
+sub-issue of the issue, so that every PR has its own issue and its own
+stage, and the one-stage invariant holds:
 
+- The sub-issues are created `queued` (and `accepted`, by David's
+  approval of the spec) and are built in order: the orchestrator
+  queues the next one once the previous is ready for review.
 - Each PR branches from its parent, has the parent's branch as base,
-  and says `Part of #N`. Only the last one says `Closes #N`.
-- The issue loops through `queued` → … → `in-review` once per PR. The
-  orchestrator starts the next PR as soon as the previous one is ready
-  for review.
+  and closes its own sub-issue. The parent issue closes with its last
+  sub-issue.
 - When a PR of the stack is merged, the orchestrator starts an
   `address` job on its child. The job rebases the child onto `main`
   (`git rebase --onto main <parent> <child>`), reruns the gates and
   force-pushes. The orchestrator then retargets the child PR to `main`.
+
+The spec job proposes the sub-issues; the orchestrator creates them
+only after David approves the spec, which counts as his acceptance of
+each of them.
 
 #### PR body
 
@@ -544,17 +616,18 @@ The `address` job replies to every thread (fixed in `<sha>`, or why
 not) and pushes new commits, never a force-push.
 
 After at most two rounds the orchestrator either hands the PR to David
-or blocks it:
+or blocks it. `blocker` and `major` findings must be fixed; `minor`
+and `nit` may be left open with a reason.
 
-- **Clean, or only `minor` and `nit` left:** it marks the PR ready for
+- **No `blocker` or `major` open:** it marks the PR ready for
   review and requests David's review. The review job's last comment
   summarizes it for David:
   - each reviewer's verdict;
   - the findings left open, with the reason;
   - the "Decisions for David";
   - what to look at first.
-- **Blockers left after round 2:** the PR stays a draft and the issue
-  goes to `blocked` with the open question.
+- **A `blocker` or `major` still open after round 2:** the PR stays a
+  draft and the issue goes to `blocked` with the open question.
 
 The review guides (what each angle checks, with Kaos examples) live in
 `docs/factory/review/<angle>.md`, so they are versioned and shared.
@@ -563,8 +636,9 @@ coordinator view, screenshots on UI issues, the independent review.
 
 ### 6. `address`, David's review and the merge
 
-David reviews the ready PR on GitHub. "Request changes" or a comment
-moves the issue to `changes-requested`, and an `address` job:
+David reviews the ready PR on GitHub. "Request changes", a review
+thread, or a comment mentioning `@kaos-factory` moves the issue to
+`changes-requested`, and an `address` job:
 
 1. fixes;
 2. replies once per thread, and never resolves one;
@@ -594,9 +668,11 @@ The orchestrator does the cleanup either way, after it sees the merge:
 
 ## Guardrails
 
-A `PreToolUse` hook, `.claude/hooks/factory-guard.sh`, registered in
-the committed `.claude/settings.json`, refuses these commands from any
-session, jobs and interactive ones alike:
+A `PreToolUse` hook, `.claude/hooks/factory-guard.sh`, refuses these
+commands. It is registered twice: in `.claude/factory-job.json`, which
+jobs load from the main checkout, and in the committed
+`.claude/settings.json`, for interactive sessions. The refused
+commands are:
 
 - `gh pr merge`, `./factory merge`, `git push` to `main`, and any
   force-push to `main` or to `issue-screenshots`;
@@ -608,8 +684,11 @@ session, jobs and interactive ones alike:
 
 It matches these exact subcommands, so `Closes #N` in a PR body stays
 allowed. Hooks are a guardrail, not a security boundary: the job
-instructions state the same rules, and the orchestrator checks the
-`accepted` gate against the timeline. Changes to the factory itself
+instructions state the same rules, `factory-job.json` repeats them as
+deny rules, and the orchestrator checks the `accepted` gate against the
+timeline. Before every job, the orchestrator also checks that the main
+checkout's `factory-job.json` and hook match `main`, and refuses to
+start a job if they do not. Changes to the factory itself
 (`factory`, `.claude/`, `scripts/factory/`, `docs/factory/`,
 `.github/`) always go through a spec, and the `rules` reviewer flags
 them.
@@ -623,7 +702,8 @@ scripts/factory/github.mjs            the REST and GraphQL calls, no npm depende
 scripts/factory/{token,gates,try-pr,merge}.sh
 scripts/factory/scenarios/*.json
 scripts/factory/test/                 tests of the transitions on recorded GitHub states
-.claude/settings.json                 allowlist, hook
+.claude/factory-job.json              settings of the jobs: allowlist, deny rules, hook
+.claude/settings.json                 the hook, for interactive sessions
 .claude/hooks/factory-guard.sh
 .claude/skills/factory/SKILL.md       /factory in an interactive session
 .claude/skills/factory-{triage,spec,build,review,address}/SKILL.md
@@ -647,7 +727,7 @@ for `kaos-ui`. It uses only the standard library (`fetch`,
 
 `.gitignore` ignores the whole `.claude/` today, so none of the files
 above would be committed. It becomes `.claude/*` with exceptions for
-`settings.json`, `hooks/`, `skills/` and `agents/`;
+`settings.json`, `factory-job.json`, `hooks/`, `skills/` and `agents/`;
 `settings.local.json` and `worktrees/` stay ignored. `.factory/` is
 added.
 
@@ -667,9 +747,10 @@ added.
   minting, but it is a full account with a long-lived token, counts as
   a collaborator, and its actions look like a person's. The App is the
   real bot, with short-lived tokens scoped to one repo.
-- **Moving `kaos` to a free organization now.** It would give the
-  ruleset on `main` and let the App own the board, but it changes the
-  repo's URLs and settings. It is left as an open question.
+- **Moving `kaos` to a free organization.** It would let the App own
+  the board and drop David's classic token, but it changes the repo's
+  URLs and still gives no ruleset on a private repo. It is left as an
+  open question, together with GitHub Pro.
 - **A local job directory as state** (zazencodes' factory). Invisible
   on GitHub and tied to one machine.
 - **An agent approver that merges low-risk PRs** (zazencodes).
@@ -685,7 +766,8 @@ Each step is one PR, usable on its own:
 1. The bot: create the App, `token.sh`, `./factory setup`; the labels
    and their migration; issue forms; PR template; `docs/factory/README.md`;
    the `.gitignore` changes and the `CLAUDE.md` pointer.
-2. `.claude/settings.json`, the guard hook, `gates.sh`, `./factory merge`.
+2. `factory-job.json`, `.claude/settings.json`, the guard hook,
+   `gates.sh`, `./factory merge`.
 3. The orchestrator with the transitions, its tests, the board sync,
    `./factory up/down/status/logs/run`, and the `triage` job. Pilot on
    the open issues.
@@ -693,16 +775,22 @@ Each step is one PR, usable on its own:
    `build` job.
 5. The reviewers, the verifier, the review guides, and the `review`
    job.
-6. The `spec` and `address` jobs, and stacked PRs.
+6. The `spec` and `address` jobs, and stacked PRs with sub-issues.
 
 Pilot candidates: #73 (ellipses, trivial UI), #75 (classic consumer
 configs, core bug), #76 (remove the auto-pilot, likely a spec).
 
 ## Open questions
 
-1. Move `kaos` to a free organization? That would give branch
-   protection on `main` and a board the bot can own, at the cost of
-   new URLs.
+1. Close the two gaps that GitHub Free leaves?
+   - GitHub Pro ($4/month, same URLs) adds a ruleset on `main` that
+     the bot cannot bypass.
+   - A free organization lets the bot own the board, which removes
+     David's classic `repo` token from the factory, at the cost of new
+     URLs.
+
+   Both together close both gaps. Without either, the guard hook and
+   David's token remain.
 2. Should small bugs that David files himself be accepted
    automatically? This design says no: `accepted` is always his.
 3. Playwright as a `kaos-ui` dev dependency, or headless Chrome driven
