@@ -140,7 +140,7 @@ cmd_loop() {
     . "$FACTORY_SCRIPTS/identity.sh"
     log "loop up (pid $$, poll ${poll}s)"
 
-    local snapshot=$FACTORY_STATE/snapshot.json last_hash= hash last_tick=0 job_ended=false last_job=none
+    local snapshot=$FACTORY_STATE/snapshot.json last_hash= hash last_tick=0 job_ended=false last_job=none last_reason=
     [[ -f $FACTORY_STATE/tick-snapshot.json ]] || echo '{"issues": [], "prs": [], "closed_prs": []}' >"$FACTORY_STATE/tick-snapshot.json"
     while [[ ! -f $FACTORY_STATE/stop ]]; do
         if ! FACTORY_TRUSTED=$("$FACTORY_SCRIPTS/trusted.sh"); then
@@ -170,7 +170,7 @@ cmd_loop() {
             last_tick=$(date +%s)
             job_ended=false
             local tick
-            tick=$("$scripts/job.sh" tick "$snapshot" "$FACTORY_STATE/tick-snapshot.json" "last-job=$last_job" ${requests[@]+"${requests[@]}"} | tail -n 1) || tick='{}'
+            tick=$("$scripts/job.sh" tick "$snapshot" "$FACTORY_STATE/tick-snapshot.json" "last-job=$last_job" ${last_reason:+"reason=$last_reason"} ${requests[@]+"${requests[@]}"} | tail -n 1) || tick='{}'
             jq -e . <<<"$tick" >/dev/null 2>&1 || tick='{"status": "failed"}'
             log "tick: $(jq -c '{status, cost, result}' <<<"$tick")"
             if [[ $(jq -r .status <<<"$tick") == ok ]]; then
@@ -178,7 +178,10 @@ cmd_loop() {
                 ((${#request_files[@]})) && rm -f "${request_files[@]}"
             fi
             # A failed tick has not seen the last job: keep it for the next.
-            [[ $(jq -r .status <<<"$tick") == ok ]] && last_job=none
+            if [[ $(jq -r .status <<<"$tick") == ok ]]; then
+                last_job=none
+                last_reason=
+            fi
             local kind issue
             kind=$(jq -r '.result.job // empty' <<<"$tick")
             issue=$(jq -r '.result.issue // empty' <<<"$tick")
@@ -196,7 +199,8 @@ cmd_loop() {
                 log "job: $kind #$issue: $(jq -c '{status, seconds, cost, log}' <<<"$done")"
                 local status
                 status=$(jq -r '.status // "failed"' <<<"$done")
-                last_job="$kind:$issue:$status:$(basename "$(jq -r '.log // "none"' <<<"$done")")"
+                last_job="$kind,$issue,$status,$(jq -r '(now - (.seconds // 0)) | todate' <<<"$done"),$(basename "$(jq -r '.log // "none"' <<<"$done")")"
+                last_reason=$(jq -r '.reason // empty' <<<"$done")
                 # After a success, the next tick comes at once to read the
                 # handoff; after a failure, it waits for the poll, so that a
                 # job failing on start cannot spin.

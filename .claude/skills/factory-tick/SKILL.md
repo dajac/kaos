@@ -12,7 +12,7 @@ handoffs"). You run headless in the factory's trusted checkout of
 `main`: nobody answers questions. Each tick starts from a fresh context
 and ends with one structured output.
 
-Arguments: `<snapshot.json> <previous.json> last-job=<kind:N:status:log|none> [<kind:N> ...]`
+Arguments: `<snapshot.json> <previous.json> last-job=<kind,N,status,start,log|none> [reason=<why>] [<kind:N> ...]`
 
 - `snapshot.json`: the open issues with their stage, the open PRs with
   their CI, the PRs closed in the last two days (`status.sh`).
@@ -20,7 +20,9 @@ Arguments: `<snapshot.json> <previous.json> last-job=<kind:N:status:log|none> [<
   *changed* when its `updated_at` differs from there, or it is not
   there.
 - `last-job`: the job the loop ran since the previous tick, its status
-  (`ok`, `failed`, `timeout`) and the name of its log, or `none`.
+  (`ok`, `failed`, `timeout`, or `refused` when it did not start, with
+  the `reason`), the time it started (ISO, like the handoffs' times) and
+  the name of its log, or `none`.
 - The rest: jobs David asked for with `./factory run`.
 
 ## Rules
@@ -84,14 +86,15 @@ fields in `A.handoff.fields` (`job`, `route`, `round`, `blocking`,
 after `A.labeled[<the current stage>]`; a handoff with a `blocked`
 field is a *blocked handoff*; "the PR" is the open PR of `A.prs` whose
 head does not start with `spec/`, and "the spec PR" the one whose head
-does. "Block" means: post the comment above, then `stage.sh N
-blocked`.
+does. "Block" means: `stage.sh N blocked`, then, only if it moved the
+issue, post the comment above (an issue already blocked gets no second
+comment).
 
 | Stage | When | Do |
 |---|---|---|
-| any | `last-job` is a `failed` or `timeout` job of N | block, quoting the status and the log name; `resume` is the current stage |
+| any | `last-job` is a `failed`, `timeout` or `refused` job of N | block, quoting the status, the `reason` when there is one, and the log name; `resume` is the current stage |
 | any | a blocked handoff newer than the stage | `stage.sh N blocked` (no comment: the job wrote it) |
-| any | `last-job` is an `ok` job of N, and the issue has no handoff of that job newer than the moment the job started (its log's name holds that time) | block ("the job ended without a handoff"); `resume` is the current stage |
+| any | `last-job` is an `ok` job of N, and the issue has no handoff of that job newer than the job's start time | block ("the job ended without a handoff"); `resume` is the current stage |
 | `none` | always | `stage.sh N needs-triage` |
 | `needs-triage` | `accepted` is on the issue, there is a `triage` handoff (of any age), and David wrote nothing after it | `stage.sh N queued`: David accepted it, maybe while removing `triaged`; it checks that he added `accepted` |
 | `needs-triage` | a `triage` handoff newer than the stage, and David wrote nothing after it | `stage.sh N triaged`, or `needs-info` when its `route` is `needs-info` |

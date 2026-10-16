@@ -333,8 +333,10 @@ and PRs show as `kaos-agent[bot]`.
   approvals and comments are his.
 - **Commits** are authored by the bot, with
   `Co-Authored-By: Claude <model> <noreply@anthropic.com>` naming the
-  model the job ran on. GitHub authors a squash commit with the PR's
-  author, whoever merges, so the squash of a PR the bot opened is the
+  model the job ran on. When the factory's own PRs were merged (by the
+  bot), GitHub authored each squash commit with the PR's author: the
+  bot for the PRs it opened, David for those opened under his handle
+  during the bootstrap. So the squash of a PR the bot opened is the
   bot's; `./factory merge` keeps the `Co-Authored-By` lines of the PR's
   commits. (The factory's own first PRs, opened under David's handle
   during the bootstrap, are authored by David.)
@@ -910,11 +912,16 @@ push to `main`. The refused commands are:
   credential`, `security`), git aliases, and `xargs` and `find -exec`,
   which run commands the guard would not see.
 
-A command can run another one (`bash -c`, `xargs`, `find -exec`, git
-aliases, `npm exec`), so David's gates and the identity escapes are
-refused wherever they appear in the line, not only as a command's first
-word. Its tests are in `scripts/factory/test/guard_test.sh`. `Closes
-#N` in a PR body stays allowed. Hooks are a guardrail, not a security boundary: the job
+A command can run another one (`xargs`, `find -exec`, git and `gh`
+aliases), so David's gates and the identity escapes are refused
+wherever they appear in the line, not only as a command's first word;
+what runs a quoted string as a command (`bash -c`, `eval`) is refused,
+since the guard cannot look into it. Quoted strings and heredoc bodies
+are data (commit messages, PR bodies, patterns): the line-wide checks
+skip them, while the per-command checks see through quotes, so that
+`gh pr "merge"` reads as `gh pr merge`; every match ignores case. Its
+tests are in `scripts/factory/test/guard_test.sh` and
+`guard_data_test.sh`. Hooks are a guardrail, not a security boundary: the job
 instructions state the same rules, `factory-job.json` repeats the
 plainest forms as deny rules (the guard is the real check: a deny
 pattern cannot tell `git push origin main` from every way to write it),
@@ -925,11 +932,15 @@ and `job.sh` reverts any change a tick makes there. Changes to the factory itsel
 (`factory`, `.claude/`, `scripts/factory/`, `docs/factory/`,
 `.github/`) always go through a spec, and the `rules` reviewer flags
 them. Claude Code loads the hooks, skills, agents and `CLAUDE.md` of a
-job's worktree, so a branch that changes `.claude/` or `CLAUDE.md`
+job's worktree, and the job runs the worktree's scripts, so a branch
+that changes `.claude/`, `CLAUDE.md`, `scripts/factory/` or `./factory`
 would change the rules of its own jobs: `job.sh` refuses to run a spec,
-build or address job on such a branch, and David builds those changes
-himself; the review job replaces them, and `scripts/factory/`, with
-main's.
+build or address job on such a branch (measured from where the branch
+forked from `main`, so a branch older than a change of main's is not
+taken for one), the tick blocks the issue with the reason, and David
+builds those changes himself. The review job replaces them with main's
+(`git checkout --no-overlay`, which also removes the files a PR adds
+there).
 
 Sessions in a worktree whose branch predates the factory (or the frozen
 `initial-setup` branch) have no `.claude/settings.json`, hence no guard

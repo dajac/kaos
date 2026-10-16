@@ -58,10 +58,18 @@ message=$(jq -r .body <<<"$view" | commit_message)
 # The squash keeps the co-authors of the PR's commits: Claude, with the
 # model each job ran on.
 coauthors=$(gh api "repos/$FACTORY_REPO/pulls/$pr/commits" --paginate --jq '.[].commit.message' |
-    grep -E '^Co-Authored-By: ' | sort -u || true)
-[[ -z $coauthors ]] || message="$message
-
-$coauthors"
+    grep -iE '^Co-Authored-By: ' | sort -fu || true)
+while IFS= read -r line; do
+    [[ -z $line ]] && continue
+    grep -qixF -- "$line" <<<"$message" && continue
+    if [[ -n $message ]]; then
+        [[ $message == *$'\n'[Cc]o-[Aa]uthored-[Bb]y:* || $message == [Cc]o-[Aa]uthored-[Bb]y:* ]] ||
+            message+=$'\n'
+        message+=$'\n'"$line"
+    else
+        message=$line
+    fi
+done <<<"$coauthors"
 
 merged=$(gh api -X PUT "repos/$FACTORY_REPO/pulls/$pr/merge" -f merge_method=squash -f sha="$head" \
     -f commit_title="$title" -f commit_message="$message" --jq .sha)
