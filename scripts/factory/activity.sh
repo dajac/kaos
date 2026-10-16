@@ -5,9 +5,11 @@
 #   fenced yaml "factory:" block): its time, its raw block, and its
 #   scalar fields (job, seen_until, route, round, blocking, blocked,
 #   resume...);
-# - david: what David wrote after the watermark (the handoff's
-#   seen_until, or the bot's last comment when there is no handoff), on
-#   the issue and on its PRs: comments, reviews and review comments;
+# - david: what David wrote after the watermark, on the issue and on
+#   its PRs: comments, reviews and review comments. The watermark is the
+#   seen_until (or the time) of the last handoff of a job that reads
+#   David's comments (triage, spec, build, address) or of the tick; a
+#   review's handoff does not count, as a review does not act on them;
 # - others: the comments of anyone but the bot and David after the
 #   watermark, on the issue (a reporter answering a question);
 # - accepted_by: who last added the accepted label;
@@ -62,9 +64,10 @@ jq -n --argjson issue "$issue" --arg bot "$bot" --arg david "$FACTORY_DAVID" \
         | ([$yaml | split("\n")[] | capture("^\\s+(?<k>[a-z_]+):\\s*(?<v>[^\\s].*)$")?
             | {key: .k, value: (.v | sub("\\s+#.*$"; "") | gsub("^\"|\"$"; ""))}] | from_entries) as $fields
         | {at: .created_at, url: .html_url, yaml: $yaml, fields: $fields, job: $fields.job, seen_until: $fields.seen_until};
-    ([$comments[] | select(.user.login == $bot) | select(.body | test("```yaml\\s*\\nfactory:")) | handoff_of] | last) as $handoff
-    | ([$comments[] | select(.user.login == $bot) | .created_at] | last) as $last_bot
-    | (($handoff.seen_until // $handoff.at // $last_bot) // "1970-01-01T00:00:00Z") as $mark
+    [$comments[] | select(.user.login == $bot) | select(.body | test("```yaml\\s*\\nfactory:")) | handoff_of] as $handoffs
+    | ($handoffs | last) as $handoff
+    | ([$handoffs[] | select(.job != "review")] | last) as $reader
+    | (($reader.seen_until // $reader.at) // "1970-01-01T00:00:00Z") as $mark
     | [
         ($comments[] | select(.user.login == $david and .created_at > $mark)
             | {on: "issue", kind: "comment", at: .created_at, url: .html_url, body}),

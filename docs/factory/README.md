@@ -458,7 +458,8 @@ the old stage label for the new one):
 | `spec-review` | David approves the spec PR on its head | `queued`, `needs-spec` removed, spec PR closed |
 | `queued`, no `needs-spec` | the job is chosen, fewer than two PRs wait for David | `in-progress`, start `build` |
 | `in-progress` | a `build` or `address` handoff, PR pushed | `reviewing`, start `review` |
-| `reviewing` | a `review` handoff with open `blocker` or `major` findings, round 1; or CI red; or CI not done 30 minutes after the review | `in-progress`, start `address` |
+| `reviewing` | a `review` handoff with open `blocker` or `major` findings, round 1; or CI red | `in-progress`, start `address` |
+| `reviewing` | nothing blocking, but CI has not reported 30 minutes after the review | `blocked` |
 | `reviewing` | a `review` handoff with only `minor` and `nit` left, CI green | `in-review`: PR ready, review requested from David |
 | `reviewing` | round 2 with an open `blocker` or `major` | `blocked` |
 | `in-review` | David requests changes, opens a review thread, or mentions `@kaos-agent` | `changes-requested` |
@@ -468,7 +469,7 @@ the old stage label for the new one):
 | any | a job fails, times out, ends without a handoff, or reports `blocked` | `blocked` |
 | `blocked` | a new comment from David | the stage it was blocked from (`stage.sh` allows nothing else but `needs-triage`) |
 | `in-review` | David merges | issue closed by `Closes #N`; the next tick removes the local worktree and branch |
-| `in-progress`, `reviewing`, `in-review` | the PR is closed without merging | `blocked` |
+| `in-progress`, `reviewing`, `in-review` | the PR (not a spec PR) is closed without merging | `blocked` |
 
 The table is the summary; the rules the tick applies, with their exact
 conditions and their order, are in `.claude/skills/factory-tick/SKILL.md`.
@@ -483,8 +484,10 @@ Review rounds are counted in the `review` handoff (`round: 1` or `2`),
 and restart at 1 each time David sends the PR back.
 
 A "new" comment is one newer than the `seen_until` time of the last
-handoff, the moment its job read GitHub, so a comment posted while a
-job runs is not lost behind that job's own comments. The orchestrator
+handoff of a job that reads David's comments (triage, spec, build,
+address), the moment its job read GitHub, so a comment posted while a
+job runs is not lost behind that job's own comments; a review's
+handoff does not move this watermark. The orchestrator
 reads issue comments, PR comments, reviews and inline review comments
 together. `./factory status` and the Pipeline issue flag any issue that breaks
 the one-stage invariant.

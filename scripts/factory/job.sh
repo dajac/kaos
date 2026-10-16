@@ -103,9 +103,13 @@ triage)
     prompt="/factory-triage $arg"
     ;;
 spec)
-    s=$(slug "$arg")
-    dir=$worktrees/spec-$arg-$s
-    branch_worktree "$dir" "spec/$arg-$s" "$base"
+    # An existing spec branch is reused, whatever the issue's title has
+    # become since.
+    head=$(gh pr list --repo "$FACTORY_REPO" --state all --search "head:spec/$arg-" --json headRefName \
+        --jq "[.[] | select(.headRefName | test(\"^spec/$arg-\"))][0].headRefName // empty")
+    branch=${head:-spec/$arg-$(slug "$arg")}
+    dir=$worktrees/${branch//\//-}
+    branch_worktree "$dir" "$branch" "$base"
     prompt="/factory-spec $arg"
     ;;
 build | address)

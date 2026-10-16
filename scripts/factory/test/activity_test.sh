@@ -38,6 +38,17 @@ test_finds_the_handoff_and_davids_comments_after_it() {
     assert_eq "$(jq -r '[.others[] | .author + ":" + .body] | join("|")' <<<"$out")" "someone:not David"
 }
 
+test_a_review_handoff_does_not_hide_davids_comments() {
+    setup_fake
+    review=$(jq -n '{user: {login: "kaos-agent[bot]"}, created_at: "2026-10-01T14:00:00Z", html_url: "r",
+        body: "Review.\n\n```yaml\nfactory:\n  job: review\n  round: 1\n  blocking: 0\n  seen_until: 2026-10-01T13:50:00Z\n```\n"}')
+    jq -s . <(handoff_comment 2026-10-01T12:00:00Z 2026-10-01T12:00:00Z) \
+        <(comment dajac 2026-10-01T13:00:00Z "during the review") <(echo "$review") >fake/api/repos_dajac_kaos_issues_75_comments
+    out=$("$FACTORY_TEST_SCRIPTS/activity.sh" 75)
+    assert_eq "$(jq -r .handoff.job <<<"$out")" review
+    assert_eq "$(jq -r '[.david[].body] | join("|")' <<<"$out")" "during the review"
+}
+
 test_without_a_handoff_every_comment_of_david_is_new() {
     setup_fake
     jq -s . <(comment dajac 2026-10-01T10:00:00Z "hello") >fake/api/repos_dajac_kaos_issues_75_comments
