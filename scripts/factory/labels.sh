@@ -31,7 +31,6 @@ area:ui|c2e0c6|kaos-ui
 area:build|c2e0c6|Maven, CI, packaging
 area:protocol|c2e0c6|Kafka group protocol semantics
 area:factory|c2e0c6|The software factory itself
-pipeline|ffffff|The factory's overview, rewritten by kaos-agent
 priority:high|b60205|Goes first in the queue
 '
 

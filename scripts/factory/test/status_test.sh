@@ -14,8 +14,7 @@ test_snapshot_classifies_ci_and_stages() {
     cat >fake/issues.json <<'JSON'
 [
   {"number": 5, "title": "A", "author": {"login": "dajac"}, "labels": [{"name": "queued"}, {"name": "accepted"}], "updatedAt": "u", "createdAt": "c"},
-  {"number": 6, "title": "B", "author": {"login": "dajac"}, "labels": [{"name": "queued"}, {"name": "blocked"}], "updatedAt": "u", "createdAt": "c"},
-  {"number": 7, "title": "Pipeline", "author": {"login": "kaos-agent"}, "labels": [{"name": "pipeline"}], "updatedAt": "u", "createdAt": "c"}
+  {"number": 6, "title": "B", "author": {"login": "dajac"}, "labels": [{"name": "queued"}, {"name": "blocked"}], "updatedAt": "u", "createdAt": "c"}
 ]
 JSON
     cat >fake/prs.json <<'JSON'

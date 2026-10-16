@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
-# The Pipeline issue: a pinned issue whose body shows the whole pipeline,
-# rendered from a snapshot of status.sh and the loop's state, with no
-# model. Editing an issue body notifies no one.
+# The overview of the pipeline, for "./factory status": the open issues
+# grouped by who they wait for, rendered as Markdown from a snapshot of
+# status.sh and the loop's state, with no model.
 #
-# Usage: scripts/factory/pipeline.sh render <snapshot.json>   print the markdown
-#        scripts/factory/pipeline.sh update <snapshot.json>   update the issue when it changed
-#        scripts/factory/pipeline.sh ensure                   create and pin the issue if missing
+# Usage: scripts/factory/overview.sh <snapshot.json>
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
-
-number_file=$FACTORY_STATE/pipeline-issue
 
 render() {
     local snapshot=$1 loop=down job='null' paused=no
@@ -44,8 +40,6 @@ render() {
         | [$issues[] | select(.stage == "invalid")] as $invalid
         | "Updated \($now[0:16] | sub("T"; " ")) UTC · loop \($loop) · running: \(if $job then "\($job.kind) #\($job.issue)" else "nothing" end) · paused: \($paused)",
           "",
-          "This issue is the overview of the [software factory](../blob/main/docs/factory/README.md). kaos-agent rewrites it; do not edit it.",
-          "",
           "## Waiting for David (\($david | length))",
           "",
           table([$david[] | [link, what, prs_text(.number), ago(.updated_at)]]; ["Issue", "What", "PRs", "Since"]),
@@ -65,34 +59,4 @@ render() {
     ' "$snapshot"
 }
 
-ensure() {
-    local number id
-    if [[ -f $number_file ]] && [[ $(gh issue view "$(cat "$number_file")" --repo "$FACTORY_REPO" --json state --jq .state 2>/dev/null) == OPEN ]]; then
-        cat "$number_file"
-        return
-    fi
-    number=$(gh issue list --repo "$FACTORY_REPO" --state open --label pipeline --json number --jq '.[0].number // empty')
-    if [[ -z $number ]]; then
-        number=$(gh issue create --repo "$FACTORY_REPO" --title Pipeline --label pipeline \
-            --body "The overview of the software factory. kaos-agent fills it in." | sed -E 's#.*/##')
-    fi
-    id=$(gh issue view "$number" --repo "$FACTORY_REPO" --json id --jq .id)
-    gh api graphql -f query='mutation($id: ID!) { pinIssue(input: {issueId: $id}) { issue { number } } }' -F id="$id" >/dev/null ||
-        info "could not pin #$number; pin it by hand"
-    echo "$number" >"$number_file"
-    echo "$number"
-}
-
-case ${1:-} in
-render) render "${2:?snapshot}" ;;
-update)
-    body=$(render "${2:?snapshot}")
-    # The first line carries the time; compare the rest.
-    if [[ ! -f $FACTORY_STATE/pipeline.md ]] || [[ $(tail -n +2 "$FACTORY_STATE/pipeline.md") != "$(tail -n +2 <<<"$body")" ]]; then
-        gh issue edit "$(ensure)" --repo "$FACTORY_REPO" --body "$body" >/dev/null
-        echo "$body" >"$FACTORY_STATE/pipeline.md"
-    fi
-    ;;
-ensure) ensure ;;
-*) die "usage: pipeline.sh render|update <snapshot.json> | ensure" ;;
-esac
+render "${1:?usage: overview.sh <snapshot.json>}"

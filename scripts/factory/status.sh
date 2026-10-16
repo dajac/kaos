@@ -26,7 +26,6 @@ jq -n --argjson issues "$issues" --argjson prs "$prs" --argjson done "$done_prs"
         else "pass" end;
     {
         issues: [$issues[]
-            | select(any(.labels[]; .name == "pipeline") | not)
             | ([.labels[].name]) as $labels
             | {
                 number, title,

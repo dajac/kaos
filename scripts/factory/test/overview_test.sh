@@ -1,4 +1,4 @@
-# Tests of the Pipeline issue's rendering and of the snapshot's stages.
+# Tests of the overview (./factory status) and of ./factory run.
 
 snapshot() {
     cat >snapshot.json <<'JSON'
@@ -22,7 +22,7 @@ test_render_groups_the_issues_by_who_they_wait_for() {
     snapshot
     mkdir -p "$FACTORY_HOME/.factory"
     echo '{"kind": "build", "issue": "75", "pid": 1}' >"$FACTORY_HOME/.factory/job.json"
-    out=$("$FACTORY_TEST_SCRIPTS/pipeline.sh" render snapshot.json)
+    out=$("$FACTORY_TEST_SCRIPTS/overview.sh" snapshot.json)
     assert_contains "$out" "running: build #75"
     assert_contains "$out" "## Waiting for David (1)"
     assert_contains "$out" "| #73 Ellipses / dots | triage proposal to accept, comment on or close |  | Oct 16 08:00 |"

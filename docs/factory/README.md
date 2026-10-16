@@ -33,7 +33,7 @@ And, for David:
 
 7. One command starts and stops the factory.
 8. One orchestrator decides what runs.
-9. One place on GitHub shows the whole pipeline and what waits for him.
+9. David can see the whole pipeline and what waits for him.
 10. The factory acts as its own GitHub identity, a bot, never as David.
 
 Non-goals: auto-merge, deployment, a hosted service.
@@ -83,9 +83,7 @@ Three pieces:
   3. when the snapshot differs from the previous one, a job just
      ended, David queued a request, or 30 minutes went by, runs one
      **tick**;
-  4. runs the job the tick chose, if any, and waits for it;
-  5. re-renders the Pipeline issue from the labels
-     (`scripts/factory/pipeline.sh`, no model).
+  4. runs the job the tick chose, if any, and waits for it.
 - **The tick**, `claude -p "/factory-tick"`, a short headless session
   and the brain of the orchestrator (`.claude/skills/factory-tick/`).
   It gets the snapshot, the previous tick's snapshot, the last job's
@@ -116,8 +114,7 @@ Three pieces:
    ├─► status.sh ──► snapshot changed? ──no──► sleep
    │                      │yes
    ├─► claude -p /factory-tick ──► stage.sh (labels) ──► {job: build, issue: 75}
-   ├─► job.sh build 75 ──► claude -p /factory-build 75 (worktree 75-…)
-   └─► pipeline.sh ──► Pipeline issue
+   └─► job.sh build 75 ──► claude -p /factory-build 75 (worktree 75-…)
               all GitHub calls as kaos-agent[bot]
 ```
 
@@ -240,7 +237,7 @@ built but `try` and `up --at-login` (planned).
 
 | Command | Does |
 |---|---|
-| `./factory setup` | One-time: checks `claude`, `gh`, `jq`, Docker and Chrome, creates the bot, the labels and the Pipeline issue, stores the bot key in the macOS Keychain, checks that every GitHub action comes out as the bot. Safe to run again |
+| `./factory setup` | One-time: checks `claude`, `gh`, `jq`, Docker and Chrome, creates the bot and the labels, stores the bot key in the macOS Keychain, checks that every GitHub action comes out as the bot. Safe to run again |
 | `./factory whoami` | Checks the bot's identity, as `setup` does |
 | `./factory up` | Starts the loop in the background, logging to `.factory/logs/loop.log`; `--foreground` to watch it |
 | `./factory down` | Stops the loop; the running job finishes, or `--now` stops it |
@@ -372,47 +369,36 @@ kills the running ones and alerts David. GitHub Pro would allow a
 ruleset on `main` that closes the hole server side; it is left out for
 now and can be added later without changing the design.
 
-## The overview: the Pipeline issue
+## The overview
 
-A pinned issue, **Pipeline**, opened by the bot with the label
-`pipeline` (which keeps it out of the snapshot), shows the whole
-pipeline. `scripts/factory/pipeline.sh update` rewrites its body at the
-end of every poll when anything but its time line changed;
-`./factory status` prints the same text in the terminal.
-Editing an issue body notifies no one, so the issue does not spam
-David.
+The labels are the state, so GitHub's own views show the pipeline:
+
+- the labels as saved issue searches: `is:open label:triaged` (triage
+  proposals to accept), `label:in-review` (PRs ready for David),
+  `label:blocked`, `label:queued`...;
+- David's review queue, `github.com/pulls/review-requested`, since the
+  bot requests his review on every ready PR and spec.
+
+`./factory status` (`scripts/factory/overview.sh`) prints the whole
+pipeline in the terminal, from a snapshot, with no model: what waits
+for David, what is in flight (with the running job), what is queued,
+what waits for triage or information, and the issues with several stage
+labels.
 
 ```markdown
 Updated 2026-10-16 09:14 UTC · loop up · running: review #73 · paused: no
 
 ## Waiting for David (3)
-| Issue | What | Since |
-|---|---|---|
-| #81 Row text unreadable | PR #90 ready for review | 2 h |
-| #76 Remove the auto-pilot | spec PR #88 | 1 d |
-| #91 Lag gauge legend | triage proposal | 10 min |
-
-## In flight (2)
-| Issue | Stage | Since | PR |
+| Issue | What | PRs | Since |
 |---|---|---|---|
-| #73 Ellipses | reviewing, round 1 (running) | 4 min | #89 |
-| #75 Classic session timeout | changes requested | 1 h | #87 |
-
-## Queued (1) · Blocked (1) · Needs info (0)
-…
+| #81 Row text unreadable | PR ready for review | #90, CI pass | Oct 16 07:10 |
+...
 ```
 
-The labels stay the source of truth; the issue is a view of them. The
-other GitHub views remain:
-- the labels as saved issue searches, e.g.
-  `is:open label:in-review`;
-- David's review queue, `github.com/pulls/review-requested`, since
-  the bot requests his review on every ready PR.
-
-A GitHub Projects board would look better, but GitHub Apps can only
-write to projects owned by an organization, and the repository stays
-under David's account. Syncing a board would therefore need David's
-own token, which the factory never uses (see "Identity").
+A page on GitHub was tried and dropped: a pinned issue whose body the
+bot rewrote read as a stray issue, and a GitHub Projects board needs
+either an organization or David's own token, which the factory never
+uses (see "Identity").
 
 ## State: labels and handoffs
 
@@ -428,7 +414,7 @@ Two flags record David's decisions and never move:
 
 The stage is a separate label, and an open issue has **exactly one**:
 
-| Stage | Meaning | Pipeline section |
+| Stage | Meaning | `./factory status` section |
 |---|---|---|
 | `needs-triage` | Not looked at yet | Triage |
 | `triaged` | Proposal posted, waiting for David | Waiting for David |
@@ -489,7 +475,7 @@ address), the moment its job read GitHub, so a comment posted while a
 job runs is not lost behind that job's own comments; a review's
 handoff does not move this watermark. The orchestrator
 reads issue comments, PR comments, reviews and inline review comments
-together. `./factory status` and the Pipeline issue flag any issue that breaks
+together. `./factory status` flags any issue that breaks
 the one-stage invariant.
 
 Type labels stay (`bug`, `enhancement`, `task`, `documentation`).
@@ -838,7 +824,7 @@ The orchestrator does the rest of the cleanup either way, after it
 sees the merge: the next tick removes the local worktree and branch of
 a merged bot PR (`scripts/factory/cleanup.sh`, which touches only
 `<N>-<slug>` and `spec/<N>-<slug>` branches and keeps a worktree with
-uncommitted changes), and the Pipeline issue drops the issue. Deleting
+uncommitted changes). Deleting
 the spec branch with the last PR of the issue and rebasing the child of
 a stacked PR are planned.
 
@@ -903,7 +889,7 @@ scripts/factory/activity.sh           what the tick needs about one issue
 scripts/factory/stage.sh              legal stage transitions and David's gates
 scripts/factory/job.sh                runs one job or tick headless, with limits
 scripts/factory/tick-schema.json      the tick's structured output
-scripts/factory/pipeline.sh           renders and updates the Pipeline issue
+scripts/factory/overview.sh           the overview of ./factory status
 scripts/factory/cleanup.sh            removes the local worktree and branch of a merged PR
 .claude/skills/factory/SKILL.md       /factory in an interactive session
 .claude/skills/factory-tick/SKILL.md  the transitions and the choice of the next job
@@ -990,7 +976,7 @@ applies to everything, the remaining rollout steps included.
    the `CLAUDE.md` pointer.
 2. Built. `factory-job.json`, `gates.sh`, `./factory merge`.
 3. Built. The loop, `status.sh`, `stage.sh`, `activity.sh` and their
-   tests, `job.sh`, the trusted checkout, the Pipeline issue,
+   tests, `job.sh`, the trusted checkout, the overview,
    `./factory up/down/status/logs/run/pause/resume`, the `tick` and
    `triage` skills. Pilot on the open issues.
 4. `./factory try`, the scenarios, `capture.sh`, and the `build`

@@ -80,7 +80,6 @@ cmd_setup() {
     (
         . "$FACTORY_SCRIPTS/identity.sh"
         "$FACTORY_SCRIPTS/labels.sh"
-        info "Pipeline issue: #$("$FACTORY_SCRIPTS/pipeline.sh" ensure)"
     )
     info "setup done"
 }
@@ -121,7 +120,7 @@ stage_fits() {
 # poll it refreshes the trusted checkout, takes a snapshot and, when
 # something changed (or a job just ended, or David queued a request, or
 # 30 minutes went by), runs one tick, then the job the tick chose, and
-# updates the Pipeline issue. See docs/factory/README.md.
+# records the running job for ./factory status. See docs/factory/README.md.
 cmd_loop() {
     load_bot
     mkdir -p "$FACTORY_STATE/logs" "$FACTORY_STATE/requests"
@@ -185,7 +184,6 @@ cmd_loop() {
             if [[ -n $kind && -n $issue && ! -f $FACTORY_STATE/stop ]]; then
                 log "job: $kind #$issue"
                 echo "{\"kind\": \"$kind\", \"issue\": \"$issue\"}" >"$FACTORY_STATE/job.json"
-                "$scripts/pipeline.sh" update "$snapshot" || true
                 local done
                 done=$("$scripts/job.sh" "$kind" "$issue" | tail -n 1) || done='{"status": "failed"}'
                 jq -e . <<<"$done" >/dev/null 2>&1 || done='{"status": "failed"}'
@@ -204,7 +202,6 @@ cmd_loop() {
             hash=$(shasum <"$snapshot" | cut -d' ' -f1)
         fi
         last_hash=$hash
-        "$scripts/pipeline.sh" update "$snapshot" || log "cannot update the Pipeline issue"
         $job_ended && continue
         local slept=0
         while ((slept < poll)) && [[ ! -f $FACTORY_STATE/stop ]]; do
@@ -254,7 +251,7 @@ cmd_status() {
         . "$FACTORY_SCRIPTS/identity.sh"
         "$FACTORY_SCRIPTS/status.sh" >"$snapshot"
     fi
-    "$FACTORY_SCRIPTS/pipeline.sh" render "$snapshot"
+    "$FACTORY_SCRIPTS/overview.sh" "$snapshot"
 }
 
 cmd_logs() {
