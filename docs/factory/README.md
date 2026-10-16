@@ -169,7 +169,7 @@ Below, "the orchestrator" means the loop and its ticks together.
   `claude -p --max-budget-usd`, both enforced by `job.sh` and
   overridable with `FACTORY_LIMIT_MINUTES` and `FACTORY_BUDGET_USD`:
   tick 10 minutes and $1, triage 30 and $3, spec 45 and $8, build 90
-  and $20, review 45 and $12, address 60 and $12. A job that hits
+  and $20, review 60 and $20, address 60 and $12. A job that hits
   one is stopped (interrupt, then terminate, then kill), and the next
   tick blocks its issue, naming the job's log in `.factory/logs/`.
 - After a failed job, the next tick waits for the next poll, so that a
@@ -776,7 +776,10 @@ never conflicts.
 
 `.claude/skills/factory-review/SKILL.md`. A review job runs on every
 draft PR the orchestrator hands it, and again after each `address`
-round, in `.claude/worktrees/review-<N>`, a checkout of the PR head. It
+round, in `.claude/worktrees/review-<N>`, a checkout of the PR head
+whose `.claude/` and `CLAUDE.md` `job.sh` replaces with main's: Claude
+Code loads the agents, skills and instructions of its working
+directory, and a PR must not bring its own reviewers. It
 picks the reviewers from the changed paths and runs them in parallel
 as subagents, each defined in `.claude/agents/reviewer-<angle>.md`:
 what the angle checks, the severities, and the JSON it returns.
@@ -787,11 +790,13 @@ what the angle checks, the severities, and the JSON it returns.
 | `tests` | always | the new test fails without the change (it reverts the fix to check), coverage of the acceptance criteria, flakiness (sleeps, ports, timing) |
 | `rules` | always | `CLAUDE.md` rules (public vs `internal`, no kafka-clients type in the API or JSON, no static mutable state, the single `ThreadFactory`, `*Test` names, `@IntegrationTest`, `var`), `docs/ARCHITECTURE.md` matches the code, PR body complete |
 | `api` | public package of `kaos-core`, `kaos-server`, OpenAPI | naming and consistency with the existing API, compatibility, JSON shape, OpenAPI and `schema.d.ts` in sync, error responses |
-| `ux` | `kaos-ui` | runs `./factory try` with the scenario and takes its own shots with `capture.sh` (states only, it cannot click); the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus styles in the CSS, states (loading, stale, stopped); the screenshots match what it sees |
+| `ux` | `kaos-ui` | runs the PR with `try-pr.sh` and the scenario and takes its own shots with `capture.sh` (states only, it cannot click); the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus styles in the CSS, states (loading, stale, stopped); the screenshots match what it sees |
 | `kafka` | the consumer, group, assignment, proxy and fault code of `kaos-core`, or `area:protocol` | the simulated behavior matches the real group coordinator and clients, checked against the Apache Kafka sources at the tag of the kafka-clients version in the `pom.xml` (KIP-848 and classic protocols, epochs, revocation, static membership) |
 
 Each reviewer is independent. It gets the issue, the spec, the
-acceptance criteria and the diff, not the build job's reasoning. It
+acceptance criteria, the PR's body and reads the diff, not the build
+job's reasoning. Only the tests reviewer (in a worktree of its own) and
+the UX reviewer build: the others read the checkout they share. It
 does not trust the PR body's claims without checking them. It returns
 findings with a file, a line, a severity (`blocker`, `major`, `minor`,
 `nit`) and a failure scenario.
@@ -807,7 +812,10 @@ that had findings re-review, with their previous findings, the
 replies, and the diff since their previous review.
 
 The review job's handoff carries `round`, `blocking` (the `blocker` and
-`major` findings kept), `minor`, the angles and the head it reviewed.
+`major` findings still open: kept by the verifier, or earlier ones not
+resolved), `minor`, the list of open findings, the angles and the head
+it reviewed. Inline comments go only on lines of the diff's hunks; the
+others go into the review's body.
 
 The `address` job replies to every thread (fixed in `<sha>`, or why
 not) and pushes new commits, never a force-push.

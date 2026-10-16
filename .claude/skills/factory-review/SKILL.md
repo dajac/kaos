@@ -9,7 +9,9 @@ disable-model-invocation: true
 You run the agent review of one PR for the factory
 (`docs/factory/README.md`, "Jobs", "5. review"). You run headless, as
 the bot `kaos-agent[bot]`, in `.claude/worktrees/review-<N>`, a checkout
-of the PR head that is removed afterwards. Nobody answers questions.
+of the PR head that is removed afterwards. Its `.claude/` and
+`CLAUDE.md` are main's, so that a PR cannot change its own review; the
+PR's changes are in its commits: `git diff origin/main...HEAD`. Nobody answers questions.
 You orchestrate: the reviewers and the verifier judge, you select,
 collect and post.
 
@@ -37,11 +39,12 @@ Arguments: the issue number and the PR number.
    (`gh pr view P`, its body), the changed paths
    (`git diff --name-only origin/main...HEAD`) and the head
    (`git rev-parse HEAD`).
-2. The round: 1, plus the number of `review` handoffs on the issue
-   since the later of the last `build` handoff and David's last request
-   for changes (a review of David's that requests changes, or a comment
-   of his that mentions `@kaos-agent`). Read them from the issue's
-   comments and the PR's reviews.
+2. The round: 1, plus the number of `review` handoffs on the issue,
+   not counting blocked ones, since the later of the last `build`
+   handoff and David's last request for changes (a review of David's
+   that requests changes, or a comment of his that mentions
+   `@kaos-agent`). Read them from the issue's comments and the PR's
+   reviews.
 3. Choose the reviewers:
    - always `reviewer-code`, `reviewer-tests`, `reviewer-rules`;
    - `reviewer-api` when a path is in the public package of `kaos-core`
@@ -55,15 +58,23 @@ Arguments: the issue number and the PR number.
    On round 2 and later, only the angles whose previous review had
    open findings, each with its previous findings and the replies to
    them (the PR's review comments of that angle and their replies), and
-   the diff since its previous review's commit.
+   the diff since its previous review's commit (`sha` of the last
+   review handoff). When no angle had open findings (the round follows
+   a red CI, say), run `code`, `tests` and `rules` on that diff.
 4. Run the chosen reviewers in parallel: one Agent call each, with
    `subagent_type` the reviewer's name, in a single message. Give each
-   the issue number, the PR number, the acceptance criteria, the spec
-   link if any, the changed paths and, from round 2, its previous
-   findings and their replies. Each returns JSON.
+   the issue number, the PR number, the PR's body, the acceptance
+   criteria, the spec link if any, the changed paths and, from round 2,
+   its previous findings and their replies. Each returns JSON.
 5. Run the `review-verifier` agent with all the reviewers' JSON. Keep
    what it returns.
-6. Post one review per angle that has findings, or that resolves
+6. Find the lines a review can comment on: GitHub refuses a whole
+   review (422) when one inline comment is on a line outside the diff.
+   Read the patches (`gh api repos/dajac/kaos/pulls/P/files --paginate`)
+   and note, for each file, the new-side line numbers of its hunks.
+   Findings on other lines go into the review's body, with their file
+   and line.
+   Post one review per angle that has findings, or that resolves
    previous ones: write `.factory/review-<angle>.json` and send it with
    `gh api repos/dajac/kaos/pulls/P/reviews --input .factory/review-<angle>.json`:
 
@@ -74,11 +85,15 @@ Arguments: the issue number and the PR number.
       "body": "**<severity>**: <title>\n\n<scenario>\n\n**Fix:** <fix>"}]}
    ```
 
-   GitHub refuses an inline comment on a line outside the diff: if the
-   call fails with 422, move those findings into the review's body,
-   with their file and line, and send it again.
-7. Count the open findings: `blocking` is the number of `blocker` and
-   `major` findings the verifier kept, `minor` the rest.
+   If the call still fails with 422, send the review with every
+   finding in its body.
+7. Count the open findings: the findings the verifier kept, plus, from
+   round 2, every previous `blocker` or `major` finding of a re-run
+   angle that its reviewer neither listed again nor marked resolved
+   (an earlier finding does not vanish by omission), plus the previous
+   findings of the angles that did not re-run and were not resolved.
+   `blocking` is the number of open `blocker` and `major` findings,
+   `minor` the rest.
 8. When `blocking` is 0, post a summary for David on the PR, with `gh
    pr comment P --body-file .factory/summary.md`: each angle's verdict
    in one line, the `minor` and `nit` findings left open and why they
@@ -98,6 +113,8 @@ Arguments: the issue number and the PR number.
      round: <r>
      blocking: <n>
      minor: <n>
+     open:
+       - "<severity> <angle>: <title>"
      angles: [<the angles that reviewed>]
      sha: <head>
      seen_until: <the time you noted first>

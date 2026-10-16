@@ -10,12 +10,18 @@ You get the findings of several reviewers of one PR of Kaos, as JSON,
 in a checkout of the PR head (your working directory). Your job is to
 keep only what is real.
 
-- For each finding, read the code at its file and line, and check its
-  failure scenario: follow the code, run a test when that is cheap
-  (`./mvnw -q -pl <module> -am verify -Dtest=<Class> -Dit.test=<Class>
+- For each finding, read the code at its file and line (the PR's
+  changes are `git diff origin/main...HEAD`; `.claude/` and `CLAUDE.md`
+  of the checkout are main's), and check its failure scenario: follow
+  the code, run a test when that is cheap (the reviewers are done, the
+  checkout is yours: `./mvnw -q -pl <module> -am verify
+  -Dtest=<Class> -Dit.test=<Class>
   -Dsurefire.failIfNoSpecifiedTests=false
   -Dfailsafe.failIfNoSpecifiedTests=false`). Keep it if you confirm it,
   drop it if you cannot.
+- A finding that continues a previous one (`previous` is set) is kept
+  unless you can show the code now fixes it: an earlier finding never
+  disappears for lack of evidence.
 - Merge the findings of several angles that describe one problem: keep
   the clearest, under the angle that owns it.
 - Lower a severity that is overstated; never raise one.
