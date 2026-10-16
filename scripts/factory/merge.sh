@@ -6,8 +6,12 @@
 # It merges only a PR that is ready: not a draft, based on main, approved
 # by David on its current head, with every review thread resolved and CI
 # green. It squashes with the PR title and the part of the body above
-# the "---" rule (the rest is review material), then deletes the branch
-# unless another open PR is based on it.
+# the "---" rule (the rest is review material), then deletes the branch:
+# GitHub then retargets the PRs based on it to main.
+#
+# GitHub does not let anyone approve their own PR, so a PR opened under
+# David's handle (the factory's bootstrap PRs) cannot pass the approval
+# gate; David merges those with the button.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
@@ -29,20 +33,26 @@ last_review=$(gh api "repos/$FACTORY_REPO/pulls/$pr/reviews" --paginate |
 [[ -n $last_review && $(jq -r .state <<<"$last_review") == APPROVED ]] || die "#$pr is not approved by $FACTORY_DAVID"
 [[ $(jq -r .commit_id <<<"$last_review") == "$head" ]] || die "#$pr has commits after the approval; approve its current head"
 
-unresolved=$(gh api graphql -F n="$pr" -F owner="${FACTORY_REPO%%/*}" -F name="${FACTORY_REPO#*/}" -f query='
+threads=$(gh api graphql -F n="$pr" -F owner="${FACTORY_REPO%%/*}" -F name="${FACTORY_REPO#*/}" -f query='
     query($owner: String!, $name: String!, $n: Int!) {
       repository(owner: $owner, name: $name) {
-        pullRequest(number: $n) { reviewThreads(first: 100) { nodes { isResolved } } }
+        pullRequest(number: $n) { reviewThreads(first: 100) { totalCount nodes { isResolved } } }
       }
-    }' --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)] | length')
+    }' | jq '.data.repository.pullRequest.reviewThreads')
+(($(jq .totalCount <<<"$threads") <= 100)) || die "#$pr has more than 100 review threads; check them by hand"
+unresolved=$(jq '[.nodes[] | select(.isResolved | not)] | length' <<<"$threads")
 ((unresolved == 0)) || die "#$pr has $unresolved unresolved review threads"
 
-checks=$(gh pr checks "$pr" --repo "$FACTORY_REPO" --json name,bucket 2>/dev/null || echo '[]')
+# The exit code of gh pr checks depends on the state of the checks; the
+# JSON is what counts, and no JSON means gh could not read them.
+checks=$(gh pr checks "$pr" --repo "$FACTORY_REPO" --json name,bucket) || true
+jq -e 'type == "array"' <<<"${checks:-null}" >/dev/null 2>&1 || die "cannot read the checks of #$pr"
 pending=$(jq -r '[.[] | select(.bucket != "pass" and .bucket != "skipping")] | map("\(.name): \(.bucket)") | join(", ")' <<<"$checks")
 [[ -z $pending ]] || die "#$pr CI is not green: $pending"
 [[ $(jq length <<<"$checks") -gt 0 ]] || die "#$pr has no CI checks"
 
-title="$(jq -r .title <<<"$view") (#$pr)"
+title=$(jq -r .title <<<"$view")
+[[ $title == *"(#$pr)" ]] || title="$title (#$pr)"
 message=$(jq -r .body <<<"$view" | commit_message)
 
 merged=$(gh api -X PUT "repos/$FACTORY_REPO/pulls/$pr/merge" -f merge_method=squash -f sha="$head" \
@@ -50,8 +60,8 @@ merged=$(gh api -X PUT "repos/$FACTORY_REPO/pulls/$pr/merge" -f merge_method=squ
 author=$(gh api "repos/$FACTORY_REPO/commits/$merged" --jq '.commit.author.name + " <" + .commit.author.email + ">"')
 info "merged #$pr as $merged, authored by $author"
 
-if [[ -n $(gh pr list --repo "$FACTORY_REPO" --base "$branch" --state open --json number --jq '.[].number') ]]; then
-    info "kept the branch $branch: open PRs are based on it"
+if gh api -X DELETE "repos/$FACTORY_REPO/git/refs/heads/$branch" >/dev/null 2>&1; then
+    info "deleted the branch $branch; GitHub retargets the PRs based on it to main"
 else
-    gh api -X DELETE "repos/$FACTORY_REPO/git/refs/heads/$branch" >/dev/null && info "deleted the branch $branch"
+    info "the branch $branch was already gone"
 fi

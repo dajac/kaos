@@ -175,16 +175,36 @@ always passes one:
   `--permission-prompts none` tells Claude not to retry a denied call.
   A job that needs something not allowed fails cleanly, and its issue
   goes to `blocked`; it never hangs on a prompt.
-- `.claude/factory-job.json` holds the allowlist (reads, edits,
-  subagents, skills, and Bash for `git`, `gh`, `./mvnw`, `npm`,
-  `docker`, `curl`, `jq`, the factory scripts and the usual file
-  tools), the deny rules, `"disableAllHooks": false`, and the
-  `SessionStart` and guard hooks (see "Guardrails"), which it finds
-  through `$FACTORY_HOME`. It is read from the **main checkout**, not
-  from the job's worktree. A job can edit its own
-  branch's `.claude/`, but not the rules that bind it: deny rules win
-  over any allow rule the branch adds, and the hook from the main
-  checkout runs whatever the branch's copy says.
+- `.claude/factory-job.json` holds the allowlist, the deny rules,
+  `"disableAllHooks": false`, and the `SessionStart` and guard hooks
+  (see "Guardrails"). It is read from the trusted checkout (planned:
+  `.claude/worktrees/factory-main`, kept at `origin/main` by the loop),
+  not from the job's worktree, and finds the hooks through
+  `$FACTORY_TRUSTED`, which `job.sh` exports. Both hooks have
+  `"onFailure": "block"`: a hook that cannot run blocks the command
+  rather than letting it through without the bot's identity.
+  - Allowed: reads anywhere but the credentials (`~/.config/gh`,
+    `~/.ssh`, `~/.netrc`, `~/.git-credentials` are denied), edits and
+    writes under the job's worktree only (`Edit(./**)`), subagents,
+    skills, and Bash for `git`, `gh`, `./mvnw`, `npm`, `curl`, `jq`,
+    `java`, the read-only `docker` commands, the factory scripts of the
+    worktree, and the usual file tools. Not allowed: `node`, `npx`,
+    `docker run`, and a bare `Bash`, `Edit` or `Write`.
+  - In `dontAsk`, a compound command runs only when each part is
+    allowed, and Claude Code refuses `cd` inside a compound, `$(...)`
+    in an assignment, and `for` loops: the job skills use `git -C`,
+    paths and one command per call instead. A job does not write a
+    script to run it: the guard checks the commands it sees, not the
+    contents of a file.
+  - The project settings of the job's worktree still load, with their
+    hooks: Claude Code drops their allow rules in `-p` runs, but a
+    project hook could answer "allow". `--setting-sources user` would
+    exclude them, but also the project's `CLAUDE.md` and skills, and
+    keep David's user `CLAUDE.md`, so it is not used. Instead the deny
+    rules and the guard refuse `.claude/settings.local.json`, and
+    `job.sh` refuses to start a job whose worktree has one (planned).
+    A branch that changes `.claude/settings.json` is factory work,
+    which goes through a spec and David's review.
 - The `stream-json` log, `.factory/logs/<N>-<kind>.jsonl`, is what
   `./factory logs` follows and what the `blocked` comment quotes.
 
@@ -631,9 +651,12 @@ one verdict line: `GATES: PASS`, `GATES: FAIL <step>` or
 that line, so a skipped step can never read as a pass.
 
 It runs from the root of the worktree it is called in, and checks the
-JDK (21 or later) and, for `full`, Docker, before anything else. Then:
+JDK (21 or later, the one of `JAVA_HOME` when set, as `./mvnw` does)
+and, for `full`, Docker, before anything else. Then:
 
-- `format`: `./mvnw spotless:apply`;
+- `format`: `./mvnw spotless:check`; it only checks, so that the
+  verdict is about the tree the job pushes: a job runs
+  `./mvnw spotless:apply` and commits the result first;
 - `factory-tests`: `scripts/factory/test/run.sh`;
 - `verify`: `./mvnw verify -DskipITs` for `quick`, `./mvnw verify`
   with the integration tests for `full`, which is required before a PR
@@ -767,9 +790,12 @@ green. Only David merges, in one of two ways:
   logged in as anyone else, and merges only a PR that is open, not a
   draft, based on `main`, whose last review by David approves its
   current head, with no unresolved thread and every check green. It
-  squashes with the PR title and `(#N)`, and the body above the `---`
-  rule without its HTML comments, prints the author GitHub recorded,
-  and deletes the branch unless an open PR is based on it.
+  squashes with the PR title and `(#N)` (once), and the body above
+  the `---` rule without its HTML comments, prints the author GitHub
+  recorded, and deletes the branch, which makes GitHub retarget the PRs
+  based on it to `main`. GitHub does not let anyone approve their own
+  PR, so the bootstrap PRs, opened under David's handle, are merged
+  with the button.
 - The "Squash and merge" button, after trimming the message himself.
 
 The orchestrator (planned) does the rest of the cleanup either way,
@@ -805,8 +831,10 @@ push to `main`. The refused commands are:
 Its tests are in `scripts/factory/test/guard_test.sh`. It matches these
 exact subcommands, so `Closes #N` in a PR body stays
 allowed. Hooks are a guardrail, not a security boundary: the job
-instructions state the same rules, `factory-job.json` repeats the main
-ones as deny rules, and the orchestrator checks the `accepted` gate
+instructions state the same rules, `factory-job.json` repeats the
+plainest forms as deny rules (the guard is the real check: a deny
+pattern cannot tell `git push origin main` from every way to write it),
+and the orchestrator checks the `accepted` gate
 against the timeline (planned). Before every job, the orchestrator
 also checks that the main checkout's `factory-job.json` and hook match
 `main`, and refuses to start a job if they do not (planned). Changes to the factory itself
