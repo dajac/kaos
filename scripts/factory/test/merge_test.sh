@@ -41,6 +41,20 @@ test_merges_a_ready_pr_with_the_message_above_the_rule() {
     grep -q -- '-X DELETE repos/dajac/kaos/git/refs/heads/75-fix-cells' fake/calls || fail "the branch was not deleted"
 }
 
+test_keeps_the_co_authors_and_retargets_the_children_first() {
+    ready_pr
+    printf '%s\n' '[{"commit": {"message": "Fix\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"}},' \
+        '{"commit": {"message": "Test\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"}}]' \
+        >fake/api/repos_dajac_kaos_pulls_81_commits
+    echo '[{"number": 82}]' >fake/prs.json
+    merge 81 >/dev/null
+    [[ $(grep -c 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>' fake/calls) == 1 ]] ||
+        fail "the co-author is missing or repeated: $(grep -c Co-Authored-By fake/calls)"
+    edit=$(grep -n 'pr edit 82' fake/calls | cut -d: -f1)
+    delete=$(grep -n -- '-X DELETE' fake/calls | cut -d: -f1)
+    [[ -n $edit && $edit -lt $delete ]] || fail "#82 was not retargeted before the branch was deleted"
+}
+
 test_refuses_without_davids_approval_of_the_head() {
     ready_pr
     echo '[{"user": {"login": "dajac"}, "state": "APPROVED", "commit_id": "old"}]' >fake/api/repos_dajac_kaos_pulls_81_reviews

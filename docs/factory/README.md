@@ -152,11 +152,9 @@ The loop keeps a little local runtime state in `.factory/`
 issue, start time, log path), the request queue, the job logs and the
 current bot token. GitHub stays the truth: after a crash or a reboot,
 the next tick rebuilds everything from the labels, the PRs and the
-timeline. For an issue in `in-progress`, `reviewing` or `spec-review`
-with no running job, it looks for a valid handoff newer than the stage
-label: if there is one, the job finished while the loop was down and
-the handoff is applied; otherwise the job died and the issue goes to
-`blocked`.
+timeline: a job that handed off while the loop was down has its handoff
+applied, and one that died without a handoff is run again (a job that
+the loop saw end without a handoff blocks its issue instead).
 
 Below, "the orchestrator" means the loop and its ticks together.
 
@@ -334,14 +332,14 @@ and PRs show as `kaos-agent[bot]`.
   David's own terminal, outside Claude, keeps his login: his merges,
   approvals and comments are his.
 - **Commits** are authored by the bot, with
-  `Co-Authored-By: Claude <noreply@anthropic.com>`, and so is the
-  squash commit that lands on `main`, although David merges (planned).
-  GitHub's merge API takes no author, so rollout step 2 checks on a test PR who
-  GitHub records as the author of a squash merged by David. If it is
-  David, `./factory merge` instead lets the orchestrator merge with the
-  bot's token once David has approved and run the command, so the
-  merge stays David's decision and the bot stays the author. The
-  audit of `main` then expects the bot as the merger of factory PRs.
+  `Co-Authored-By: Claude <model> <noreply@anthropic.com>` naming the
+  model the job ran on. When the factory's own PRs were merged (by the
+  bot), GitHub authored each squash commit with the PR's author: the
+  bot for the PRs it opened, David for those opened under his handle
+  during the bootstrap. So the squash of a PR the bot opened is the
+  bot's; `./factory merge` keeps the `Co-Authored-By` lines of the PR's
+  commits. (The factory's own first PRs, opened under David's handle
+  during the bootstrap, are authored by David.)
 
 What the bot makes simpler:
 
@@ -416,16 +414,16 @@ The stage is a separate label, and an open issue has **exactly one**:
 
 | Stage | Meaning | `./factory status` section |
 |---|---|---|
-| `needs-triage` | Not looked at yet | Triage |
+| `needs-triage` | Not looked at yet | To triage |
 | `triaged` | Proposal posted, waiting for David | Waiting for David |
 | `needs-info` | Waiting for the reporter | Needs info |
 | `queued` | Accepted, waiting for a job | Queued |
-| `spec-review` | Spec PR open | Spec |
-| `in-progress` | A build or address job is running | Building |
-| `reviewing` | The draft PR is with the agent review | Reviewing |
+| `spec-review` | Spec PR open | Waiting for David |
+| `in-progress` | A build or address job is running | In flight |
+| `reviewing` | The draft PR is with the agent review | In flight |
 | `in-review` | PR ready, waiting for David | Waiting for David |
-| `changes-requested` | David asked for changes | Changes requested |
-| `blocked` | Waiting on a decision, see the last bot comment | Blocked |
+| `changes-requested` | David asked for changes | In flight |
+| `blocked` | Waiting on a decision, see the last bot comment | Waiting for David |
 
 The orchestrator applies every transition (an arrow swaps
 the old stage label for the new one):
@@ -471,7 +469,7 @@ and restart at 1 each time David sends the PR back.
 
 A "new" comment is one newer than the `seen_until` time of the last
 handoff of a job that reads David's comments (triage, spec, build,
-address), the moment its job read GitHub, so a comment posted while a
+address) or of the tick, the moment its job read GitHub, so a comment posted while a
 job runs is not lost behind that job's own comments; a review's
 handoff does not move this watermark. The orchestrator
 reads issue comments, PR comments, reviews and inline review comments
@@ -873,8 +871,10 @@ green. Only David merges, in one of two ways:
   current head, with no unresolved thread and every check green. It
   squashes with the PR title and `(#N)` (once), and the body above
   the `---` rule without its HTML comments, prints the author GitHub
-  recorded, and deletes the branch, which makes GitHub retarget the PRs
-  based on it to `main`. GitHub does not let anyone approve their own
+  recorded, retargets the PRs based on its branch to `main`, and
+  deletes the branch. (GitHub closes, rather than retargets, a PR whose
+  base branch is deleted through its API.) The squash keeps the
+  `Co-Authored-By` lines of the PR's commits. GitHub does not let anyone approve their own
   PR, so the bootstrap PRs, opened under David's handle, are merged
   with the button.
 - The "Squash and merge" button, after trimming the message himself.
@@ -894,7 +894,7 @@ a stacked PR are planned.
 A `PreToolUse` hook, `.claude/hooks/factory-guard.sh`, refuses these
 commands. It is registered in the committed `.claude/settings.json`,
 for every session, and again in `.claude/factory-job.json`, which jobs
-load from the main checkout. It checks each simple command of the line on its own, so
+load from the trusted checkout. It checks each simple command of the line on its own, so
 that `git push origin x && git checkout main` is not mistaken for a
 push to `main`. The refused commands are:
 
@@ -905,12 +905,27 @@ push to `main`. The refused commands are:
 - `gh issue close`, the `resolveReviewThread` GraphQL mutation, and
   `gh pr review --approve`;
 - deleting the `issue-screenshots` branch;
+- adding or removing a stage label by hand: stages change through
+  `stage.sh` only;
 - once the bot exists, the ways around its identity listed in
-  "Identity".
+  "Identity", reading credentials other than the bot's (`git
+  credential`, `security`), git aliases, and `xargs` and `find -exec`,
+  which run commands the guard would not see.
 
-Its tests are in `scripts/factory/test/guard_test.sh`. It matches these
-exact subcommands, so `Closes #N` in a PR body stays
-allowed. Hooks are a guardrail, not a security boundary: the job
+A command can run another one (`xargs`, `find -exec`, git and `gh`
+aliases, heredocs and strings with substitutions), and a shell line
+cannot be told apart into messages and commands without running a
+shell. So the guard does not try: it removes quotes and backslashes,
+takes newlines for separators, and refuses David's gates and the
+identity escapes wherever they appear in the line, messages and
+heredoc bodies included; what only counts as a command (`security`,
+`eval`, an environment assignment) is checked at command positions.
+The jobs write their messages to files (`git commit -F`,
+`--body-file`), which the guard never reads; an inline message that
+names a command only David runs is refused. Every match ignores case.
+Its
+tests are in `scripts/factory/test/guard_test.sh` and
+`guard_data_test.sh`. Hooks are a guardrail, not a security boundary: the job
 instructions state the same rules, `factory-job.json` repeats the
 plainest forms as deny rules (the guard is the real check: a deny
 pattern cannot tell `git push origin main` from every way to write it),
@@ -920,7 +935,34 @@ trusted checkout, which the loop resets to `origin/main` on every poll,
 and `job.sh` reverts any change a tick makes there. Changes to the factory itself
 (`factory`, `.claude/`, `scripts/factory/`, `docs/factory/`,
 `.github/`) always go through a spec, and the `rules` reviewer flags
-them.
+them. Claude Code loads the hooks, skills, agents and `CLAUDE.md` of a
+job's worktree, and the job runs the worktree's scripts, so a branch
+that changes `.claude/`, `CLAUDE.md`, `scripts/factory/` or `./factory`
+would change the rules of its own jobs (so would a `CLAUDE.local.md`,
+a nested `CLAUDE.md` or a `.mcp.json`, committed or not): `job.sh`
+refuses to run a spec,
+build or address job on such a branch (measured from where the branch
+forked from `main`, so a branch older than a change of main's is not
+taken for one), the tick blocks the issue with the reason, and David
+builds those changes himself. The review job replaces them with main's
+(`git checkout --no-overlay`, which also removes the files a PR adds
+there). A branch cut from an older `main` keeps the skills of that
+`main` in its own jobs, with today's trusted scripts and hooks.
+
+The guard reads command lines; it does not stop what it cannot see: a
+script the job writes and then runs, a payload in a file (`gh api
+--input`, `-F query=@file`), or a build that runs code. These are
+written by the bot's own jobs and reviewed in their PRs, and `main` has
+no server-side protection on GitHub Free: the guard and the
+instructions keep honest mistakes out, not a determined attacker.
+
+Sessions in a worktree whose branch predates the factory (or the frozen
+`initial-setup` branch) have no `.claude/settings.json`, hence no guard
+and no bot identity: they act as David, as before the factory.
+
+`FACTORY_REF` (default `main`) names the branch the trusted checkout
+and the jobs' worktrees start from; it exists to try the factory on its
+own branch before it is merged.
 
 ## Files
 

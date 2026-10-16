@@ -3,7 +3,7 @@
 # issue, or a tick. Called by the loop, one at a time.
 #
 # Usage: scripts/factory/job.sh <triage|spec|build|review|address> <issue>
-#        scripts/factory/job.sh tick <snapshot.json> <previous-snapshot.json> last-job=<kind:N:status:log|none> [<kind:N>...]
+#        scripts/factory/job.sh tick <snapshot.json> <previous-snapshot.json> last-job=<kind,N,status,start,log|none> [reason=<why>] [<kind:N>...]
 #
 # It prepares the worktree of the job (see docs/factory/README.md,
 # "Architecture"), runs "claude -p /factory-<kind> <issue>" there with
@@ -12,8 +12,8 @@
 # session to .factory/logs/. It records the running job in
 # .factory/job.json while it runs. Its last line on stdout is one JSON
 # object: {kind, issue, status, exit, log, seconds, cost, result}, where
-# status is ok, failed or timeout and result is the tick's structured
-# output.
+# status is ok, failed, timeout or refused (with a reason: the job did
+# not start) and result is the tick's structured output.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 . "$FACTORY_SCRIPTS/identity.sh"
@@ -131,15 +131,47 @@ review)
     # directory: the reviewers and their rules come from main, never
     # from the PR under review. The PR's own versions stay in its
     # commits (git diff origin/main...HEAD).
-    git -C "$dir" checkout -q "$base" -- .claude CLAUDE.md
+    git -C "$dir" checkout -q --no-overlay "$base" -- .claude CLAUDE.md scripts/factory
+    # The other files Claude Code loads from a working directory: main's,
+    # or none.
+    for file in $(git -C "$dir" diff --name-only "$base" -- CLAUDE.local.md .mcp.json ':(glob)**/CLAUDE.md' ':(glob)**/CLAUDE.local.md'); do
+        if git -C "$dir" cat-file -e "$base:$file" 2>/dev/null; then
+            git -C "$dir" checkout -q "$base" -- "$file"
+        else
+            rm -f "$dir/$file"
+        fi
+    done
     cleanup_dir=$dir
     prompt="/factory-review $arg $pr"
     ;;
 esac
 
+# A job refused before it starts still ends with a result line, so that
+# the loop and the tick can say why.
+refuse_job() {
+    jq -cn --arg kind "$kind" --arg issue "$arg" --arg reason "$1" \
+        '{kind: $kind, issue: $issue, status: "refused", reason: $reason, exit: 0, log: null, seconds: 0, cost: null, result: null}'
+    exit 0
+}
+
 # A local settings file in the job's worktree would load with the job
 # and could loosen its permissions.
-[[ ! -e $dir/.claude/settings.local.json ]] || die "$dir has a .claude/settings.local.json; remove it first"
+[[ ! -e $dir/.claude/settings.local.json ]] || refuse_job "the worktree has a .claude/settings.local.json"
+# Claude Code loads the hooks, skills, agents and instructions of the
+# job's worktree, and the job runs its scripts: a branch that changes
+# them would change the rules of its own job. The factory does not build
+# its own changes: David does. The branch's changes are measured from
+# where it forked from main, not against today's main.
+factory_paths=(.claude CLAUDE.md CLAUDE.local.md .mcp.json scripts/factory factory
+    ':(glob)**/CLAUDE.md' ':(glob)**/CLAUDE.local.md')
+if [[ $kind == spec || $kind == build || $kind == address ]]; then
+    fork=$(git -C "$dir" merge-base "$base" HEAD)
+    if ! git -C "$dir" diff --quiet "$fork" HEAD -- "${factory_paths[@]}" ||
+        [[ -n $(git -C "$dir" status --porcelain -uall -- "${factory_paths[@]}") ]] ||
+        [[ -n $(git -C "$dir" status --porcelain -uall --ignored -- .claude) ]]; then
+        refuse_job "the branch changes the factory itself (.claude/, a CLAUDE.md, .mcp.json, scripts/factory/ or ./factory): David builds it by hand"
+    fi
+fi
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 name=${kind}-${arg##*/}

@@ -6,8 +6,9 @@
 # It merges only a PR that is ready: not a draft, based on main, approved
 # by David on its current head, with every review thread resolved and CI
 # green. It squashes with the PR title and the part of the body above
-# the "---" rule (the rest is review material), then deletes the branch:
-# GitHub then retargets the PRs based on it to main.
+# the "---" rule (the rest is review material) and the co-authors of its
+# commits, then retargets the PRs based on its branch to main and
+# deletes the branch.
 #
 # GitHub does not let anyone approve their own PR, so a PR opened under
 # David's handle (the factory's bootstrap PRs) cannot pass the approval
@@ -54,14 +55,36 @@ pending=$(jq -r '[.[] | select(.bucket != "pass" and .bucket != "skipping")] | m
 title=$(jq -r .title <<<"$view")
 [[ $title == *"(#$pr)" ]] || title="$title (#$pr)"
 message=$(jq -r .body <<<"$view" | commit_message)
+# The squash keeps the co-authors of the PR's commits: Claude, with the
+# model each job ran on.
+coauthors=$(gh api "repos/$FACTORY_REPO/pulls/$pr/commits" --paginate --jq '.[].commit.message' |
+    grep -iE '^Co-Authored-By: ' | sort -fu || true)
+while IFS= read -r line; do
+    [[ -z $line ]] && continue
+    grep -qixF -- "$line" <<<"$message" && continue
+    if [[ -n $message ]]; then
+        [[ $message == *$'\n'[Cc]o-[Aa]uthored-[Bb]y:* || $message == [Cc]o-[Aa]uthored-[Bb]y:* ]] ||
+            message+=$'\n'
+        message+=$'\n'"$line"
+    else
+        message=$line
+    fi
+done <<<"$coauthors"
 
 merged=$(gh api -X PUT "repos/$FACTORY_REPO/pulls/$pr/merge" -f merge_method=squash -f sha="$head" \
     -f commit_title="$title" -f commit_message="$message" --jq .sha)
 author=$(gh api "repos/$FACTORY_REPO/commits/$merged" --jq '.commit.author.name + " <" + .commit.author.email + ">"')
 info "merged #$pr as $merged, authored by $author"
 
+# GitHub closes the PRs whose base branch is deleted through the API (it
+# retargets them only for its own delete-on-merge): move them to main
+# first.
+for child in $(gh pr list --repo "$FACTORY_REPO" --base "$branch" --state open --json number --jq '.[].number'); do
+    gh pr edit "$child" --repo "$FACTORY_REPO" --base main >/dev/null
+    info "retargeted #$child to main"
+done
 if gh api -X DELETE "repos/$FACTORY_REPO/git/refs/heads/$branch" >/dev/null 2>&1; then
-    info "deleted the branch $branch; GitHub retargets the PRs based on it to main"
+    info "deleted the branch $branch"
 else
     info "the branch $branch was already gone"
 fi

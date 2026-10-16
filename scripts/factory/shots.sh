@@ -42,6 +42,7 @@ build=()
 while read -r name scenario path size || [[ -n ${name:-} ]]; do
     [[ -z ${name:-} || $name == \#* ]] && continue
     if [[ $scenario != none ]]; then
+        [[ $scenario == *.json ]] || scenario=$scenario.json
         if [[ -f $(dirname "$list")/$scenario ]]; then
             scenario=$(dirname "$list")/$scenario
         else
