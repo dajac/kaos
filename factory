@@ -167,7 +167,7 @@ cmd_loop() {
             last_tick=$(date +%s)
             job_ended=false
             local tick
-            tick=$("$scripts/job.sh" tick "$snapshot" "$FACTORY_STATE/tick-snapshot.json" "last-job=$last_job" "${requests[@]}" | tail -n 1) || tick='{}'
+            tick=$("$scripts/job.sh" tick "$snapshot" "$FACTORY_STATE/tick-snapshot.json" "last-job=$last_job" ${requests[@]+"${requests[@]}"} | tail -n 1) || tick='{}'
             jq -e . <<<"$tick" >/dev/null 2>&1 || tick='{"status": "failed"}'
             log "tick: $(jq -c '{status, cost, result}' <<<"$tick")"
             if [[ $(jq -r .status <<<"$tick") == ok ]]; then
