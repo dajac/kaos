@@ -101,8 +101,8 @@ Three pieces:
   context: nothing accumulates from one issue to the next. It also
   removes the local worktrees and branches of merged PRs
   (`scripts/factory/cleanup.sh`).
-- **Jobs**, one per piece of model work: `triage`, `build` and
-  `review` (built), `spec` and `address` (planned). A job is a skill run headless by
+- **Jobs**, one per piece of model work: `triage`, `spec`, `build`,
+  `review` and `address`. A job is a skill run headless by
   `scripts/factory/job.sh <kind> <N>` (`claude -p "/factory-<kind>
   <N>"`) in the issue's worktree. It does its work, posts its result
   on GitHub with a `yaml` handoff block, and exits. It never changes a
@@ -559,9 +559,10 @@ David answers in one of three ways:
   proposal.
 - He closes the issue.
 
-### 3. `spec` (planned)
+### 3. `spec`
 
-For an accepted issue with `needs-spec`:
+`.claude/skills/factory-spec/SKILL.md`. For an accepted issue with
+`needs-spec`:
 
 - branch `spec/<N>-<slug>` from `main`, in its own worktree, adding
   `docs/specs/<N>-<slug>.md`. The spec covers:
@@ -572,11 +573,15 @@ For an accepted issue with `needs-spec`:
   - the alternatives;
   - the impact on `docs/ARCHITECTURE.md`;
   - the test strategy;
-  - the planned PR stack, when the work spans several PRs;
+  - the open questions for David, each with a recommendation;
+  - the planned PR stack, when the work spans several PRs (stacks are
+    planned: until then, the spec proposes the smallest first PR that
+    is useful on its own);
 - opens the spec PR (`Spec: <title>`, body `Spec for #N`) and requests
   David's review;
 - on later runs, addresses David's comments with the same rules as the
-  `address` job.
+  `address` job: new commits, one reply per thread, his review
+  requested again.
 
 Once David approves it, the orchestrator closes the spec PR. Specs are
 not merged, because `docs/ARCHITECTURE.md` describes the merged code
@@ -611,7 +616,7 @@ worktree `.claude/worktrees/<N>-<slug>` on branch `<N>-<slug>` from
 Draft means it is the agents' turn. Ready for review, with David's
 review requested, means it is David's turn.
 
-#### Stacked PRs
+#### Stacked PRs (planned)
 
 When the spec plans a stack, each planned PR becomes a GitHub
 sub-issue of the issue, so that every PR has its own issue and its own
@@ -839,7 +844,11 @@ code. Lessons that sat in one user's local memory moved there: the UX
 reviewer checks the rows against the coordinator's view, and the review
 is independent of the author.
 
-### 6. `address` (planned), David's review and the merge
+### 6. `address`, David's review and the merge
+
+`.claude/skills/factory-address/SKILL.md` answers whatever stands
+between a PR and David's approval: the agent reviewers' findings (from
+`reviewing`), a red CI, and David's own review.
 
 David reviews the ready PR on GitHub. "Request changes", a review
 thread, or a comment mentioning `@kaos-agent` moves the issue to
@@ -945,6 +954,8 @@ scripts/factory/cleanup.sh            removes the local worktree and branch of a
 .claude/skills/factory-triage/SKILL.md
 .claude/skills/factory-build/SKILL.md
 .claude/skills/factory-review/SKILL.md
+.claude/skills/factory-spec/SKILL.md
+.claude/skills/factory-address/SKILL.md
 .claude/agents/reviewer-{code,tests,rules,api,ux,kafka}.md
 .claude/agents/review-verifier.md
 scripts/factory/try-pr.sh             ./factory try: a tree on its own broker, in a scenario's state
@@ -959,12 +970,7 @@ docs/factory/README.md                this document
 .factory/                             runtime state, gitignored
 ```
 
-Planned:
-
-```
-.claude/skills/factory-{spec,address}/SKILL.md
-docs/specs/                           only on spec branches
-```
+Planned: none. The specs live under `docs/specs/` on their spec branches only.
 
 The scripts need `bash`, `gh`, `jq`, `git`, `openssl`, `curl`, Docker
 and Chrome, all already on David's machine; no Node, Python or extra
@@ -1036,7 +1042,11 @@ applies to everything, the remaining rollout steps included.
    `publish-shots.sh`, the `build` skill, and the commit and PR
    conventions in `CLAUDE.md`.
 5. Built. The reviewers, the verifier, and the `review` skill.
-6. The `spec` and `address` skills, and stacked PRs with sub-issues.
+6. Built. The `spec` and `address` skills.
+7. Stacked PRs with sub-issues: the spec's PR list becomes sub-issues
+   that count as accepted through David's approval of the spec, which
+   needs a gate of its own in `stage.sh`; the rebase of a child when
+   its parent merges; deleting the spec branch with the last PR.
 
 Pilot candidates: #73 (ellipses, trivial UI), #75 (classic consumer
 configs, core bug), #76 (remove the auto-pilot, likely a spec).
