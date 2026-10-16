@@ -99,8 +99,8 @@ blocked`.
 | `spec-review` | there is no spec PR, or David wrote | candidate for a `spec` job |
 | `in-progress` | a `build` or `address` handoff newer than the stage, and the PR exists | `stage.sh N reviewing`, candidate for a `review` job |
 | `in-progress` | `last-job` is an `ok` job of N, with no such handoff | block ("the job ended without a handoff"); `resume: in-progress` |
-| `in-progress` | the PR exists | candidate for an `address` job (review findings, CI, David's changes) |
-| `in-progress` | otherwise | candidate for a `build` job |
+| `in-progress` | the PR exists and the last handoff's `job` is `build`, `review`, `address` or `tick` (the build handed off once) | candidate for an `address` job (review findings, CI, David's changes) |
+| `in-progress` | otherwise: no PR, or a PR that an interrupted build opened before handing off (the last handoff is still the `triage` or the `spec`) | candidate for a `build` job, which reuses the PR |
 | `reviewing` | a `review` handoff newer than the stage, `blocking` is `0` and the PR's `checks` is `pass` | `gh pr ready <PR>`, `gh pr edit <PR> --add-reviewer dajac`, `stage.sh N in-review` |
 | `reviewing` | a `review` handoff newer than the stage, `blocking` is `0`, `checks` is `pending` or `none`, and the handoff is less than 30 minutes old | nothing: wait for CI |
 | `reviewing` | a `review` handoff newer than the stage with `blocking` above `0` and `round` `1`; or `checks` is `fail`; or `pending`/`none` for 30 minutes | `stage.sh N in-progress`, candidate for an `address` job |
