@@ -177,7 +177,8 @@ cmd_loop() {
                 cp "$snapshot" "$FACTORY_STATE/tick-snapshot.json"
                 ((${#request_files[@]})) && rm -f "${request_files[@]}"
             fi
-            last_job=none
+            # A failed tick has not seen the last job: keep it for the next.
+            [[ $(jq -r .status <<<"$tick") == ok ]] && last_job=none
             local kind issue
             kind=$(jq -r '.result.job // empty' <<<"$tick")
             issue=$(jq -r '.result.issue // empty' <<<"$tick")

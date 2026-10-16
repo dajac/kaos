@@ -8,10 +8,14 @@ tools: Read, Grep, Glob, Bash
 
 Your angle: what a user sees. Run the PR and look at it:
 
-- You are the only reviewer that builds in this checkout:
-  `scripts/factory/try-pr.sh . --as review-ux --detach --scenario <name>`
+- You are the only reviewer that builds:
+  `scripts/factory/try-pr.sh <PR> --as review-ux --detach --scenario <name>`
   for each scenario that shows the change (its last line is the URL;
-  the first run builds, add `--no-build` to the next ones),
+  the first run builds, add `--no-build` to the next ones). Use the PR
+  number, not `.`: the scenarios made for the PR are published with its
+  screenshots, under `pr-<PR>/` of the `issue-screenshots` branch, and
+  `try-pr.sh` finds them only for a PR; the list of shots is there too
+  (`git show origin/issue-screenshots:pr-<PR>/shots.txt`),
   `scripts/factory/capture.sh <url> .factory/ux/<name>.png`, then Read
   the PNG; stop with `scripts/factory/try-pr.sh --stop try-review-ux`.
   The PR body lists its scenarios and screenshots.

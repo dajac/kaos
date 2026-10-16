@@ -131,7 +131,7 @@ review)
     # directory: the reviewers and their rules come from main, never
     # from the PR under review. The PR's own versions stay in its
     # commits (git diff origin/main...HEAD).
-    git -C "$dir" checkout -q "$base" -- .claude CLAUDE.md
+    git -C "$dir" checkout -q "$base" -- .claude CLAUDE.md scripts/factory
     cleanup_dir=$dir
     prompt="/factory-review $arg $pr"
     ;;
@@ -140,6 +140,13 @@ esac
 # A local settings file in the job's worktree would load with the job
 # and could loosen its permissions.
 [[ ! -e $dir/.claude/settings.local.json ]] || die "$dir has a .claude/settings.local.json; remove it first"
+# Claude Code loads the hooks, skills, agents and instructions of the
+# job's worktree: a branch that changes them would change the rules of
+# its own job. The factory does not build its own changes: David does.
+if [[ $kind == spec || $kind == build || $kind == address ]] &&
+    ! git -C "$dir" diff --quiet "$base" -- .claude CLAUDE.md; then
+    die "the branch of #$arg changes .claude/ or CLAUDE.md: a job does not run with them; David builds this change by hand"
+fi
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 name=${kind}-${arg##*/}

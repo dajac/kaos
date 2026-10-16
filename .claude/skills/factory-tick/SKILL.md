@@ -71,8 +71,10 @@ Arguments: `<snapshot.json> <previous.json> last-job=<kind:N:status:log|none> [<
    `^(spec/)?[0-9]+-`: `scripts/factory/cleanup.sh <head>`. For one
    closed without being merged whose head matches `^[0-9]+-` (not a
    spec PR: those are closed once approved) and whose issue is open in
-   `in-progress`, `reviewing` or `in-review`, and still has no other
-   open PR: block the issue ("the PR was closed without merging").
+   `in-progress`, `reviewing` or `in-review`, still has no other open
+   PR, and has not changed stage since the PR closed (its stage label
+   was added before `closed_at`): block the issue ("the PR was closed
+   without merging").
 5. Choose the next job (below) and give the structured output.
 
 In the table, `A` is the issue's `activity.sh` output; "David wrote"
@@ -89,6 +91,7 @@ blocked`.
 |---|---|---|
 | any | `last-job` is a `failed` or `timeout` job of N | block, quoting the status and the log name; `resume` is the current stage |
 | any | a blocked handoff newer than the stage | `stage.sh N blocked` (no comment: the job wrote it) |
+| any | `last-job` is an `ok` job of N, and the issue has no handoff of that job newer than the moment the job started (its log's name holds that time) | block ("the job ended without a handoff"); `resume` is the current stage |
 | `none` | always | `stage.sh N needs-triage` |
 | `needs-triage` | `accepted` is on the issue, there is a `triage` handoff (of any age), and David wrote nothing after it | `stage.sh N queued`: David accepted it, maybe while removing `triaged`; it checks that he added `accepted` |
 | `needs-triage` | a `triage` handoff newer than the stage, and David wrote nothing after it | `stage.sh N triaged`, or `needs-info` when its `route` is `needs-info` |

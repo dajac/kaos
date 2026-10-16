@@ -53,6 +53,38 @@ line_has 'event[^a-zA-Z]*APPROVE' && refuse "approving a PR is David's"
 line_has '/issues/[0-9]+[^ ]* .*state[^a-z]*closed' && refuse "closing an issue is David's"
 line_has '/labels' && line_has 'accepted' && refuse "the accepted label is David's"
 
+# Commands can run other commands (xargs, find -exec, bash -c, git
+# aliases, npm exec...), out of the reach of the per-command checks
+# below: David's gates are refused wherever they appear in the line.
+line_has '(^|[^a-z-])gh +pr +merge' && refuse "merging a PR is David's"
+line_has '(^|[^a-z-])gh +issue +close' && refuse "closing an issue is David's"
+line_has '(^|[^a-z-])gh +pr +review[^;&|]*(--approve|[ ]-a( |$))' && refuse "approving a PR is David's"
+line_has '(^|[^a-z-])factory +merge' && refuse "merging a PR is David's"
+
+# Stage labels change only through stage.sh, which checks the
+# transitions and David's gates (its own gh calls are not Bash commands
+# of the session, so the guard does not see them).
+stages='needs-triage|triaged|needs-info|queued|spec-review|in-progress|reviewing|in-review|changes-requested|blocked'
+line_has "gh +(issue|pr) +(edit|create)[^;&|]*(--add-label|--remove-label|--label|-l)[ =]+([^ ]*,)?[\"']?($stages)([,\"' ]|\$)" &&
+    ! line_has '(^|[ /])stage\.sh ' && refuse "stage labels change through scripts/factory/stage.sh only"
+line_has '/labels' && line_has "($stages)" && refuse "stage labels change through scripts/factory/stage.sh only"
+
+# Once the bot exists, the ways around its identity are refused
+# wherever they appear in the line, for the same reason.
+if $bot; then
+    line_has '(^|[^A-Za-z_])(GH_TOKEN|GITHUB_TOKEN|GH_CONFIG_DIR|GH_HOST|GIT_CONFIG_[A-Z_0-9]*|GIT_AUTHOR_[A-Z]*|GIT_COMMITTER_[A-Z]*|GIT_SSH[A-Z_]*|GIT_ASKPASS|SSH_ASKPASS)=' &&
+        refuse "overriding the bot's identity"
+    line_has '(^|[^a-z])(unset|env)[^;&|]* -u|(^|[^a-z])env [^;&|]*(-i|--ignore-environment|--unset)|(^|[^a-z])unset [^;&|]*(GH_|GITHUB_TOKEN|GIT_)' &&
+        refuse "overriding the bot's identity"
+    line_has '(^|[^a-z-])gh +auth' && refuse "gh auth reads or changes David's login"
+    line_has 'credential-(osxkeychain|store|cache|manager)|(^|[^a-z-])git[^;&|]* credential( |$)|(^|[^a-z])security ' &&
+        refuse "reading credentials other than the bot's"
+    line_has '-c *(alias\.|credential|url\.|core\.sshCommand|core\.askPass|core\.hooksPath|user\.|author\.|committer\.)' &&
+        refuse "overriding the bot's git identity"
+    line_has '(^|[^a-z])(xargs|find [^;&|]*-(exec|execdir|ok|okdir))( |$)' &&
+        refuse "running commands through xargs or find -exec hides them from the guard"
+fi
+
 for s in ${segments[@]+"${segments[@]}"}; do
     case $s in
     gh\ * | */gh\ *)

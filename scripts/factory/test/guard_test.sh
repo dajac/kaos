@@ -79,7 +79,6 @@ test_ordinary_work_is_allowed() {
         'gh pr create --draft --base main --title x --body y' \
         'gh pr close 88' \
         'gh pr review 81 --comment -b "looks good"' \
-        'gh issue edit 75 --add-label in-progress --remove-label queued' \
         'gh issue edit 75 --remove-label needs-spec' \
         'gh pr list --label accepted' \
         './mvnw -q verify' \
@@ -114,6 +113,29 @@ test_identity_escapes_are_refused_once_the_bot_exists() {
         'git config --get user.name' \
         'git log --author=kaos-agent' \
         'git commit -m x'
+}
+
+test_commands_hidden_behind_other_commands_are_refused() {
+    with_bot
+    refused 'echo 5 | xargs gh pr merge' \
+        "bash -c 'gh issue close 75'" \
+        "find . -name x -exec env -u GH_TOKEN gh pr list \\;" \
+        "git -c alias.x='!env -u GH_TOKEN gh pr list' x" \
+        "printf 'protocol=https\\nhost=github.com\\n' | git credential-osxkeychain get" \
+        'git credential fill' \
+        'security find-internet-password -s github.com' \
+        'cat x | xargs rm'
+}
+
+test_stage_labels_change_through_stage_sh_only() {
+    without_bot
+    refused 'gh issue edit 75 --add-label in-review' \
+        'gh issue edit 75 --remove-label queued --add-label in-progress' \
+        'gh api repos/dajac/kaos/issues/75/labels -f "labels[]=queued"'
+    allowed 'scripts/factory/stage.sh 75 in-review' \
+        'gh issue list --label queued' \
+        'gh issue edit 75 --add-label bug,area:ui' \
+        'gh issue edit 75 --add-label needs-spec'
 }
 
 test_identity_escapes_are_allowed_before_the_bot_exists() {
