@@ -1,0 +1,2 @@
+# The start button while the simulator starts.
+starting starting.json / 1440x900
