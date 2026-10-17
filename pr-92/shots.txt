@@ -1,0 +1,2 @@
+# The locked config panel, the legend, the axis, a STOPPED row and "Actions" at rest.
+contrast stopped-consumer.json / 1440x900
