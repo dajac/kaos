@@ -84,7 +84,7 @@ describe('stripCells', () => {
     const cells = stripCells('orders-1', 4, topicStates(partitions, 'orders-1'), g.lag);
 
     expect(cells).toEqual([
-      { state: 'ASSIGNED', fillPct: 0, tip: 'orders-1 / p0 · assigned' },
+      { state: 'ASSIGNED', fillPct: 0, tip: 'orders-1 / p0 · assigned · lag 0' },
       { state: 'PENDING', fillPct: 15, tip: 'orders-1 / p1 · pending · lag 12' },
       { state: 'EMPTY', fillPct: 0, tip: '' },
       { state: 'EMPTY', fillPct: 0, tip: '' },

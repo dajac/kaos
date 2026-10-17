@@ -51,11 +51,11 @@ describe('ConsumerRow', () => {
 
     expect(html).toContain('<div class="row-panel stable">');
     expect(html).toContain('<span class="row-state-badge stable">STABLE</span>');
-    expect(html).toContain('<div class="pcell assigned" data-tip="orders-1 / p0 · assigned"></div>');
+    expect(html).toContain('<div class="pcell assigned" data-tip="orders-1 / p0 · assigned · lag 0"></div>');
     expect(html).toContain(
       '<div class="pcell pending" style="--fill:15%" data-tip="orders-1 / p1 · pending · lag 12"></div>',
     );
-    expect(html).toContain('<div class="pcell revoking" data-tip="orders-2 / p3 · revoking"></div>');
+    expect(html).toContain('<div class="pcell revoking" data-tip="orders-2 / p3 · revoking · lag 0"></div>');
     expect(html.match(/class="pcell empty"/g)).toHaveLength(5);
     expect(html).toContain('<span class="row-axis-topic-label" title="orders-1">orders-1</span>');
     expect(html).toContain('<span class="row-axis-tick" style="left:12.50%">0</span>');
