@@ -1,0 +1,3 @@
+# The tooltip shows on hover only, which a headless shot cannot take: the
+# pair shows that the Rows view (the gauges of lag 0) looks the same.
+rows default.json / 1440x900
