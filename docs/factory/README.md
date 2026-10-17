@@ -376,19 +376,29 @@ The labels are the state, so GitHub's own views show the pipeline:
   bot requests his review on every ready PR and spec.
 
 `./factory status` (`scripts/factory/overview.sh`) prints the whole
-pipeline in the terminal, from a snapshot, with no model: what waits
-for David, what is in flight (with the running job), what is queued,
-what waits for triage or information, and the issues with several stage
-labels.
+pipeline in the terminal as plain text, from a snapshot, with no model.
+First what waits for David, one line per issue with the action he takes
+(accept the triage, review the spec, review the PR, unblock); then what
+is in flight, with the running job marked; then counts of the queued
+issues (how many have `priority:high`, how many need a spec first) and
+of the issues waiting for triage (no stage label or `needs-triage`) or
+for information; last, the issues with several stage labels, if any.
+Each line ends with the time since the issue last changed; the columns
+are aligned, and the titles are shortened with `…` to fit `$COLUMNS`,
+else the terminal's width, else 100 columns.
 
-```markdown
+```text
 Updated 2026-10-16 09:14 UTC · loop up · running: review #73 · paused: no
 
-## Waiting for David (3)
-| Issue | What | PRs | Since |
-|---|---|---|---|
-| #81 Row text unreadable | PR ready for review | #90, CI pass | Oct 16 07:10 |
-...
+Waiting for David (3)
+  #81  Row text unreadable                      review the PR      #90, CI pass  2h
+  #74  Group configs refused by the broker ar…  review the spec    #91, CI pass  2d
+  #70  Stuck job                                unblock                          5d
+
+In flight (1)
+  #73  "Starting..." and "Stopping…" use…  reviewing (running)  #86 (draft), CI pass  20m
+
+Queued 2 (1 high priority, 1 spec first) · To triage 22 · Needs info 0
 ```
 
 A page on GitHub was tried and dropped: a pinned issue whose body the
@@ -412,10 +422,10 @@ The stage is a separate label, and an open issue has **exactly one**:
 
 | Stage | Meaning | `./factory status` section |
 |---|---|---|
-| `needs-triage` | Not looked at yet | To triage |
+| `needs-triage` | Not looked at yet | To triage (count) |
 | `triaged` | Proposal posted, waiting for David | Waiting for David |
-| `needs-info` | Waiting for the reporter | Needs info |
-| `queued` | Accepted, waiting for a job | Queued |
+| `needs-info` | Waiting for the reporter | Needs info (count) |
+| `queued` | Accepted, waiting for a job | Queued (count) |
 | `spec-review` | Spec PR open | Waiting for David |
 | `in-progress` | A build or address job is running | In flight |
 | `reviewing` | The draft PR is with the agent review | In flight |
