@@ -161,7 +161,7 @@ function Footer() {
     case 'STARTING':
       button = (
         <button className="btn btn-start" id="btn-start-sim" disabled>
-          Starting...
+          Starting&hellip;
         </button>
       );
       break;
