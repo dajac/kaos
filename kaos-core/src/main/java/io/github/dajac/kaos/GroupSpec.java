@@ -33,8 +33,11 @@ import io.github.dajac.kaos.internal.config.EffectiveConfigResolver;
  *
  * @param id the group id
  * @param subscribedTopics the names of the topics the consumers subscribe to
- * @param sessionTimeoutMs the group config {@code consumer.session.timeout.ms}
- * @param heartbeatIntervalMs the group config {@code consumer.heartbeat.interval.ms}
+ * @param sessionTimeoutMs the session timeout of the consumers of both protocols: the group config
+ *     {@code consumer.session.timeout.ms}, and the {@code session.timeout.ms} of a classic client
+ * @param heartbeatIntervalMs the heartbeat interval of the consumers of both protocols: the group
+ *     config {@code consumer.heartbeat.interval.ms}, and the {@code heartbeat.interval.ms} of a
+ *     classic client
  * @param assignmentIntervalMs the group config {@code consumer.assignment.interval.ms}
  * @param consumerDefaults the settings the consumers inherit
  * @param consumers the consumers

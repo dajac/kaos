@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,6 +34,7 @@ import io.github.dajac.kaos.ConsumerSettings;
 import io.github.dajac.kaos.ConsumerSpec;
 import io.github.dajac.kaos.ConsumerStatus;
 import io.github.dajac.kaos.Fault;
+import io.github.dajac.kaos.GroupSpec;
 import io.github.dajac.kaos.PartitionRef;
 import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.SimulationException;
@@ -44,6 +46,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -76,10 +79,15 @@ class ConsumerRunnerTest {
     }
 
     private ConsumerRunner runner(ConsumerSettings settings) {
+        return runner(settings, ConsumerRunner.ClassicTimeouts.NONE);
+    }
+
+    private ConsumerRunner runner(ConsumerSettings settings, ConsumerRunner.ClassicTimeouts timeouts) {
         return new ConsumerRunner(
             "g",
             new ConsumerSpec("consumer-0", null, settings),
             List.of("orders"),
+            timeouts,
             new ConsumerRunner.Owner() {
                 @Override
                 public void changed() {
@@ -343,7 +351,8 @@ class ConsumerRunnerTest {
     void theClientPropertiesFollowTheSettingsAndTheProtocol() {
         var settings = new ConsumerSettings(Protocol.CLASSIC, "roundrobin", true, "rack-a", 0, 1000, 7000);
 
-        var classic = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, Protocol.CLASSIC);
+        var none = ConsumerRunner.ClassicTimeouts.NONE;
+        var classic = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, none, Protocol.CLASSIC);
 
         assertThat(classic)
             .containsEntry(ConsumerConfig.GROUP_ID_CONFIG, "g")
@@ -356,10 +365,12 @@ class ConsumerRunnerTest {
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                 "org.apache.kafka.clients.consumer.RoundRobinAssignor"
             )
-            .doesNotContainKey(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG);
+            .doesNotContainKey(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG)
+            .doesNotContainKey(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)
+            .doesNotContainKey(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
 
         // The classic assignor does not exist for the consumer protocol, whose default applies.
-        var switched = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, Protocol.CONSUMER);
+        var switched = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, none, Protocol.CONSUMER);
 
         assertThat(switched)
             .containsEntry(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer")
@@ -367,17 +378,80 @@ class ConsumerRunnerTest {
             .doesNotContainKey(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
 
         var dynamic = new ConsumerSettings(Protocol.CONSUMER, "range", false, "", 0, 1000, 300_000);
-        assertThat(ConsumerRunner.clientProperties("g", "c", dynamic, Protocol.CONSUMER))
+        assertThat(ConsumerRunner.clientProperties("g", "c", dynamic, none, Protocol.CONSUMER))
             .containsEntry(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "range")
             .doesNotContainKey(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG)
             .doesNotContainKey(ConsumerConfig.CLIENT_RACK_CONFIG);
         // A name both protocols list is kept across a switch.
-        assertThat(ConsumerRunner.clientProperties("g", "c", dynamic, Protocol.CLASSIC))
+        assertThat(ConsumerRunner.clientProperties("g", "c", dynamic, none, Protocol.CLASSIC))
             .containsEntry(
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "org.apache.kafka.clients.consumer.RangeAssignor"
             );
         assertThat(ConsumerRunner.assignorFor(dynamic, Protocol.CLASSIC)).isEqualTo("range");
         assertThat(ConsumerRunner.assignorFor(settings, Protocol.CONSUMER)).isEmpty();
+    }
+
+    @Test
+    void onlyAClassicClientGetsTheTimeoutsOfTheGroup() {
+        var settings = new ConsumerSettings(Protocol.CLASSIC, "", false, "", 0, 20, 300_000);
+        var timeouts = new ConsumerRunner.ClassicTimeouts(OptionalInt.of(10_000), OptionalInt.of(1_000));
+
+        assertThat(ConsumerRunner.clientProperties("g", "c", settings, timeouts, Protocol.CLASSIC))
+            .containsEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10_000)
+            .containsEntry(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1_000);
+        assertThat(ConsumerRunner.clientProperties("g", "c", settings, timeouts, Protocol.CONSUMER))
+            .doesNotContainKey(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)
+            .doesNotContainKey(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+        // Only the setting that is explicit is set; the client keeps its default for the other.
+        var sessionOnly = new ConsumerRunner.ClassicTimeouts(OptionalInt.of(10_000), OptionalInt.empty());
+        assertThat(ConsumerRunner.clientProperties("g", "c", settings, sessionOnly, Protocol.CLASSIC))
+            .containsEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10_000)
+            .doesNotContainKey(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+    }
+
+    @Test
+    void theClassicTimeoutsAreTheExplicitSettingsOfTheGroup() {
+        var defaults = GroupSpec.of("g", g -> g.subscribe("orders"));
+        var explicit = GroupSpec.of(
+            "g",
+            g -> g.subscribe("orders").sessionTimeout(Duration.ofSeconds(10)).heartbeatInterval(Duration.ofSeconds(3))
+        );
+
+        assertThat(ConsumerRunner.ClassicTimeouts.of(defaults)).isEqualTo(ConsumerRunner.ClassicTimeouts.NONE);
+        assertThat(ConsumerRunner.ClassicTimeouts.of(explicit))
+            .isEqualTo(new ConsumerRunner.ClassicTimeouts(OptionalInt.of(10_000), OptionalInt.of(3_000)));
+    }
+
+    @Test
+    void aClassicConsumerWhoseHeartbeatIsNotBelowItsSessionTimeoutIsFailed() throws InterruptedException {
+        var classic = new ConsumerSettings(Protocol.CLASSIC, "", false, "", 0, 20, 300_000);
+        // The heartbeat interval keeps the client default of 3000 ms.
+        var runner = runner(classic, new ConsumerRunner.ClassicTimeouts(OptionalInt.of(2_000), OptionalInt.empty()));
+
+        runner.start(services, resources);
+
+        assertThat(clients).isEmpty();
+        assertThat(threads()).isEmpty();
+        var state = runner.localState();
+        assertThat(state.failure()).isEqualTo(
+            "The heartbeat interval of a classic consumer, 3000 ms (the client default), must be lower than its "
+                + "session timeout, 2000 ms"
+        );
+        assertThat(StatusDeriver.status(state, ConsumerStatus.JOINING, Set.of(), Set.of()))
+            .isEqualTo(ConsumerStatus.FAILED);
+
+        // The consumer protocol takes the timeouts from the group configs, so its client starts.
+        runner.switchProtocol(Protocol.CONSUMER);
+
+        assertThat(clients).hasSize(1);
+        assertThat(runner.localState().failed()).isFalse();
+
+        runner.stop();
+    }
+
+    @Test
+    void anInvalidSessionTimeoutIsUnrecoverable() {
+        assertThat(ConsumerRunner.isUnrecoverable(new InvalidSessionTimeoutException("out of bounds"))).isTrue();
     }
 
     @Test

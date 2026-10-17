@@ -233,6 +233,65 @@ class ConsumerGroupLifecycleTest {
     }
 
     @Test
+    void anIsolatedClassicStaticMemberLeavesAfterTheSessionTimeoutOfTheGroup() {
+        var topic = cluster.uniqueName("classic-session");
+        var groupId = cluster.uniqueName("classic-session");
+
+        try (var simulator = newSimulator()) {
+            simulator.addTopic(topic, 4);
+            var group = simulator.addGroup(groupId, g -> g
+                .subscribe(topic)
+                .sessionTimeout(Duration.ofSeconds(10))
+                .heartbeatInterval(Duration.ofSeconds(1))
+                .consumerDefaults(
+                    c -> c.protocol(Protocol.CLASSIC).staticMember(true).pollDelay(Duration.ofMillis(100)))
+                .consumers(2)
+            );
+            simulator.start();
+            var stable = group.awaitSnapshot(allAssigned(4, "consumer-0", "consumer-1"), TIMEOUT);
+            assertThat(stable.type()).isEqualTo(GroupType.CLASSIC);
+
+            group.consumer(0).inject(Fault.networkIsolation());
+
+            // A static member that stops heartbeating stays until its session times out: 10 s
+            // from the group, not the 45 s of the client default.
+            var evicted = group.awaitSnapshot(
+                allAssigned(4, "consumer-1").and(s -> consumer(s, "consumer-0").memberId().isEmpty()),
+                Duration.ofSeconds(30)
+            );
+            assertThat(consumer(evicted, "consumer-0").status()).isEqualTo(ConsumerStatus.ISOLATED);
+        }
+    }
+
+    @Test
+    void aClassicSessionTimeoutUnderTheBrokerMinimumFailsTheConsumer() {
+        var topic = cluster.uniqueName("classic-min");
+        var groupId = cluster.uniqueName("classic-min");
+
+        try (var simulator = newSimulator()) {
+            simulator.addTopic(topic, 2);
+            // 5.5 s is within the consumer protocol bounds of the broker, and under the 6 s of its
+            // group.min.session.timeout.ms, which bounds the classic members.
+            var group = simulator.addGroup(groupId, g -> g
+                .subscribe(topic)
+                .sessionTimeout(Duration.ofMillis(5_500))
+                .heartbeatInterval(Duration.ofSeconds(1))
+                .consumerDefaults(c -> c.pollDelay(Duration.ofMillis(100)))
+                .consumer(c -> c.protocol(Protocol.CLASSIC))
+                .consumers(1)
+            );
+            simulator.start();
+
+            var failed = group.awaitSnapshot(
+                allAssigned(2, "consumer-1").and(s -> consumer(s, "consumer-0").status() == ConsumerStatus.FAILED),
+                TIMEOUT
+            );
+            assertThat(consumer(failed, "consumer-0").failure()).contains("InvalidSessionTimeoutException");
+            assertThat(group.warnings()).isEmpty();
+        }
+    }
+
+    @Test
     void setsOnlyTheExplicitGroupConfigsAndRevertsThem() throws Exception {
         var topic = cluster.uniqueName("configs");
         var groupId = cluster.uniqueName("configs");

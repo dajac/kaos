@@ -23,6 +23,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,6 +39,7 @@ import io.github.dajac.kaos.ConsumerHandle;
 import io.github.dajac.kaos.ConsumerSettings;
 import io.github.dajac.kaos.ConsumerSpec;
 import io.github.dajac.kaos.Fault;
+import io.github.dajac.kaos.GroupSpec;
 import io.github.dajac.kaos.PartitionRef;
 import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.SimulationException;
@@ -58,6 +61,7 @@ import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -114,6 +118,61 @@ public final class ConsumerRunner implements ConsumerHandle {
         }
     }
 
+    /**
+     * The session timeout and heartbeat interval of a member that speaks the classic protocol. Such
+     * a member takes them from its client, not from the group configs, so the runner sets them on
+     * the client. As for the group configs, only the explicit settings of the group are set: those
+     * whose value differs from their default in {@link ConfigMetadata}. The others keep the default
+     * of the client.
+     *
+     * @param sessionTimeoutMs the explicit session timeout of the group, empty when there is none
+     * @param heartbeatIntervalMs the explicit heartbeat interval of the group, empty when there is
+     *     none
+     */
+    public record ClassicTimeouts(OptionalInt sessionTimeoutMs, OptionalInt heartbeatIntervalMs) {
+        /** No explicit setting: the client defaults apply. */
+        public static final ClassicTimeouts NONE = new ClassicTimeouts(OptionalInt.empty(), OptionalInt.empty());
+
+        public ClassicTimeouts {
+            Objects.requireNonNull(sessionTimeoutMs, "sessionTimeoutMs");
+            Objects.requireNonNull(heartbeatIntervalMs, "heartbeatIntervalMs");
+        }
+
+        /** The explicit settings of a group. */
+        public static ClassicTimeouts of(GroupSpec group) {
+            return new ClassicTimeouts(
+                explicit(ConfigMetadata.SESSION_TIMEOUT_MS, group.sessionTimeoutMs()),
+                explicit(ConfigMetadata.HEARTBEAT_INTERVAL_MS, group.heartbeatIntervalMs())
+            );
+        }
+
+        private static OptionalInt explicit(ConfigMetadata.Field field, int value) {
+            return value != field.intDefault() ? OptionalInt.of(value) : OptionalInt.empty();
+        }
+
+        /**
+         * Why a classic client cannot be created with these settings, or empty when it can: the
+         * client refuses a heartbeat interval that is not lower than the session timeout.
+         */
+        Optional<String> refusal() {
+            var session = sessionTimeoutMs.orElse(clientDefault(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG));
+            var heartbeat = heartbeatIntervalMs.orElse(clientDefault(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
+            if (heartbeat < session) {
+                return Optional.empty();
+            }
+            return Optional.of(
+                "The heartbeat interval of a classic consumer, " + heartbeat + " ms"
+                    + (heartbeatIntervalMs.isPresent() ? "" : " (the client default)")
+                    + ", must be lower than its session timeout, " + session + " ms"
+                    + (sessionTimeoutMs.isPresent() ? "" : " (the client default)")
+            );
+        }
+
+        private static int clientDefault(String key) {
+            return (Integer) ConsumerConfig.configDef().defaultValues().get(key);
+        }
+    }
+
     /** One run of the loop: a thread and the Kafka consumer it owns. */
     private static final class Loop {
         private final Consumer<String, String> consumer;
@@ -136,6 +195,7 @@ public final class ConsumerRunner implements ConsumerHandle {
     private final String groupId;
     private final ConsumerSpec spec;
     private final List<String> topics;
+    private final ClassicTimeouts timeouts;
     private final Owner owner;
     private final String clientId;
 
@@ -160,13 +220,22 @@ public final class ConsumerRunner implements ConsumerHandle {
      * @param groupId the group of the consumer
      * @param spec the description of the consumer, with its id assigned and its effective settings
      * @param topics the names of the topics the consumer subscribes to
+     * @param timeouts the settings of the group the consumer sets on its client with the classic
+     *     protocol
      * @param owner the group; it is told, from any thread, when what the snapshot shows of the
      *     consumer changed
      */
-    public ConsumerRunner(String groupId, ConsumerSpec spec, List<String> topics, Owner owner) {
+    public ConsumerRunner(
+        String groupId,
+        ConsumerSpec spec,
+        List<String> topics,
+        ClassicTimeouts timeouts,
+        Owner owner
+    ) {
         this.groupId = Objects.requireNonNull(groupId, "groupId");
         this.spec = Objects.requireNonNull(spec, "spec");
         this.topics = List.copyOf(topics);
+        this.timeouts = Objects.requireNonNull(timeouts, "timeouts");
         this.owner = Objects.requireNonNull(owner, "owner");
         this.clientId = clientId(groupId, spec.id());
         this.protocol = spec.effective().protocol();
@@ -415,9 +484,22 @@ public final class ConsumerRunner implements ConsumerHandle {
         }
     }
 
-    /** The caller holds the switchLock. */
+    /**
+     * Starts a loop, or fails the consumer without one when its client would refuse its settings.
+     * The caller holds the switchLock.
+     */
     private void startLoop() {
-        var consumer = services.clients().apply(clientProperties(groupId, clientId, spec.effective(), protocol));
+        if (protocol == Protocol.CLASSIC) {
+            var refusal = timeouts.refusal();
+            if (refusal.isPresent()) {
+                failure = refusal.get();
+                EVENTS.warn("[{}] {} cannot start: {}", groupId, spec.id(), failure);
+                owner.changed();
+                return;
+            }
+        }
+        var properties = clientProperties(groupId, clientId, spec.effective(), timeouts, protocol);
+        var consumer = services.clients().apply(properties);
         var loop = new Loop(consumer);
         try {
             var thread = services.threads().newThread(groupId + "-" + spec.id(), () -> run(loop));
@@ -485,11 +567,16 @@ public final class ConsumerRunner implements ConsumerHandle {
         return listed.contains(settings.assignor()) ? settings.assignor() : "";
     }
 
-    /** The settings of the Kafka consumer, without those every client of the simulator shares. */
+    /**
+     * The settings of the Kafka consumer, without those every client of the simulator shares. The
+     * session timeout and the heartbeat interval are set with the classic protocol only: the
+     * consumer protocol client refuses them, and its member takes them from the group configs.
+     */
     static Map<String, Object> clientProperties(
         String groupId,
         String clientId,
         ConsumerSettings settings,
+        ClassicTimeouts timeouts,
         Protocol protocol
     ) {
         var properties = new HashMap<String, Object>();
@@ -500,9 +587,17 @@ public final class ConsumerRunner implements ConsumerHandle {
         properties.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol.id());
         var assignor = assignorFor(settings, protocol);
         switch (protocol) {
-            case CLASSIC -> Assignors.classicAssignorClass(assignor).ifPresent(
-                name -> properties.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, name)
-            );
+            case CLASSIC -> {
+                Assignors.classicAssignorClass(assignor).ifPresent(
+                    name -> properties.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, name)
+                );
+                timeouts.sessionTimeoutMs().ifPresent(
+                    ms -> properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, ms)
+                );
+                timeouts.heartbeatIntervalMs().ifPresent(
+                    ms -> properties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, ms)
+                );
+            }
             case CONSUMER -> Assignors.remoteAssignor(assignor).ifPresent(
                 name -> properties.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, name)
             );
@@ -640,6 +735,7 @@ public final class ConsumerRunner implements ConsumerHandle {
             || e instanceof UnsupportedVersionException
             || e instanceof GroupMaxSizeReachedException
             || e instanceof InvalidGroupIdException
+            || e instanceof InvalidSessionTimeoutException
             || e instanceof AuthenticationException
             || e instanceof AuthorizationException
             || e instanceof InterruptException;

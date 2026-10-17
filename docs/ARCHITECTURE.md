@@ -440,12 +440,30 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `ConfigMetadata`; a setting with that default is left to the broker,
   even when the user set it to that value. `warnings()` lists what the start could not
   apply and went on without; it is empty while the group does not run.
+- The session timeout and the heartbeat interval apply to both
+  protocols. A consumer-protocol member takes them from the group
+  configs (`consumer.session.timeout.ms`,
+  `consumer.heartbeat.interval.ms`), and its client refuses them. A
+  classic member takes them from its client, so `ConsumerRunner` sets
+  `session.timeout.ms` and `heartbeat.interval.ms` on the client of a
+  consumer that speaks the classic protocol, with the same rule: only
+  the explicit settings are set, and the others keep the client
+  defaults (45 s and 3 s). The broker bounds the classic session
+  timeout by `group.min.session.timeout.ms` (6 s by default) and
+  `group.max.session.timeout.ms`, not by the consumer-protocol bounds,
+  so a timeout out of them leaves the classic consumer `FAILED` with
+  `InvalidSessionTimeoutException`. The classic client refuses a
+  heartbeat interval that is not lower than the session timeout, client
+  defaults included: such a consumer is `FAILED` with a message that
+  gives both values, without a Kafka consumer, until it switches to the
+  consumer protocol.
 - The consumers connect through the proxy. Their Kafka settings come
   from the effective settings of the consumer: `group.protocol`,
   `max.poll.interval.ms`, `client.rack`, `group.instance.id` (the
   client id, for a static member), `partition.assignment.strategy` for
   a classic assignor and `group.remote.assignor` for a consumer-protocol
-  one, `auto.offset.reset=latest`, and a `request.timeout.ms` of 10 s
+  one, `session.timeout.ms` and `heartbeat.interval.ms` from the group
+  for a classic consumer, `auto.offset.reset=latest`, and a `request.timeout.ms` of 10 s
   unless the client properties of the simulator set it, so that a
   consumer whose request the proxy dropped recovers within that time.
   The poll timeout and the poll delay drive the loop itself.
@@ -868,7 +886,8 @@ built with the runner, and so is the removal.
   consumer stays out of its group whatever is polled: a fenced or
   unreleased instance id, an inconsistent group protocol, an
   unsupported assignor or version, a full group, an invalid group id,
-  and authentication and authorization failures.
+  an invalid session timeout, and authentication and authorization
+  failures.
 - A poller error keeps the last `AdminView` and sets `stale` on the
   snapshot.
 - Autopilot validates `min ≤ max`. It does nothing when its group has no
@@ -1589,7 +1608,8 @@ removing components at runtime.
   that did not type the name, such as one shown again after a reload,
   shows a preset name as that preset.
 - Optional group settings, added with "+ Add setting":
-  - session timeout, heartbeat interval, assignment interval;
+  - session timeout, heartbeat interval, assignment interval; the first
+    two apply to the consumers of both protocols;
   - poll timeout, poll delay, max poll interval.
 - The consumer list has add, duplicate-last and remove.
 - Each consumer has collapsible per-consumer **overrides**: protocol,
@@ -1789,7 +1809,10 @@ that the README example compiles.
   lag, the group deleted at stop); `switchProtocol` in both directions;
   `Fault.freeze()` leads to eviction by the max poll interval and the
   consumer rejoins once cleared; `Fault.networkIsolation()` fences the
-  member and it rejoins once healed; only the explicit group configs
+  member and it rejoins once healed; an isolated classic static member
+  leaves after the 10 s session timeout of the group, not the 45 s of
+  the client default; a classic session timeout under the broker's
+  `group.min.session.timeout.ms` leaves the consumer `FAILED`; only the explicit group configs
   are set and they are reverted; a config the broker refuses is a
   warning; a quick stop and start with static members works with both
   protocols; listeners fire only on change; an unsupported
