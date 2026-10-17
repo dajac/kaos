@@ -171,10 +171,10 @@
 }
 .config-section.expanded .section-body { display: block; }
 
-/* -- Running state: config stays fully visible but grayed out & non-interactive -- */
-#config-mode.locked .config-scroll {
-  opacity: 0.45;
-}
+/* -- Running state: config stays fully visible & non-interactive. Not the
+      prototype's 45% opacity of .config-scroll: the labels and the values
+      keep their contrast, the inputs lose their box, and the rules after
+      "Errors" add the note and the not-allowed cursor. -- */
 #config-mode.locked .field-input,
 #config-mode.locked .btn-add-consumer {
   pointer-events: none;
@@ -453,3 +453,31 @@ div.section-toggle { line-height: normal; }
   cursor: pointer;
 }
 .section-remove:focus-visible { opacity: 1; }
+
+/* -- Locked panel, not in the prototype, which dimmed the whole panel: a
+      note above the sections, the inputs and dropdowns drawn as plain
+      values with a dashed outline and no chevron, the not-allowed cursor
+      over them, and the buttons that edit the config dimmed as disabled
+      buttons are. -- */
+.config-locked-note {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+#config-mode.locked .field-input,
+#config-mode.locked .field .dd-btn {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border);
+}
+#config-mode.locked .dd-chevron { visibility: hidden; }
+#config-mode.locked .field,
+#config-mode.locked .add-consumer-row { cursor: not-allowed; }
+#config-mode.locked .btn-add-consumer,
+#config-mode.locked .dd-btn-add,
+#config-mode.locked .field-remove { opacity: 0.35; }

@@ -27,7 +27,8 @@ import { GroupSection } from './GroupSection';
 
 // The config panel of the sidebar (`#config-mode`): the sections of every
 // group, the error banner and the footer with Start / Stop. While a
-// simulation runs, the panel is locked: grayed out and not editable.
+// simulation runs, the panel is locked: a note says so, and the values stay
+// readable but are not editable.
 
 export function ConfigPanel() {
   const meta = useConfigStore((s) => s.meta);
@@ -36,6 +37,11 @@ export function ConfigPanel() {
 
   return (
     <div id="config-mode" className={locked ? 'locked' : undefined}>
+      {locked ? (
+        <div className="config-locked-note" role="status">
+          Locked while the simulation runs
+        </div>
+      ) : null}
       <div className="config-scroll" id="config-scroll">
         {meta === null || groups === undefined
           ? null

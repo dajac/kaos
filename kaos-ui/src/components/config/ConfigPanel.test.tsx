@@ -377,6 +377,18 @@ describe('start', () => {
     expect(toggleOf(1).getAttribute('aria-expanded')).toBe('true');
   });
 
+  it('says that the panel is locked while a simulation starts, runs or stops, and only then', async () => {
+    expect(screen.queryByRole('status')).toBeNull();
+    for (const phase of ['STARTING', 'RUNNING', 'STOPPING'] as const) {
+      configStore.setState({ phase });
+      const note = await screen.findByRole('status');
+      expect(note.textContent).toBe('Locked while the simulation runs');
+    }
+    configStore.setState({ phase: 'IDLE' });
+    await screen.findByRole('button', { name: 'Start' });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('shows the transient phases with an ellipsis character on a disabled button', async () => {
     configStore.setState({ phase: 'STARTING' });
     const starting = await screen.findByRole('button', { name: 'Starting…' });
