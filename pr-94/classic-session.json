@@ -1,0 +1,57 @@
+{
+  "description": "One topic of 6 partitions and a classic group of 3 static consumers with a session timeout of 10 s and a heartbeat interval of 1 s, every partition assigned.",
+  "steps": [
+    {
+      "request": "POST /api/v1/simulator",
+      "body": {
+        "topics": [
+          {
+            "name": "orders",
+            "partitions": 6
+          }
+        ],
+        "producers": [
+          {
+            "topics": [
+              "orders"
+            ],
+            "ratePerPartition": 2
+          }
+        ],
+        "groups": [
+          {
+            "id": "orders-app",
+            "subscribedTopics": [
+              "orders"
+            ],
+            "sessionTimeoutMs": 10000,
+            "heartbeatIntervalMs": 1000,
+            "consumerDefaults": {
+              "protocol": "classic",
+              "staticMember": true
+            },
+            "consumers": [
+              {},
+              {},
+              {}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator",
+        "jq": ".phase == \"RUNNING\"",
+        "timeout_s": 90
+      }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator/snapshot",
+        "jq": "[.groups[] | select(.id == \"orders-app\") | .consumers[]] as $c | ($c | length) == 3 and all($c[]; (.raw.assignment | length) > 0) and ([$c[].raw.assignment[]] | length) == 6",
+        "timeout_s": 90
+      }
+    }
+  ]
+}
