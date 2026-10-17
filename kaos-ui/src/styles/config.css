@@ -456,7 +456,8 @@ div.section-toggle { line-height: normal; }
 
 /* -- Locked panel, not in the prototype, which dimmed the whole panel: a
       note above the sections, the inputs and dropdowns drawn as plain
-      values with a dashed outline and no chevron, the not-allowed cursor
+      values with a dashed outline, in the accent when focused, and no
+      chevron, the not-allowed cursor
       over them, and the buttons that edit the config dimmed as disabled
       buttons are. -- */
 .config-locked-note {
@@ -475,9 +476,11 @@ div.section-toggle { line-height: normal; }
   border-style: dashed;
   border-color: var(--border);
 }
+#config-mode.locked .field-input:focus { border-color: var(--accent); }
 #config-mode.locked .dd-chevron { visibility: hidden; }
 #config-mode.locked .field,
 #config-mode.locked .add-consumer-row { cursor: not-allowed; }
 #config-mode.locked .btn-add-consumer,
 #config-mode.locked .dd-btn-add,
-#config-mode.locked .field-remove { opacity: 0.35; }
+#config-mode.locked .field-remove,
+#config-mode.locked .section-toggle:hover .section-remove { opacity: 0.35; }

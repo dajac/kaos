@@ -1549,17 +1549,22 @@ their styles.
   replace `alert()`, the banners of the main area (`.rows-banner*`),
   and the locked panel (`.config-locked-note`, and the
   `#config-mode.locked` rules after it).
-- Departures for contrast: every text reaches the 4.5:1 of WCAG AA
-  against its actual background, opacity included, which
-  `styles/contrast.test.ts` measures from the tokens.
+- Departures for contrast: the dim texts below reach the 4.5:1 of WCAG
+  AA against their background, opacity included, which
+  `styles/contrast.test.ts` measures from the tokens and the rules of
+  `config.css` and `rows.css`. The disabled controls are exempt, as
+  WCAG allows, and "Actions" over a lag-filled cell depends on the
+  fill (#65).
   - `--text-muted` is `#929fb0` and `--text-dim` is `#7d8a9c`, instead
     of `#6b7a8d` and `#4a5568`.
   - The locked panel is not at 45% opacity
     (`#config-mode.locked .config-scroll`): a note heads it, its inputs
     and value dropdowns have a transparent background, a dashed border
-    and no chevron, the cursor is `not-allowed` over a field, and the
-    buttons that edit the config (+ Add, + Duplicate, + Add setting,
-    the ×) are at 35% opacity, as disabled buttons are.
+    (in `--accent` on a focused input) and no chevron, the cursor is
+    `not-allowed` over a field, and the buttons that edit the config
+    (+ Add, + Duplicate, + Add setting, the × of a field, and the × of
+    a section, shown on hover) are at 35% opacity, as disabled buttons
+    are.
   - A stopped row dims only its strip, not its axis and left overlay;
     its `STOPPED` badge is in `--text-muted`.
   - The axis's ticks and topic label, and the hover meta's labels and
