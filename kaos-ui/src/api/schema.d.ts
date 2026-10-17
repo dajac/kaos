@@ -678,7 +678,9 @@ export interface components {
             /**
              * @description The lag of each subscribed topic, in the order of
              *     `subscribedTopics`: one entry per partition, indexed by
-             *     partition number.
+             *     partition number. The lag is the end offset minus the
+             *     committed offset, and 0 for a partition without a committed
+             *     offset; it is -1 while the end offset is not known.
              */
             lag: {
                 [key: string]: number[];

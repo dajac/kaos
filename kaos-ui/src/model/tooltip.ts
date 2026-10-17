@@ -72,12 +72,13 @@ const STATE_LABELS: Record<PartitionState, string> = {
 
 /**
  * The text of the tooltip of a cell, or the empty string for an empty cell,
- * which has none. A known, positive lag is appended.
+ * which has none. A known lag, 0 included, is appended; `-1`, an unknown lag,
+ * is not.
  */
 export function cellTooltipText(topic: string, partition: number, state: PartitionState, lag: number): string {
   if (state === 'EMPTY') {
     return '';
   }
   const text = `${topic} / p${partition} · ${STATE_LABELS[state]}`;
-  return lag > 0 ? `${text} · lag ${lag}` : text;
+  return lag >= 0 ?`${text} · lag ${lag}` : text;
 }

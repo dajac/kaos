@@ -47,12 +47,12 @@ describe('placeTooltip', () => {
 });
 
 describe('cellTooltipText', () => {
-  // Parity with the tooltip text of `updateStripCellsNew(panel, m, topics,
-  // numPartitions, partitionLag)` of simulator.html on initial-setup: no text
-  // for an empty cell, and the lag only when it is positive.
+  // The tooltip text of `updateStripCellsNew(panel, m, topics, numPartitions,
+  // partitionLag)` of simulator.html on initial-setup, except for the lag: no
+  // text for an empty cell, and the lag whenever it is known, 0 included.
   it.each([
     ['kaos-1', 3, 'ASSIGNED', 12, 'kaos-1 / p3 · assigned · lag 12'],
-    ['kaos-1', 3, 'ASSIGNED', 0, 'kaos-1 / p3 · assigned'],
+    ['kaos-1', 3, 'ASSIGNED', 0, 'kaos-1 / p3 · assigned · lag 0'],
     ['kaos-1', 3, 'ASSIGNED', -1, 'kaos-1 / p3 · assigned'],
     ['kaos-2', 0, 'PENDING', 5, 'kaos-2 / p0 · pending · lag 5'],
     ['kaos-2', 7, 'REVOKING', 1, 'kaos-2 / p7 · revoking · lag 1'],

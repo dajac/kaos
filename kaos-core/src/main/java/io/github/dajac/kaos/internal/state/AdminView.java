@@ -35,7 +35,8 @@ import io.github.dajac.kaos.PartitionRef;
  * @param epoch the group epoch of a consumer group
  * @param targetAssignmentEpoch the epoch of the target assignment of a consumer group
  * @param members the members the coordinator lists
- * @param lag the lag of every partition it is known for: the end offset minus the committed offset
+ * @param lag the lag of every partition it is known for: the end offset minus the committed offset,
+ *     or 0 for a partition without a committed offset
  */
 public record AdminView(
     GroupType type,

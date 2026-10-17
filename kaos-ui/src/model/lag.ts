@@ -18,7 +18,7 @@
 // of lags per subscribed topic, indexed by partition, where -1 is a lag that
 // is not known yet.
 
-/** The lag of a partition whose committed offset is not known yet. */
+/** The lag of a partition whose end offset is not known yet. */
 export const UNKNOWN_LAG = -1;
 
 /** A lag at or above this value fills the gauge; below it, the fill is linear. */
