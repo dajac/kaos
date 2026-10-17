@@ -137,7 +137,7 @@ At most one, among the jobs whose skill exists, the first that applies:
 4. `triage` on a `needs-triage` candidate, oldest first.
 5. `spec` on a `spec-review` or `queued` + `needs-spec` candidate.
 6. `build` on a `queued` candidate, `priority:high` first, then the
-   oldest; only while fewer than two issues are `in-review`.
+   oldest.
 
 When the chosen job's rule says "when chosen", run that `stage.sh`
 first; if it refuses, choose the next one. The loop checks that the

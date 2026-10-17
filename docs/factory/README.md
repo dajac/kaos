@@ -161,8 +161,6 @@ Below, "the orchestrator" means the loop and its ticks together.
 ### Limits
 
 - One job at a time.
-- No new `build` while two PRs wait for David, so the factory does not
-  pile work up in front of him.
 - Each session has a time limit and a budget cap passed to
   `claude -p --max-budget-usd`, both enforced by `job.sh` and
   overridable with `FACTORY_LIMIT_MINUTES` and `FACTORY_BUDGET_USD`:
@@ -440,7 +438,7 @@ the old stage label for the new one):
 | `queued` + `needs-spec` | the job is chosen | `spec-review`, start `spec` |
 | `spec-review` | no spec PR yet, or David requests changes or comments | start `spec` again |
 | `spec-review` | David approves the spec PR on its head | `queued`, `needs-spec` removed, spec PR closed |
-| `queued`, no `needs-spec` | the job is chosen, fewer than two PRs wait for David | `in-progress`, start `build` |
+| `queued`, no `needs-spec` | the job is chosen | `in-progress`, start `build` |
 | `in-progress` | a `build` or `address` handoff, PR pushed | `reviewing`, start `review` |
 | `reviewing` | a `review` handoff with open `blocker` or `major` findings, round 1; or CI red | `in-progress`, start `address` |
 | `reviewing` | nothing blocking, but CI has not reported 30 minutes after the review | `blocked` |
