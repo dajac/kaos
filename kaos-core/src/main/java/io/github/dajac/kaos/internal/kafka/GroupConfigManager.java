@@ -51,8 +51,9 @@ import org.slf4j.LoggerFactory;
  * bounds of its own configuration. Such a key becomes a warning and the group runs without it. Any
  * other failure is thrown.
  *
- * <p>The configs are those of the consumer protocol. The members that speak the classic protocol
- * take their session timeout and heartbeat interval from their client.
+ * <p>The configs are those of the consumer protocol. The session timeout and the heartbeat interval
+ * apply to the members of both protocols: those that speak the classic protocol take them from
+ * their client, on which {@code ConsumerRunner} sets the values of the group, defaults included.
  */
 public final class GroupConfigManager {
 

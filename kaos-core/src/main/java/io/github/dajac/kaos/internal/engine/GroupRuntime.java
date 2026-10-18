@@ -316,7 +316,13 @@ public final class GroupRuntime implements ConsumerGroup {
         var identified = consumer.id().isEmpty()
             ? new ConsumerSpec(nextConsumerId(), consumer.overrides(), consumer.effective())
             : consumer;
-        return new ConsumerRunner(spec.id(), identified, spec.subscribedTopics(), owner);
+        return new ConsumerRunner(
+            spec.id(),
+            identified,
+            spec.subscribedTopics(),
+            ConsumerRunner.ClassicTimeouts.of(spec),
+            owner
+        );
     }
 
     /**
