@@ -68,8 +68,8 @@ Argument: the issue number.
    Update `docs/ARCHITECTURE.md` when the design moves.
 4. Read your diff (`git diff --stat origin/main`, then the hunks) as
    a reviewer would, and remove what no acceptance criterion needs.
-   Then format and commit: `./mvnw -q spotless:apply`, then `git add` the
-   files and `git commit`. Small commits with clear messages are fine:
+   Then format and commit: `./mvnw -q spotless:apply`, then `git add`
+   the files and `git commit`. Small commits with clear messages are fine:
    the PR is squashed.
 5. Run `scripts/factory/gates.sh full` until its last line is
    `GATES: PASS`, with at most three fix attempts per failing step.

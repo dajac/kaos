@@ -82,9 +82,10 @@ Arguments: `<snapshot.json> <previous.json> last-job=<kind,N,status,start,log|no
 In the table, `A` is the issue's `activity.sh` output; "David wrote"
 means `A.david` is not empty; "the handoff" is `A.handoff`, with its
 fields in `A.handoff.fields` (`job`, `route`, `round`, `blocking`,
-`unanswered`, `blocked`, `resume`; an absent `unanswered` is `0`); "newer than the stage" means `A.handoff.at` is
-after `A.labeled[<the current stage>]`; a handoff with a `blocked`
-field is a *blocked handoff*; "the PR" is the open PR of `A.prs` whose
+`unanswered`, `blocked`, `resume`; an absent `unanswered` is `0`);
+"newer than the stage" means `A.handoff.at` is after
+`A.labeled[<the current stage>]`; a handoff with a `blocked` field is
+a *blocked handoff*; "the PR" is the open PR of `A.prs` whose
 head does not start with `spec/`, and "the spec PR" the one whose head
 does. "Block" means: `stage.sh N blocked`, then, only if it moved the
 issue, post the comment above (an issue already blocked gets no second

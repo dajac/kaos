@@ -26,7 +26,7 @@ keep only what is real.
   collapse something) is confirmed by checking that every acceptance
   criterion still holds, and is still checked, without what it
   removes; judge its severity on the scope scale of
-  `reviewer-code.md`. Drop it when another finding you keep needs what
+  `.claude/agents/reviewer-code.md`. Drop it when another finding you keep needs what
   it removes.
 - Merge the findings of several angles that describe one problem: keep
   the clearest, under the angle that owns it, with the `previous` of

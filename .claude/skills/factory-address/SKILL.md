@@ -62,8 +62,8 @@ Argument: the issue number.
    full` until `GATES: PASS` (the build skill's flake rule applies).
    Push. When you changed nothing (every point declined or answered),
    skip the commit, the gates and the push, and hand off the current
-   head as `sha`. When CI is red but the failure does not reproduce and there is
-   nothing to change (a flake on CI's side), push nothing and stop with
+   head as `sha`, with `gates: skipped`. When CI is red but the failure
+   does not reproduce and there is nothing to change (a flake on CI's side), push nothing and stop with
    a blocked handoff that quotes the failure: the bot cannot rerun CI,
    David can.
 4. When the change touches `kaos-ui/`, take the shots again, as in the
@@ -92,8 +92,8 @@ Argument: the issue number.
    factory:
      job: address
      pr: <PR>
-     sha: <the pushed head>
-     gates: PASS
+     sha: <the pushed head, or the current one when nothing changed>
+     gates: <PASS | skipped>
      seen_until: <the time you noted first>
    ```
    ````

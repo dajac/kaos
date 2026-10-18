@@ -23,7 +23,7 @@ The factory turns this into a pipeline with GitHub as its only state:
 3. An accepted issue is spec'ed first when it needs one, implemented
    right away otherwise.
 4. Every PR is reviewed by several agents, each from one angle (code,
-   tests, rules, API, UX, Kafka semantics).
+   rules, and UX and Kafka semantics when the change touches them).
 5. David has the final word: he accepts issues, approves specs and PRs,
    and is the only one who merges.
 6. Every PR carries a description, screenshots when it touches the UI,
@@ -787,7 +787,7 @@ what the angle checks, the severities, and the JSON it returns.
 
 | Reviewer | When | Looks at |
 |---|---|---|
-| `code` | always | correctness (edge cases, concurrency and shutdown, error paths); the tests (the new test fails without the change: it reverts the fix to check; the acceptance criteria covered; flakiness); the scope (the smallest change that meets the criteria: no code, test or file they do not need, no machinery out of proportion such as a parser to check what the screenshots show, comments of one line) |
+| `code` | always | correctness (edge cases, concurrency and shutdown, error paths, reuse of existing helpers); the tests (the new test fails without the change: it reverts the fix to check; the acceptance criteria covered; flakiness); the scope (the smallest change that meets the criteria: no code, test or file they do not need, no machinery out of proportion such as a parser to check what the screenshots show, comments of one line) |
 | `rules` | always | `CLAUDE.md` rules (public vs `internal`, no kafka-clients type in the API or JSON, no static mutable state, the single `ThreadFactory`, `*Test` names, `@IntegrationTest`, `var`), `docs/ARCHITECTURE.md` matches the code, PR body complete; when the PR changes the public Java or HTTP API, its naming, compatibility, JSON shape, OpenAPI and `schema.d.ts` in sync, error responses |
 | `ux` | `kaos-ui` | runs the PR with `try-pr.sh` and the scenario and takes its own shots with `capture.sh` (states only, it cannot click); the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus styles in the CSS, states (loading, stale, stopped); the screenshots match what it sees |
 | `kafka` | the consumer, group, assignment, proxy and fault code of `kaos-core`, or `area:protocol` | the simulated behavior matches the real group coordinator and clients, checked against the Apache Kafka sources at the tag of the kafka-clients version in the `pom.xml` (KIP-848 and classic protocols, epochs, revocation, static membership) |
@@ -814,8 +814,8 @@ The review job's handoff carries `round`, `blocking` (the `blocker` and
 `major` findings still open: kept by the verifier, or earlier ones not
 resolved), `minor`, `unanswered` (the open findings of any severity
 that the address job has not replied to yet), the list of open
-findings, the angles and the head it reviewed. Inline comments go only on lines of the diff's hunks; the
-others go into the review's body.
+findings, the angles and the head it reviewed. Inline comments go only
+on lines of the diff's hunks; the others go into the review's body.
 
 The `address` job replies to every finding, whatever its severity, and
 to David's threads, once each (fixed in `<sha>`, or not changed and

@@ -25,12 +25,11 @@ public API. Check:
   `scripts/factory/`, `docs/factory/`, `.github/`): flag it as `major`
   unless the issue had an approved spec.
 
-### The public API
+## The public API
 
-When the PR changes the public API: in the public package of `kaos-core`, the
-routes of `kaos-server` and the OpenAPI document
+When the PR touches the public package of `kaos-core`, the routes of
+`kaos-server` or the OpenAPI document
 (`kaos-server/src/main/resources/openapi/kaos-v1.yaml`), check:
-
 
 - naming and shape consistent with the existing API (read it first);
 - compatibility: a removed or renamed field, a changed type or status
@@ -91,7 +90,7 @@ description: check its claims against the code.
 Return only this JSON, nothing else:
 
 ```json
-{"angle": "<your angle>", "summary": "<one sentence>",
+{"angle": "rules", "summary": "<one sentence>",
  "findings": [{"severity": "blocker|major|minor|nit", "file": "<path>", "line": <n>,
    "title": "<one line>", "scenario": "<how it fails>", "fix": "<the fix>",
    "previous": "<the title of the previous finding it continues, or null>"}],

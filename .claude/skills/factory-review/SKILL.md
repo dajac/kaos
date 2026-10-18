@@ -93,9 +93,11 @@ Arguments: the issue number and the PR number.
    findings of the angles that did not re-run and were not resolved.
    `blocking` is the number of open `blocker` and `major` findings,
    `minor` the rest. `unanswered` is the number of open findings, of
-   any severity, first raised this round: `previous` null and not
-   carried over from an earlier round. The address job fixes or
-   declines each of them before the PR goes to David.
+   any severity, that the address job has not replied to: those first
+   raised this round (`previous` null, not carried over), and earlier
+   ones whose thread, or line of a review body, has no reply of the
+   bot since they were raised. The address job fixes or declines each
+   of them before the PR goes to David.
 8. When `blocking` and `unanswered` are 0, post a summary for David on
    the PR, with `gh pr comment P --body-file .factory/summary.md`: each
    angle's verdict in one line, the findings still open with the

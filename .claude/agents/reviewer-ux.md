@@ -79,7 +79,7 @@ description: check its claims against the code.
 Return only this JSON, nothing else:
 
 ```json
-{"angle": "<your angle>", "summary": "<one sentence>",
+{"angle": "ux", "summary": "<one sentence>",
  "findings": [{"severity": "blocker|major|minor|nit", "file": "<path>", "line": <n>,
    "title": "<one line>", "scenario": "<how it fails>", "fix": "<the fix>",
    "previous": "<the title of the previous finding it continues, or null>"}],
