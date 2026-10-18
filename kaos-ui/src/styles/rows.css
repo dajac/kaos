@@ -518,8 +518,8 @@
   -webkit-backdrop-filter: blur(4px);
 }
 
-/* Compact Actions text button. Visible at rest (text IS the icon), in
-   --text-muted for contrast; lights up on button-hover / dd-open. Uses .dd-btn +
+/* Compact Actions text button. Visible at rest (text IS the icon), lights
+   up on button-hover / dd-open. Uses .dd-btn +
    .row-actions-btn compound selectors to override base .dd-btn defaults.
 
    Hover surface is the same GRAY as a dropdown-menu item

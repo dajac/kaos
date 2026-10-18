@@ -171,8 +171,7 @@
 }
 .config-section.expanded .section-body { display: block; }
 
-/* -- Running state: config stays fully visible & non-interactive. Dashed
-      inputs instead of the prototype's 45% opacity, which broke contrast. -- */
+/* -- Running state: dashed inputs show the lock; an opacity would break the contrast. -- */
 #config-mode.locked .field-input,
 #config-mode.locked .btn-add-consumer {
   pointer-events: none;

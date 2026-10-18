@@ -16,8 +16,7 @@
 
 /* -- Design tokens: the :root block of the prototype. The fonts are the
       variable fonts of fontsource, bundled with the UI, then the families
-      the prototype loaded from Google Fonts. --text-muted and --text-dim
-      are lighter than the prototype's, to reach the 4.5:1 of WCAG AA. -- */
+      the prototype loaded from Google Fonts. -- */
 :root {
   --bg: #0a0e14;
   --surface: #12171f;
@@ -26,6 +25,7 @@
   --border: #2a3342;
   --border-subtle: #1e2736;
   --text: #d4dce8;
+  /* Lighter than the prototype's, to reach the 4.5:1 of WCAG AA. */
   --text-muted: #929fb0;
   --text-dim: #7d8a9c;
   --accent: #4c9aff;
