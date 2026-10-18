@@ -1517,9 +1517,10 @@ their styles.
   grid of the shown group. The banners float over its bottom right: the
   event stream is down ("Disconnected from the server.
   Reconnecting…"), or a request failed.
-- `GroupHeader`: the type and state badges, then the epoch and target
-  epoch, or the generation of a classic group; `STARTING` until the
-  group is reported. Then the `Legend` and the `UiSettingsMenu` (⚙).
+- `GroupHeader`: the type and state badges, then, for a consumer group,
+  the epoch and target epoch; `STARTING` until the group is reported.
+  A classic group shows no generation: `DescribeGroups` does not report
+  it, and the UI shows the coordinator's view only. Then the `Legend` and the `UiSettingsMenu` (⚙).
 - `RowsGrid` renders one memoized `ConsumerRow` per consumer and sets
   `--strip-height`. The lag map of the group changes with the lag of any
   partition, so `ConsumerRow` compares it with `sameLagOf` (`rows.ts`):
@@ -1528,8 +1529,8 @@ their styles.
   memoized, since the header renders again with every change of the
   group. `ConsumerRow` renders a `PartitionStrip` per topic,
   the axis rail, the name (the consumer id, its client id as the title)
-  with the badge, the hover meta (protocol, member id, instance, epoch
-  or generation) and the `ActionMenu`.
+  with the badge, the hover meta (protocol, member id, instance and, for
+  a consumer protocol member, epoch) and the `ActionMenu`.
 - `ActionMenu` ("Actions ▾"): Stop or Start consumer (`leave`/`join`),
   Upgrade to consumer or Downgrade to classic (`switch-protocol`),
   Partition network or Heal network (`network-isolation`), Freeze or
@@ -1662,22 +1663,23 @@ Mixed-protocol groups are supported.
 - Cell states are assigned, pending, revoking or empty.
 - The lag gauge rounds up to a multiple of 5 and scales to 100.
 - An axis rail with ticks.
-- A state badge and a hover meta display: member id, instance, epoch or
-  generation.
+- A state badge and a hover meta display: member id, instance, and the
+  epoch of a consumer protocol member.
 - An "Actions ▾" menu.
 - A floating tooltip, placed below the cell and clamped to the viewport.
 - The empty states for out-of-group and eager mid-rebalance.
 
 **Header**
-- Group type and state badges; epoch and target epoch, or generation for
-  classic groups.
+- Group type and state badges; epoch and target epoch for consumer
+  groups.
 - A legend.
 - A ⚙ menu with the S/M/L strip height, persisted in `localStorage`.
 
 **Differences from the prototype**
 - The Bento view and the New/Old toggle do not exist.
-- The per-row classic generation shows the member's generation. (The
-  prototype always shows "—".)
+- A classic group shows no generation, in the header or per row: the
+  consumers report it, not the coordinator. (The prototype shows the
+  highest generation the consumers report.)
 - The eager mid-rebalance blanking uses the per-consumer assignor.
 - Errors show inline or as a banner instead of `alert()`.
 - A "disconnected" banner appears when SSE drops.

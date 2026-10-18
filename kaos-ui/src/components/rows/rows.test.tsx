@@ -63,14 +63,16 @@ describe('ConsumerRow', () => {
     expect(html).toContain('<span class="row-header-meta-value dim">—</span>');
   });
 
-  it('hides the badge of a healthy classic member and shows its generation', () => {
+  it('hides the badge of a healthy classic member and shows no generation', () => {
     const g = group();
     const html = renderToStaticMarkup(
       <ConsumerRow groupId="orders" consumer={g.consumers[1]!} topics={TOPICS} lag={g.lag} />,
     );
 
     expect(html).not.toContain('row-state-badge');
-    expect(html).toContain('<span class="row-header-meta-label">generation</span><span class="row-header-meta-value">4</span>');
+    expect(html).toContain('<span class="row-header-meta-label">instance</span>');
+    expect(html).not.toContain('generation');
+    expect(html).not.toContain('meta-epoch');
   });
 
   it('shows a stopped consumer out of the group', () => {
@@ -127,7 +129,7 @@ describe('GroupHeader', () => {
     expect(html).toContain('<span id="status-epoch" class="status-value">—</span>');
   });
 
-  it('shows the epochs of a consumer group and the generation of a classic one', () => {
+  it('shows the epochs of a consumer group and no generation for a classic one', () => {
     simulationStore.getState().ingestSnapshot(snapshot());
     const consumerGroup = renderToStaticMarkup(<GroupHeader groupId="orders" />);
     expect(consumerGroup).toContain('<span id="status-type" class="status-badge s-type">CONSUMER</span>');
@@ -140,7 +142,7 @@ describe('GroupHeader', () => {
       .ingestSnapshot(snapshot({ groups: [group({ type: 'CLASSIC', state: 'PREPARING_REBALANCE', generation: 3 })] }));
     const classicGroup = renderToStaticMarkup(<GroupHeader groupId="orders" />);
     expect(classicGroup).toContain('class="status-badge s-reconciling">PREPARING REBALANCE</span>');
-    expect(classicGroup).toContain('<span id="status-generation" class="status-value">3</span>');
+    expect(classicGroup).not.toContain('generation');
     expect(classicGroup).not.toContain('status-item-epoch');
   });
 });
