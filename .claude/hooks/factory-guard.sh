@@ -90,8 +90,8 @@ line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*issue +close' && refuse "clos
 line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*pr +review[^;&|]*(--approve| -[a-z]*a[a-z]*( |$))' && refuse "approving a PR is David's"
 line_has '(^|[^a-z-])factory +merge' && refuse "merging a PR is David's"
 line_has '(^|[^a-z-])gh +alias' && refuse "gh aliases hide commands from the guard"
-line_has 'settings\.local\.json' && line_has '(>|tee|cp|mv|ln|install|rsync)' &&
-    refuse "a local settings file would loosen the session's permissions"
+line_has 'settings(\.local)?\.json' && line_has '(>|tee|cp|mv|ln|install|rsync|sed +-i|perl +-[a-z]*i)' &&
+    refuse "a settings file would loosen the session's permissions or hooks"
 
 # Labels through the API: the accepted label is David's whatever the
 # call; the stage labels change through stage.sh only. Reading labels is

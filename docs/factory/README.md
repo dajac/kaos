@@ -219,7 +219,8 @@ the tick.
     project hook could answer "allow". `--setting-sources user` would
     exclude them, but also the project's `CLAUDE.md` and skills, and
     keep David's user `CLAUDE.md`, so it is not used. Instead the deny
-    rules and the guard refuse `.claude/settings.local.json`, and
+    rules refuse any edit under `.claude/`, the guard refuses writing
+    `.claude/settings.json` or `settings.local.json`, and
     `job.sh` refuses to start a job whose worktree has one.
     A branch that changes `.claude/settings.json` is factory work,
     which goes through a spec and David's review.
@@ -1075,7 +1076,7 @@ Bootstrap exception: until step 1 has created `kaos-agent` and
 applies to everything, the remaining rollout steps included.
 
 1. Built. The bot: create the App, `token.sh`, `./factory setup`, the
-   identity of every session (`identity.sh`, the `SessionStart` hook)
+   identity of the jobs (`identity.sh`, the `SessionStart` hook)
    and the guard hook; the labels and their migration; issue forms;
    PR template; `docs/factory/README.md`; the `.gitignore` changes and
    the `CLAUDE.md` pointer.

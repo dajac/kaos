@@ -17,7 +17,7 @@ session:
    tick runs it if the transition is legal. Do not run the job's skill
    yourself.
 
-What only David does, and Claude never does even when asked here:
-adding the `accepted` label, approving or merging a PR (`./factory
-merge` is his, in his own terminal), closing an issue, resolving a
-review thread. The guard hook refuses them.
+What only David does: adding the `accepted` label, approving or
+merging a PR (`./factory merge`), closing an issue, resolving a review
+thread. This session runs with his login, so do one of these only when
+he asks for that one, here and now.

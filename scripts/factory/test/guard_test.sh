@@ -60,6 +60,8 @@ test_davids_gates_are_refused() {
         "gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"x\", event: APPROVE}) { clientMutationId } }'" \
         'echo {} > .claude/settings.local.json' \
         'cp /tmp/x .claude/settings.local.json' \
+        'echo {} > .claude/settings.json' \
+        'sed -i "" s/a/b/ .claude/settings.json' \
         "gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: \"x\"}) { thread { id } } }'"
 }
 

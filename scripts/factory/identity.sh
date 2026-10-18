@@ -1,6 +1,7 @@
 # Gives the current shell the identity of the bot. Sourced, never run:
-# before every Bash command of a Claude session in Kaos (through the
-# SessionStart hook and CLAUDE_ENV_FILE), and by the factory's scripts.
+# before every Bash command of a factory job (through the SessionStart
+# hook and CLAUDE_ENV_FILE, when job.sh set FACTORY_TRUSTED), and by the
+# factory's scripts.
 #
 # Once the bot is configured, nothing run with this environment can act
 # as David:
