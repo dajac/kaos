@@ -45,6 +45,7 @@ import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.SimulationException;
 import io.github.dajac.kaos.SimulationStateException;
 import io.github.dajac.kaos.internal.config.Assignors;
+import io.github.dajac.kaos.internal.kafka.GroupConfigManager;
 import io.github.dajac.kaos.internal.proxy.NetworkFaults;
 import io.github.dajac.kaos.internal.state.ConsumerLocalState;
 import io.github.dajac.kaos.internal.state.EventLog;
@@ -105,16 +106,20 @@ public final class ConsumerRunner implements ConsumerHandle {
      * @param clients creates the Kafka consumer for the given settings
      * @param threads creates the loop thread
      * @param network the faults of the proxy the consumers connect through
+     * @param clientProperties the client properties of the simulator, which every client gets
+     *     under the settings of its consumer
      */
     public record Services(
         Function<Map<String, Object>, Consumer<String, String>> clients,
         Threads threads,
-        NetworkFaults network
+        NetworkFaults network,
+        Map<String, String> clientProperties
     ) {
         public Services {
             Objects.requireNonNull(clients, "clients");
             Objects.requireNonNull(threads, "threads");
             Objects.requireNonNull(network, "network");
+            clientProperties = Map.copyOf(clientProperties);
         }
     }
 
@@ -122,15 +127,16 @@ public final class ConsumerRunner implements ConsumerHandle {
      * The session timeout and heartbeat interval of a member that speaks the classic protocol. Such
      * a member takes them from its client, not from the group configs, so the runner sets them on
      * the client. As for the group configs, only the explicit settings of the group are set: those
-     * whose value differs from their default in {@link ConfigMetadata}. The others keep the default
-     * of the client.
+     * whose value differs from their default in {@link ConfigMetadata}, as given by {@link
+     * GroupConfigManager#explicitConfigs}. The others keep the value of the client: the client
+     * property of the simulator, or else the default of the client.
      *
      * @param sessionTimeoutMs the explicit session timeout of the group, empty when there is none
      * @param heartbeatIntervalMs the explicit heartbeat interval of the group, empty when there is
      *     none
      */
     public record ClassicTimeouts(OptionalInt sessionTimeoutMs, OptionalInt heartbeatIntervalMs) {
-        /** No explicit setting: the client defaults apply. */
+        /** No explicit setting: the values of the client apply. */
         public static final ClassicTimeouts NONE = new ClassicTimeouts(OptionalInt.empty(), OptionalInt.empty());
 
         public ClassicTimeouts {
@@ -140,36 +146,73 @@ public final class ConsumerRunner implements ConsumerHandle {
 
         /** The explicit settings of a group. */
         public static ClassicTimeouts of(GroupSpec group) {
+            var configs = GroupConfigManager.explicitConfigs(group);
             return new ClassicTimeouts(
-                explicit(ConfigMetadata.SESSION_TIMEOUT_MS, group.sessionTimeoutMs()),
-                explicit(ConfigMetadata.HEARTBEAT_INTERVAL_MS, group.heartbeatIntervalMs())
+                explicit(configs, GroupConfigManager.SESSION_TIMEOUT),
+                explicit(configs, GroupConfigManager.HEARTBEAT_INTERVAL)
             );
         }
 
-        private static OptionalInt explicit(ConfigMetadata.Field field, int value) {
-            return value != field.intDefault() ? OptionalInt.of(value) : OptionalInt.empty();
+        private static OptionalInt explicit(Map<String, String> configs, String key) {
+            var value = configs.get(key);
+            return value == null ? OptionalInt.empty() : OptionalInt.of(Integer.parseInt(value));
         }
 
         /**
          * Why a classic client cannot be created with these settings, or empty when it can: the
-         * client refuses a heartbeat interval that is not lower than the session timeout.
+         * client refuses a heartbeat interval that is not lower than the session timeout. A value
+         * the group does not set is the one the client gets: the client property of the simulator,
+         * or else the default of the client.
+         *
+         * @param clientProperties the client properties of the simulator
          */
-        Optional<String> refusal() {
-            var session = sessionTimeoutMs.orElse(clientDefault(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG));
-            var heartbeat = heartbeatIntervalMs.orElse(clientDefault(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
-            if (heartbeat < session) {
+        Optional<String> refusal(Map<String, String> clientProperties) {
+            var session = resolve(sessionTimeoutMs, ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, clientProperties);
+            var heartbeat = resolve(
+                heartbeatIntervalMs,
+                ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
+                clientProperties
+            );
+            if (session.isEmpty() || heartbeat.isEmpty() || heartbeat.get().ms() < session.get().ms()) {
                 return Optional.empty();
             }
             return Optional.of(
-                "The heartbeat interval of a classic consumer, " + heartbeat + " ms"
-                    + (heartbeatIntervalMs.isPresent() ? "" : " (the client default)")
-                    + ", must be lower than its session timeout, " + session + " ms"
-                    + (sessionTimeoutMs.isPresent() ? "" : " (the client default)")
+                "The heartbeat interval of a classic consumer, " + heartbeat.get()
+                    + ", must be lower than its session timeout, " + session.get()
             );
         }
 
-        private static int clientDefault(String key) {
-            return (Integer) ConsumerConfig.configDef().defaultValues().get(key);
+        /**
+         * The value a classic client gets for a key, empty when the client property of the
+         * simulator is not a number: the client then refuses it with its own error.
+         */
+        private static Optional<ClientValue> resolve(
+            OptionalInt explicit,
+            String key,
+            Map<String, String> clientProperties
+        ) {
+            if (explicit.isPresent()) {
+                return Optional.of(new ClientValue(explicit.getAsInt(), ""));
+            }
+            var property = clientProperties.get(key);
+            if (property == null) {
+                var clientDefault = (Integer) ConsumerConfig.configDef().defaultValues().get(key);
+                return Optional.of(new ClientValue(clientDefault, " (the client default)"));
+            }
+            try {
+                return Optional.of(
+                    new ClientValue(Integer.parseInt(property.trim()), " (a client property of the simulator)")
+                );
+            } catch (NumberFormatException e) {
+                return Optional.empty();
+            }
+        }
+
+        private record ClientValue(int ms, String origin) {
+            @Override
+            public String toString() {
+                return ms + " ms" + origin;
+            }
         }
     }
 
@@ -490,7 +533,7 @@ public final class ConsumerRunner implements ConsumerHandle {
      */
     private void startLoop() {
         if (protocol == Protocol.CLASSIC) {
-            var refusal = timeouts.refusal();
+            var refusal = timeouts.refusal(services.clientProperties());
             if (refusal.isPresent()) {
                 failure = refusal.get();
                 EVENTS.warn("[{}] {} cannot start: {}", groupId, spec.id(), failure);

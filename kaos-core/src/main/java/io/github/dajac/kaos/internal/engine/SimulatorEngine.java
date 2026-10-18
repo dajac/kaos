@@ -625,7 +625,8 @@ public final class SimulatorEngine {
             new ConsumerRunner.Services(
                 settings -> clients.createConsumer(proxyBootstrapServers, settings),
                 threads,
-                proxy.faults()
+                proxy.faults(),
+                clients.clientProperties()
             ),
             new GroupConfigManager(admin, GROUP_ADMIN_TIMEOUT),
             new GroupCleanup(admin, GROUP_ADMIN_TIMEOUT)

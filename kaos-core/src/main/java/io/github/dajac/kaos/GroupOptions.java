@@ -69,13 +69,15 @@ public final class GroupOptions {
         return this;
     }
 
-    /** The session timeout of the group. */
+    /** The session timeout of the group, for the consumers of both protocols; see {@link GroupSpec}. */
     public GroupOptions sessionTimeout(Duration sessionTimeout) {
         this.sessionTimeoutMs = Durations.toMillis(sessionTimeout);
         return this;
     }
 
-    /** The heartbeat interval of the group. */
+    /**
+     * The heartbeat interval of the group, for the consumers of both protocols; see {@link GroupSpec}.
+     */
     public GroupOptions heartbeatInterval(Duration heartbeatInterval) {
         this.heartbeatIntervalMs = Durations.toMillis(heartbeatInterval);
         return this;

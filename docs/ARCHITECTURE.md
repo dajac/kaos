@@ -446,15 +446,18 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `consumer.heartbeat.interval.ms`), and its client refuses them. A
   classic member takes them from its client, so `ConsumerRunner` sets
   `session.timeout.ms` and `heartbeat.interval.ms` on the client of a
-  consumer that speaks the classic protocol, with the same rule: only
-  the explicit settings are set, and the others keep the client
-  defaults (45 s and 3 s). The broker bounds the classic session
+  consumer that speaks the classic protocol, with the same rule (from
+  `GroupConfigManager.explicitConfigs`): only the explicit settings are
+  set, and the others keep the value of the client, that is the client
+  property of the simulator or else the client default (45 s and 3 s;
+  the 5 s default of the heartbeat interval is not explicit, so it does
+  not reach a classic client). The broker bounds the classic session
   timeout by `group.min.session.timeout.ms` (6 s by default) and
   `group.max.session.timeout.ms`, not by the consumer-protocol bounds,
   so a timeout out of them leaves the classic consumer `FAILED` with
   `InvalidSessionTimeoutException`. The classic client refuses a
-  heartbeat interval that is not lower than the session timeout, client
-  defaults included: such a consumer is `FAILED` with a message that
+  heartbeat interval that is not lower than the session timeout, whatever
+  each value comes from: such a consumer is `FAILED` with a message that
   gives both values, without a Kafka consumer, until it switches to the
   consumer protocol.
 - The consumers connect through the proxy. Their Kafka settings come

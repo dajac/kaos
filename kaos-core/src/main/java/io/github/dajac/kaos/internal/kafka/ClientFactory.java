@@ -57,6 +57,11 @@ public final class ClientFactory {
         this.clientProperties = Map.copyOf(clientProperties);
     }
 
+    /** The properties given to every client. */
+    public Map<String, String> clientProperties() {
+        return clientProperties;
+    }
+
     /** Creates an admin client. The caller closes it. */
     public Admin createAdmin(String clientId) {
         return Admin.create(properties(clientId));

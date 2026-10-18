@@ -66,7 +66,12 @@ class ConsumerRunnerTest {
     private final NetworkFaults network = new NetworkFaults();
     private final Threads threads = new Threads();
     private final Resources resources = new Resources("test");
-    private final ConsumerRunner.Services services = new ConsumerRunner.Services(this::newClient, threads, network);
+    private final ConsumerRunner.Services services = new ConsumerRunner.Services(
+        this::newClient,
+        threads,
+        network,
+        Map.of()
+    );
 
     private MockConsumer<String, String> newClient(Map<String, Object> given) {
         settings.add(given);
@@ -334,7 +339,8 @@ class ConsumerRunnerTest {
                 return newClient(given);
             },
             threads,
-            network
+            network,
+            Map.of()
         );
         var runner = runner();
         runner.start(failing, resources);
@@ -442,6 +448,59 @@ class ConsumerRunnerTest {
 
         // The consumer protocol takes the timeouts from the group configs, so its client starts.
         runner.switchProtocol(Protocol.CONSUMER);
+
+        assertThat(clients).hasSize(1);
+        assertThat(runner.localState().failed()).isFalse();
+
+        runner.stop();
+    }
+
+    @Test
+    void theHeartbeatCheckTakesTheClientPropertiesOfTheSimulator() {
+        var shared = Map.of(
+            ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
+            "10000",
+            ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
+            "500"
+        );
+
+        // The group sets only the heartbeat: the session timeout is the one of the simulator.
+        var heartbeatOnly = new ConsumerRunner.ClassicTimeouts(OptionalInt.empty(), OptionalInt.of(12_000));
+        assertThat(heartbeatOnly.refusal(shared)).contains(
+            "The heartbeat interval of a classic consumer, 12000 ms, must be lower than its session timeout, "
+                + "10000 ms (a client property of the simulator)"
+        );
+        assertThat(heartbeatOnly.refusal(Map.of())).isEmpty();
+
+        // The group sets only the session timeout: the heartbeat is the one of the simulator.
+        var sessionOnly = new ConsumerRunner.ClassicTimeouts(OptionalInt.of(2_000), OptionalInt.empty());
+        assertThat(sessionOnly.refusal(shared)).isEmpty();
+        assertThat(sessionOnly.refusal(Map.of())).contains(
+            "The heartbeat interval of a classic consumer, 3000 ms (the client default), must be lower than its "
+                + "session timeout, 2000 ms"
+        );
+
+        // A setting of the group wins over the client property of the simulator.
+        var both = new ConsumerRunner.ClassicTimeouts(OptionalInt.of(20_000), OptionalInt.of(12_000));
+        assertThat(both.refusal(shared)).isEmpty();
+
+        // A property that is not a number is left to the client, which refuses it with its own error.
+        var invalid = Map.of(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "soon");
+        assertThat(heartbeatOnly.refusal(invalid)).isEmpty();
+    }
+
+    @Test
+    void aClassicConsumerStartsWithTheHeartbeatOfTheSimulator() throws InterruptedException {
+        var shared = new ConsumerRunner.Services(
+            this::newClient,
+            threads,
+            network,
+            Map.of(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "500")
+        );
+        var classic = new ConsumerSettings(Protocol.CLASSIC, "", false, "", 0, 20, 300_000);
+        var runner = runner(classic, new ConsumerRunner.ClassicTimeouts(OptionalInt.of(2_000), OptionalInt.empty()));
+
+        runner.start(shared, resources);
 
         assertThat(clients).hasSize(1);
         assertThat(runner.localState().failed()).isFalse();
