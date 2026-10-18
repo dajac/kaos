@@ -54,7 +54,7 @@ class GroupPollerTest {
     }
 
     @Test
-    void aPartitionWithoutACommittedOffsetHasLagZero() {
+    void aPartitionWithoutACommittedOffsetCountsFromOffsetZero() {
         var lag = GroupPoller.lag(
             TOPICS,
             Map.of(new TopicPartition("orders", 0), new OffsetAndMetadata(4)),
@@ -67,7 +67,7 @@ class GroupPollerTest {
 
         assertThat(lag).isEqualTo(Map.of(
             new PartitionRef("orders", 0), 6L,
-            new PartitionRef("orders", 1), 0L,
+            new PartitionRef("orders", 1), 10L,
             new PartitionRef("orders", 2), 0L
         ));
     }

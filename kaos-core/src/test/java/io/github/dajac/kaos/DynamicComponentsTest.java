@@ -110,8 +110,8 @@ class DynamicComponentsTest {
                 "kaos-" + legacyId + "-consumer-0"
             );
 
-            // A partition without a committed offset has lag 0, so both groups commit an offset for
-            // every partition before the legacy consumers leave.
+            // A partition without a committed offset has a known lag too, so both groups commit an
+            // offset for every partition before the legacy consumers leave.
             await().atMost(TIMEOUT).until(() -> committedPartitions(nextId) == 4 && committedPartitions(legacyId) == 4);
             legacy.consumer(0).leave();
             legacy.consumer(1).leave();

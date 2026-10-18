@@ -900,8 +900,7 @@ Status: built.
    group the coordinator does not know yet (`GroupIdNotFoundException`)
    is `AdminView.unknown()` with its lag. The lag of a partition is
    known once its end offset is: a partition without a committed offset
-   has lag 0, since the consumers use `auto.offset.reset=latest` and
-   start at the end of the log.
+   counts from offset 0, so its lag is its end offset.
 2. `SnapshotAssembler`, a pure function, merges each group's
    `AdminView` with the group's `GroupLocalState` into a
    `GroupSnapshot`. The publisher puts the group snapshots together
@@ -932,7 +931,8 @@ fill them.
 - `AdminView` is what the coordinator and the offsets say about one
   group: `type`, `state`, `epoch`, `targetAssignmentEpoch`, the
   `members` and the `lag` per `PartitionRef` (end offset minus committed
-  offset, never negative, and 0 without a committed offset).
+  offset, never negative, and the end offset without a committed
+  offset).
   - A member has `clientId`, `memberId`, `instanceId`, `memberEpoch`,
     `assignment` and an optional `targetAssignment`.
   - `AdminView.unknown()` stands for a group that is not reported yet.
@@ -997,8 +997,8 @@ for free):
   no longer reacts to anything else.
 - Dense lag: one array per subscribed topic, indexed by partition. A
   partition whose end offset is not known yet has `-1`, which keeps it
-  apart from a partition that is caught up or has no committed offset
-  (`0`).
+  apart from a partition that is caught up (`0`). A partition without a
+  committed offset has its end offset.
 - Group generation: the highest generation its consumers report.
 - Effective config.
 - Consumer ids.
@@ -1286,7 +1286,8 @@ failed.
     autopilot endpoint; the intervals are the last ones given and are
     kept while it is off;
   - `lag{topic:[…dense…]}`, where a partition without a committed
-    offset is `0` and an unknown lag (no end offset yet) is `-1`;
+    offset has its end offset and an unknown lag (no end offset yet) is
+    `-1`;
   - `consumers[]`.
 - Each entry of `consumers[]` has:
   - `id`, `clientId`, `protocol`;
@@ -1640,7 +1641,8 @@ Mixed-protocol groups are supported.
 
 **Load and lag**
 - The producer writes 1 record per partition every 500 ms.
-- Per-partition lag is the latest offset minus the committed offset.
+- Per-partition lag is the latest offset minus the committed offset; a
+  partition without a committed offset counts from offset 0.
 
 **Rows view**
 - Status: built (see [Frontend](#frontend-kaos-ui)), with the header
@@ -1672,10 +1674,6 @@ Mixed-protocol groups are supported.
   in a banner; the prototype ignored them.
 - A consumer whose runner failed shows a `FAILED` badge, with the
   failure as its title; the prototype had no such state.
-- A partition without a committed offset has lag 0, since the consumers
-  start at the end of the log; the prototype counted a missing commit as
-  offset 0, so the gauge showed the whole log-end offset. The
-  steady-state lag is the same.
 - The tooltip of a cell shows `lag 0` too; the prototype showed the lag
   only when it was positive.
 - A reload during a run restores the overrides of each consumer; the

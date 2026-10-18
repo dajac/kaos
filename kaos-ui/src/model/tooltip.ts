@@ -80,5 +80,5 @@ export function cellTooltipText(topic: string, partition: number, state: Partiti
     return '';
   }
   const text = `${topic} / p${partition} · ${STATE_LABELS[state]}`;
-  return lag >= 0 ?`${text} · lag ${lag}` : text;
+  return lag >= 0 ? `${text} · lag ${lag}` : text;
 }

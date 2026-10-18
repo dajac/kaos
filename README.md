@@ -270,6 +270,11 @@ change of the design.
   times out and it reconnects, so within its `request.timeout.ms`. Kaos
   sets it to 10 s for its consumers, unless a client property
   (`Simulator.withClientProperty`) sets another value.
+- **The lag counts from offset 0 until the first commit.** The lag of a
+  partition is its end offset minus the committed offset of the group.
+  Before the group commits on a partition, the lag is the end offset of
+  the partition, so a gauge can fill right after a start and drop at the
+  first commit.
 - **Evictions follow the Kafka timeouts.** An isolated consumer loses its
   partitions after the session timeout (45 s by default) and a frozen
   one after `max.poll.interval.ms` (5 min by default). The session
