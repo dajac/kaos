@@ -49,11 +49,15 @@ Argument: the issue number.
 2. For each point:
    - a `blocker` or `major` finding, a change David asked for, a red
      CI: fix it, with a test when it is a bug;
-   - a `minor` or `nit` finding: fix it when it is cheap and right,
-     otherwise say why it can wait;
+   - a `minor` or `nit` finding: fix it, or decline it with the
+     reason (it would grow the change beyond the issue, it is wrong,
+     it belongs to another issue: name it). Never leave one without a
+     reply, and never answer "it can wait" without saying why;
    - a question of David's: answer it; change code only if he asked;
    - a finding you believe is wrong: do not change the code; explain
      why, with the evidence.
+   - a fix that would add machinery (a harness, a parser, a helper)
+     for a small finding: prefer the smallest fix, or decline.
 3. `./mvnw -q spotless:apply`, commit, then `scripts/factory/gates.sh
    full` until `GATES: PASS` (the build skill's flake rule applies).
    Push. When CI is red but the failure does not reproduce and there is
@@ -69,17 +73,18 @@ Argument: the issue number.
    .factory/pr-body.md`, from the current body (`gh pr view <PR> --json
    body`). Update its "Checks" and "Decisions for David" too. Never
    commit the list or the scenarios: the PR holds the change only.
-5. Reply to each thread you addressed, on its first comment:
+5. Reply to every finding, whatever its severity, and to each thread
+   you addressed, on its first comment:
    `gh api repos/dajac/kaos/pulls/<PR>/comments/<comment id>/replies -f
-   body=...`: "Fixed in <sha>: ..." or why not. Answer David's other
-   comments, and the findings that were in review bodies, with one `gh
-   pr comment <PR> --body-file ...`.
+   body=...`: "Fixed in <sha>: ..." or "Not changed: <the reason>".
+   Answer David's other comments, and the findings that were in review
+   bodies (one line each, by title, fixed or not changed and why),
+   with one `gh pr comment <PR> --body-file ...`.
 6. Hand off: one comment on the issue with `gh issue comment N
    --body-file .factory/handoff.md`:
 
    ````
-   **Address** of #<PR>: <what was fixed, what was answered without a
-   change>.
+   **Address** of #<PR>: <what was fixed, what was declined and why>.
 
    ```yaml
    factory:

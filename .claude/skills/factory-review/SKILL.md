@@ -46,7 +46,8 @@ Arguments: the issue number and the PR number.
    his, or a comment of his that mentions `@kaos-agent`). Read them from
    the issue's comments and the PR's reviews.
 3. Choose the reviewers:
-   - always `reviewer-code`, `reviewer-tests`, `reviewer-rules`;
+   - always `reviewer-code`, `reviewer-tests`, `reviewer-rules`,
+     `reviewer-scope`;
    - `reviewer-api` when a path is in the public package of `kaos-core`
      (`kaos-core/src/main/java/io/github/dajac/kaos/`, not under
      `internal/`), in `kaos-server/src/main/`, or is the OpenAPI
@@ -93,12 +94,15 @@ Arguments: the issue number and the PR number.
    (an earlier finding does not vanish by omission), plus the previous
    findings of the angles that did not re-run and were not resolved.
    `blocking` is the number of open `blocker` and `major` findings,
-   `minor` the rest.
-8. When `blocking` is 0, post a summary for David on the PR, with `gh
-   pr comment P --body-file .factory/summary.md`: each angle's verdict
-   in one line, the `minor` and `nit` findings left open and why they
-   can wait, the "Decisions for David" of the PR body, and what to look
-   at first.
+   `minor` the rest. `unanswered` is the number of open findings, of
+   any severity, that the address job has not replied to yet: those
+   with `previous` null. The address job fixes or declines each of
+   them before the PR goes to David.
+8. When `blocking` and `unanswered` are 0, post a summary for David on
+   the PR, with `gh pr comment P --body-file .factory/summary.md`: each
+   angle's verdict in one line, the findings still open with the
+   address job's reason and the reviewer's answer to it, the
+   "Decisions for David" of the PR body, and what to look at first.
 9. Hand off: one comment on the issue with `gh issue comment N
    --body-file .factory/handoff.md`:
 
@@ -113,6 +117,7 @@ Arguments: the issue number and the PR number.
      round: <r>
      blocking: <n>
      minor: <n>
+     unanswered: <n>
      open:
        - "<severity> <angle>: <title>"
      angles: [<the angles that reviewed>]

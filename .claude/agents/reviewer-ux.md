@@ -56,6 +56,9 @@ description: check its claims against the code.
 - Report only what you can show: a finding has a file, a line of the
   PR head, and a concrete failure scenario (inputs or state, and the
   wrong outcome). No style preferences the code style does not state.
+- The fix you ask for is the smallest that solves the problem. Do not
+  ask for new machinery (a test harness, a parser, a helper, a longer
+  comment or doc) when a line, a plain test or the screenshots do.
 - Severities:
   - `blocker`: wrong behavior on a normal path, a broken rule of
     `CLAUDE.md`, a bug fix without a test that fails without it, a
@@ -67,8 +70,9 @@ description: check its claims against the code.
   - `nit`: wording, naming.
 - On a second round you also get your previous findings and the
   replies to them. Account for every one of them: in `resolved` when
-  the code now fixes it, or again in `findings` (with `previous` set to
-  its title) when it does not. Then review the diff since your
+  the code now fixes it, or when the reply declines it with a reason
+  that holds; again in `findings` (with `previous` set to its title)
+  when it does not, saying why the reason does not hold. Then review the diff since your
   previous review for new problems.
 
 Return only this JSON, nothing else:

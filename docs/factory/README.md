@@ -789,6 +789,7 @@ what the angle checks, the severities, and the JSON it returns.
 |---|---|---|
 | `code` | always | correctness, edge cases, concurrency and shutdown, error paths, simplicity, reuse |
 | `tests` | always | the new test fails without the change (it reverts the fix to check), coverage of the acceptance criteria, flakiness (sleeps, ports, timing) |
+| `scope` | always | the change is the smallest that meets the acceptance criteria: no code, test or file they do not need, no machinery out of proportion (a harness or parser to check what the screenshots show), comments of one line, `docs/ARCHITECTURE.md` entries that state the decision |
 | `rules` | always | `CLAUDE.md` rules (public vs `internal`, no kafka-clients type in the API or JSON, no static mutable state, the single `ThreadFactory`, `*Test` names, `@IntegrationTest`, `var`), `docs/ARCHITECTURE.md` matches the code, PR body complete |
 | `api` | public package of `kaos-core`, `kaos-server`, OpenAPI | naming and consistency with the existing API, compatibility, JSON shape, OpenAPI and `schema.d.ts` in sync, error responses |
 | `ux` | `kaos-ui` | runs the PR with `try-pr.sh` and the scenario and takes its own shots with `capture.sh` (states only, it cannot click); the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus styles in the CSS, states (loading, stale, stopped); the screenshots match what it sees |
@@ -814,27 +815,31 @@ replies, and the diff since their previous review.
 
 The review job's handoff carries `round`, `blocking` (the `blocker` and
 `major` findings still open: kept by the verifier, or earlier ones not
-resolved), `minor`, the list of open findings, the angles and the head
-it reviewed. Inline comments go only on lines of the diff's hunks; the
+resolved), `minor`, `unanswered` (the open findings of any severity
+that the address job has not replied to yet), the list of open
+findings, the angles and the head it reviewed. Inline comments go only on lines of the diff's hunks; the
 others go into the review's body.
 
-The `address` job replies once to each thread it addresses, the agent
-reviewers' and David's only (fixed in `<sha>`, or why
-not) and pushes new commits, never a force-push.
+The `address` job replies to every finding, whatever its severity, and
+to David's threads, once each (fixed in `<sha>`, or not changed and
+why), and pushes new commits, never a force-push. A reviewer counts a
+declined finding as resolved when the reason holds.
 
-After at most two rounds the orchestrator either hands the PR to David
-or blocks it. `blocker` and `major` findings must be fixed; `minor`
-and `nit` may be left open with a reason.
+The orchestrator hands the PR to David only once every finding is
+fixed or declined, and blocks it otherwise. `blocker` and `major`
+findings must be fixed; `minor` and `nit` are fixed or declined with a
+reason, never left without a reply.
 
-- **No `blocker` or `major` open:** it marks the PR ready for
-  review and requests David's review. The review job's last comment
-  summarizes it for David:
+- **Nothing blocking and every finding answered:** it marks the PR
+  ready for review and requests David's review. The review job's last
+  comment summarizes it for David:
   - each reviewer's verdict;
-  - the findings left open, with the reason;
+  - the findings left open, with the address job's reason;
   - the "Decisions for David";
   - what to look at first.
-- **A `blocker` or `major` still open after round 2:** the PR stays a
-  draft and the issue goes to `blocked` with the open question.
+- **A `blocker` or `major` still open after round 2, or findings
+  still unanswered after round 3:** the PR stays a draft and the issue
+  goes to `blocked` with the open question.
 
 What each angle checks lives in its agent file, versioned with the
 code. Lessons that sat in one user's local memory moved there: the UX
@@ -997,7 +1002,7 @@ scripts/factory/cleanup.sh            removes the local worktree and branch of a
 .claude/skills/factory-review/SKILL.md
 .claude/skills/factory-spec/SKILL.md
 .claude/skills/factory-address/SKILL.md
-.claude/agents/reviewer-{code,tests,rules,api,ux,kafka}.md
+.claude/agents/reviewer-{code,tests,rules,scope,api,ux,kafka}.md
 .claude/agents/review-verifier.md
 scripts/factory/try-pr.sh             ./factory try: a tree on its own broker, in a scenario's state
 scripts/factory/scenario.sh           runs a scenario against a server

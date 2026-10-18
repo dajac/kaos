@@ -31,6 +31,13 @@ Argument: the issue number.
   committed. When the work turns out to
   need a product or design decision the issue does not settle, or a
   spec, stop with a blocked handoff that states the question.
+- Make the smallest change that meets the acceptance criteria. Tests
+  follow the existing ones and check the criteria, not the framework:
+  no new harness, parser or build change to test one change; a visual
+  criterion is shown by the screenshots. A comment says in one line
+  why, without the history of the code or the issue; a
+  `docs/ARCHITECTURE.md` entry states the design decision, not every
+  rule.
 - One command per Bash call; no `cd`, no `for` loops, no `$(...)`
   assignments. You are at the root of the worktree: use relative
   paths, `./mvnw -pl <module>`, `npm --prefix kaos-ui`.
@@ -57,7 +64,9 @@ Argument: the issue number.
    its failure message: the PR quotes it.
 3. Implement. Add or update the tests of every acceptance criterion.
    Update `docs/ARCHITECTURE.md` when the design moves.
-4. Format and commit: `./mvnw -q spotless:apply`, then `git add` the
+4. Read your diff (`git diff --stat origin/main`, then the hunks) as
+   a reviewer would, and remove what no acceptance criterion needs.
+   Then format and commit: `./mvnw -q spotless:apply`, then `git add` the
    files and `git commit`. Small commits with clear messages are fine:
    the PR is squashed.
 5. Run `scripts/factory/gates.sh full` until its last line is
