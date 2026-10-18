@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+body { margin: 0; background: #0a0e14; font-family: -apple-system, sans-serif; color: #d4dce8; }
+.grid { display: flex; gap: 16px; padding: 16px; }
+.col { width: 300px; }
+h2 { font-size: 13px; margin: 0 0 8px; color: #d4dce8; }
+.panel { background: #12171f; border: 1px solid #2a3342; border-radius: 6px; padding: 12px; font-family: Menlo, monospace; }
+.hdr { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px; }
+.sec { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; padding: 6px 0; }
+.lbl { font-size: 11px; margin: 8px 0 3px; }
+.val { font-size: 12px; border: 1px solid #2a3342; border-radius: 4px; padding: 4px 8px; color: #d4dce8; }
+.key { margin-top: 12px; font-size: 11px; line-height: 1.7; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.bad { color: #f87171; } .ok { color: #34d399; }
+</style></head><body><div class="grid">
+
+<div class="col" style="--dim:#4a5568; --muted:#6b7a8d">
+<h2>Before (main)</h2>
+<div class="panel">
+<div class="hdr"><span style="color:var(--dim)">CONSUMERS</span> <span style="color:var(--muted)">3</span></div>
+<div class="sec" style="color:var(--dim)">▸ consumer-1 &nbsp;(collapsed)</div>
+<div class="sec" style="color:var(--muted)">▾ consumer-2 &nbsp;(expanded)</div>
+<div class="lbl" style="color:var(--dim)">session.timeout.ms</div>
+<div class="val">45000</div>
+</div>
+<div class="key">
+<span class="sw" style="background:#4a5568"></span>--text-dim #4a5568 <span class="bad">2.39:1 ✗</span><br>
+<span class="sw" style="background:#6b7a8d"></span>--text-muted #6b7a8d <span class="bad">4.10:1 ✗</span><br>
+Three levels, but both greys fail 4.5:1.
+</div>
+</div>
+
+<div class="col" style="--dim:#7d8a9c; --muted:#929fb0">
+<h2>This PR (taken)</h2>
+<div class="panel">
+<div class="hdr"><span style="color:var(--dim)">CONSUMERS</span> <span style="color:var(--muted)">3</span></div>
+<div class="sec" style="color:var(--dim)">▸ consumer-1 &nbsp;(collapsed)</div>
+<div class="sec" style="color:var(--muted)">▾ consumer-2 &nbsp;(expanded)</div>
+<div class="lbl" style="color:var(--dim)">session.timeout.ms</div>
+<div class="val">45000</div>
+</div>
+<div class="key">
+<span class="sw" style="background:#7d8a9c"></span>--text-dim #7d8a9c <span class="ok">5.13:1 ✓</span><br>
+<span class="sw" style="background:#929fb0"></span>--text-muted #929fb0 <span class="ok">6.68:1 ✓</span><br>
+Both lighter, still dim &lt; muted &lt; text:<br>the three levels stay, closer together.
+</div>
+</div>
+
+<div class="col" style="--dim:#929fb0; --muted:#929fb0">
+<h2>Alternative: one grey</h2>
+<div class="panel">
+<div class="hdr"><span style="color:var(--dim)">CONSUMERS</span> <span style="color:var(--muted)">3</span></div>
+<div class="sec" style="color:var(--dim)">▸ consumer-1 &nbsp;(collapsed)</div>
+<div class="sec" style="color:var(--muted)">▾ consumer-2 &nbsp;(expanded)</div>
+<div class="lbl" style="color:var(--dim)">session.timeout.ms</div>
+<div class="val">45000</div>
+</div>
+<div class="key">
+<span class="sw" style="background:#929fb0"></span>--text-dim = --text-muted #929fb0 <span class="ok">6.68:1 ✓</span><br>
+Two levels: a collapsed section looks<br>like an expanded one.
+</div>
+</div>
+
+</div></body></html>
