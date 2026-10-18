@@ -2,3 +2,6 @@
 contrast stopped-consumer.json / 1440x900
 # The config panel before the simulation starts: editable, to compare with the locked one.
 idle none / 1440x900
+# The config panel alone, running (locked) and idle, side by side in the decisions.
+panel-locked stopped-consumer.json / 340x560
+panel-idle none / 340x560
