@@ -27,8 +27,8 @@
 set -uo pipefail
 shopt -s nocasematch
 
-[[ -n ${FACTORY_TRUSTED:-} ]] || exit 0
 input=$(cat)
+[[ -n ${FACTORY_TRUSTED:-} ]] || exit 0
 [[ $(jq -r '.tool_name // empty' <<<"$input") == Bash ]] || exit 0
 raw=$(jq -r '.tool_input.command // empty' <<<"$input")
 # The line as the guard reads it: newlines are separators; quotes and
