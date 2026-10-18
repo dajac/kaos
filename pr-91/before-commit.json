@@ -1,0 +1,59 @@
+{
+  "description": "One topic of 6 partitions fed at 5 records/s per partition for 15 s, then a group of one consumer, frozen as soon as it has applied its assignment of the 6 partitions: it stops polling before its first commit.",
+  "steps": [
+    {
+      "request": "POST /api/v1/simulator",
+      "body": {
+        "topics": [
+          {
+            "name": "orders",
+            "partitions": 6
+          }
+        ],
+        "producers": [
+          {
+            "topics": [
+              "orders"
+            ],
+            "ratePerPartition": 5
+          }
+        ]
+      }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator",
+        "jq": ".phase == \"RUNNING\"",
+        "timeout_s": 90
+      }
+    },
+    {
+      "sleep_s": 15
+    },
+    {
+      "request": "POST /api/v1/simulator/groups",
+      "body": {
+        "id": "orders-app",
+        "subscribedTopics": [
+          "orders"
+        ],
+        "consumers": [
+          {}
+        ]
+      }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator/snapshot",
+        "jq": "[.groups[] | select(.id == \"orders-app\") | .consumers[]] as $c | ($c | length) == 1 and ([$c[].partitions[] | select(.state == \"ASSIGNED\")] | length) == 6",
+        "timeout_s": 90
+      }
+    },
+    {
+      "request": "PUT /api/v1/simulator/groups/orders-app/consumers/consumer-0/faults/freeze"
+    },
+    {
+      "sleep_s": 5
+    }
+  ]
+}

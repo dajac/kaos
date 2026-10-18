@@ -1,3 +1,7 @@
-# The tooltip shows on hover only, which a headless shot cannot take: the
-# pair shows that the Rows view (the gauges of lag 0) looks the same.
+# The tooltip shows on hover only, which a headless shot cannot take.
+# rows: the steady state (lag 0 after the first commits), unchanged.
+# before-commit: a consumer that owns its partitions without a commit;
+# its gauges are empty on main (lag unknown) and fill up to the end
+# offset with the PR.
 rows default.json / 1440x900
+before-commit before-commit.json / 1440x900
