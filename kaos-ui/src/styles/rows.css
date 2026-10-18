@@ -192,9 +192,7 @@
 }
 #rows-grid .row-panel.stopping     { border-color: rgba(248,113,113,0.35); }
 #rows-grid .row-panel.joining      { border-color: rgba(76,154,255,0.38); }
-/* For stopped panels, dim only the strip. Not the prototype's, which dimmed
-   the axis and the left overlay too: their text keeps its contrast, and the
-   gray rail, border and STOPPED badge mark the row. */
+/* For stopped panels, dim only the strip, so that their text keeps its contrast. */
 #rows-grid .row-panel.stopped .row-strip { opacity: 0.45; }
 #rows-grid .row-panel.stopped { border-color: rgba(107,122,141,0.35); }
 #rows-grid .row-panel.frozen       { border-color: rgba(92,213,255,0.35); }
@@ -521,8 +519,7 @@
 }
 
 /* Compact Actions text button. Visible at rest (text IS the icon), in
-   --text-muted at full opacity, not the prototype's --text-dim at 0.75;
-   lights up on button-hover / dd-open. Uses .dd-btn +
+   --text-muted for contrast; lights up on button-hover / dd-open. Uses .dd-btn +
    .row-actions-btn compound selectors to override base .dd-btn defaults.
 
    Hover surface is the same GRAY as a dropdown-menu item

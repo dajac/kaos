@@ -1546,41 +1546,19 @@ their styles.
 - `config.css` and `rows.css` end with the only rules that are not the
   prototype's: the inline field errors (`.field-error`,
   `.consumers-error`) and the error banner (`.config-banner`), which
-  replace `alert()`, the banners of the main area (`.rows-banner*`),
-  and the locked panel (`.config-locked-note`, and the
-  `#config-mode.locked` rules after it).
-- Departures for contrast: the dim texts below reach the 4.5:1 of WCAG
-  AA against their background, opacity included, which
-  `styles/contrast.test.ts` measures from the tokens and the rules of
-  `config.css` and `rows.css`. The disabled controls are exempt, as
-  WCAG allows, and "Actions" over a lag-filled cell depends on the
-  fill (#65).
-  - `--text-muted` is `#929fb0` and `--text-dim` is `#7d8a9c`, instead
-    of `#6b7a8d` and `#4a5568`.
-  - The locked panel is not at 45% opacity
-    (`#config-mode.locked .config-scroll`): a note heads it, its inputs
-    and value dropdowns have a transparent background, a dashed border
-    (in `--accent` on a focused input) and no chevron, the cursor is
-    `not-allowed` over a field, and the buttons that edit the config
-    (+ Add, + Duplicate, + Add setting, the × of a field, and the × of
-    a section, shown on hover) are at 35% opacity, as disabled buttons
-    are.
-  - A stopped row dims only its strip, not its axis and left overlay;
-    its `STOPPED` badge is in `--text-muted`.
-  - The axis's ticks and topic label, and the hover meta's labels and
-    dim values of a row, have no opacity of their own.
-  - "Actions" at rest is in `--text-muted` at full opacity, instead of
-    `--text-dim` at 75% (90% on a stopped row) that lit up on hover.
-- Vitest processes `styles/*.css` (`test.css` of `vite.config.ts`), so
-  that the contrast test reads them with `?raw`.
+  replace `alert()`, and the banners of the main area
+  (`.rows-banner*`).
+- Departures for contrast (WCAG AA): `--text-muted` and `--text-dim`
+  are lighter than the prototype's; the locked panel shows dashed
+  inputs instead of 45% opacity; a stopped row dims only its strip; the
+  axis, the hover meta and "Actions" have no opacity of their own.
 - The fonts are bundled from fontsource instead of Google Fonts.
   `--font-mono` and `--font-body` name the variable families,
   `'JetBrains Mono Variable'` and `'DM Sans Variable'`, first, then the
   families of the prototype.
 - The Bento rules, the lag gradient of the legend and the other dead
   rules are not carried over.
-- No CSS modules. The visual result is the prototype's, but for the
-  departures above.
+- No CSS modules. The visual result is identical to the prototype.
 
 **Dev loop**
 - The Vite dev server proxies `/api`, including SSE, to `localhost:8081`.
@@ -1623,9 +1601,7 @@ removing components at runtime.
   member.
 - A collapsed consumer shows chips and a protocol tag. A consumer with no
   overrides shows the "inherits all settings" note.
-- The panel is locked while a simulation runs, or starts or stops: the
-  note "Locked while the simulation runs" heads it, and its labels and
-  values keep full contrast (see "CSS" for how the lock shows).
+- The panel is locked while a simulation runs.
 - Status: built (`components/config/`: `ConfigPanel`, `GroupSection`,
   `ConsumerSection`, `Dropdown`, `AssignorField`, `NumberInput`,
   `FieldError`), with Start and Stop, the Auto-Pilot, inline validation

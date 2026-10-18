@@ -42,8 +42,5 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],
-    // The stylesheets are processed, so that the contrast test reads them
-    // with `?raw`; otherwise Vitest turns every CSS import into an empty string.
-    css: { include: [/src\/styles\/[^/]+\.css/] },
   },
 });
