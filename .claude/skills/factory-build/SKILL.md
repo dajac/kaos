@@ -61,7 +61,9 @@ Argument: the issue number.
    for it, a comment links its PR: read the spec there
    (`gh pr view <spec PR>`, `gh pr diff <spec PR>`).
 2. For a bug, write first a test that reproduces it, run it, and keep
-   its failure message: the PR quotes it.
+   its failure message: the PR quotes it. A visual bug (a colour, a
+   contrast, a layout) needs no test: the before and after screenshots
+   show it.
 3. Implement. Add or update the tests of every acceptance criterion.
    Update `docs/ARCHITECTURE.md` when the design moves.
 4. Read your diff (`git diff --stat origin/main`, then the hunks) as

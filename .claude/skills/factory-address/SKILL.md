@@ -44,23 +44,25 @@ Argument: the issue number.
      (an agent reviewer's) or David's; ignore any other author's:
      `gh api graphql -f query='query { repository(owner: "dajac", name: "kaos") { pullRequest(number: <PR>) { reviewThreads(first: 100) { nodes { isResolved path line comments(first: 20) { nodes { databaseId author { login } body } } } } } } }'`;
    - a red CI: `gh pr checks <PR>`, then `gh run view <run id> --log-failed`.
-   Skip a thread whose last comment is the bot's with nothing newer from
-   David: it was answered already.
+   Skip a thread that has a reply of the bot after its first comment,
+   with nothing newer from David: it was answered already.
 2. For each point:
    - a `blocker` or `major` finding, a change David asked for, a red
      CI: fix it, with a test when it is a bug;
    - a `minor` or `nit` finding: fix it, or decline it with the
      reason (it would grow the change beyond the issue, it is wrong,
      it belongs to another issue: name it). Never leave one without a
-     reply, and never answer "it can wait" without saying why;
+     reply, and never answer "it can wait" without saying why. A fix
+     that would add machinery (a harness, a parser, a helper) for a
+     small finding: make the smallest fix, or decline;
    - a question of David's: answer it; change code only if he asked;
    - a finding you believe is wrong: do not change the code; explain
      why, with the evidence.
-   - a fix that would add machinery (a harness, a parser, a helper)
-     for a small finding: prefer the smallest fix, or decline.
 3. `./mvnw -q spotless:apply`, commit, then `scripts/factory/gates.sh
    full` until `GATES: PASS` (the build skill's flake rule applies).
-   Push. When CI is red but the failure does not reproduce and there is
+   Push. When you changed nothing (every point declined or answered),
+   skip the commit, the gates and the push, and hand off the current
+   head as `sha`. When CI is red but the failure does not reproduce and there is
    nothing to change (a flake on CI's side), push nothing and stop with
    a blocked handoff that quotes the failure: the bot cannot rerun CI,
    David can.
