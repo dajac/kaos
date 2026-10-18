@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -66,12 +65,7 @@ class ConsumerRunnerTest {
     private final NetworkFaults network = new NetworkFaults();
     private final Threads threads = new Threads();
     private final Resources resources = new Resources("test");
-    private final ConsumerRunner.Services services = new ConsumerRunner.Services(
-        this::newClient,
-        threads,
-        network,
-        Map.of()
-    );
+    private final ConsumerRunner.Services services = new ConsumerRunner.Services(this::newClient, threads, network);
 
     private MockConsumer<String, String> newClient(Map<String, Object> given) {
         settings.add(given);
@@ -84,7 +78,7 @@ class ConsumerRunnerTest {
     }
 
     private ConsumerRunner runner(ConsumerSettings settings) {
-        return runner(settings, ConsumerRunner.ClassicTimeouts.NONE);
+        return runner(settings, ConsumerRunner.ClassicTimeouts.DEFAULTS);
     }
 
     private ConsumerRunner runner(ConsumerSettings settings, ConsumerRunner.ClassicTimeouts timeouts) {
@@ -339,8 +333,7 @@ class ConsumerRunnerTest {
                 return newClient(given);
             },
             threads,
-            network,
-            Map.of()
+            network
         );
         var runner = runner();
         runner.start(failing, resources);
@@ -357,7 +350,7 @@ class ConsumerRunnerTest {
     void theClientPropertiesFollowTheSettingsAndTheProtocol() {
         var settings = new ConsumerSettings(Protocol.CLASSIC, "roundrobin", true, "rack-a", 0, 1000, 7000);
 
-        var none = ConsumerRunner.ClassicTimeouts.NONE;
+        var none = ConsumerRunner.ClassicTimeouts.DEFAULTS;
         var classic = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, none, Protocol.CLASSIC);
 
         assertThat(classic)
@@ -371,9 +364,7 @@ class ConsumerRunnerTest {
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                 "org.apache.kafka.clients.consumer.RoundRobinAssignor"
             )
-            .doesNotContainKey(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG)
-            .doesNotContainKey(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)
-            .doesNotContainKey(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+            .doesNotContainKey(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG);
 
         // The classic assignor does not exist for the consumer protocol, whose default applies.
         var switched = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, none, Protocol.CONSUMER);
@@ -400,7 +391,7 @@ class ConsumerRunnerTest {
     @Test
     void onlyAClassicClientGetsTheTimeoutsOfTheGroup() {
         var settings = new ConsumerSettings(Protocol.CLASSIC, "", false, "", 0, 20, 300_000);
-        var timeouts = new ConsumerRunner.ClassicTimeouts(OptionalInt.of(10_000), OptionalInt.of(1_000));
+        var timeouts = new ConsumerRunner.ClassicTimeouts(10_000, 1_000);
 
         assertThat(ConsumerRunner.clientProperties("g", "c", settings, timeouts, Protocol.CLASSIC))
             .containsEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10_000)
@@ -408,104 +399,33 @@ class ConsumerRunnerTest {
         assertThat(ConsumerRunner.clientProperties("g", "c", settings, timeouts, Protocol.CONSUMER))
             .doesNotContainKey(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)
             .doesNotContainKey(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
-        // Only the setting that is explicit is set; the client keeps its default for the other.
-        var sessionOnly = new ConsumerRunner.ClassicTimeouts(OptionalInt.of(10_000), OptionalInt.empty());
-        assertThat(ConsumerRunner.clientProperties("g", "c", settings, sessionOnly, Protocol.CLASSIC))
-            .containsEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10_000)
-            .doesNotContainKey(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 
     @Test
-    void theClassicTimeoutsAreTheExplicitSettingsOfTheGroup() {
+    void theClassicTimeoutsAreTheSettingsOfTheGroupDefaultsIncluded() {
         var defaults = GroupSpec.of("g", g -> g.subscribe("orders"));
-        var explicit = GroupSpec.of(
+        var set = GroupSpec.of(
             "g",
             g -> g.subscribe("orders").sessionTimeout(Duration.ofSeconds(10)).heartbeatInterval(Duration.ofSeconds(3))
         );
 
-        assertThat(ConsumerRunner.ClassicTimeouts.of(defaults)).isEqualTo(ConsumerRunner.ClassicTimeouts.NONE);
-        assertThat(ConsumerRunner.ClassicTimeouts.of(explicit))
-            .isEqualTo(new ConsumerRunner.ClassicTimeouts(OptionalInt.of(10_000), OptionalInt.of(3_000)));
-    }
-
-    @Test
-    void aClassicConsumerWhoseHeartbeatIsNotBelowItsSessionTimeoutIsFailed() throws InterruptedException {
+        assertThat(ConsumerRunner.ClassicTimeouts.of(defaults))
+            .isEqualTo(ConsumerRunner.ClassicTimeouts.DEFAULTS)
+            .isEqualTo(new ConsumerRunner.ClassicTimeouts(45_000, 5_000));
+        assertThat(ConsumerRunner.ClassicTimeouts.of(set)).isEqualTo(new ConsumerRunner.ClassicTimeouts(10_000, 3_000));
+        // A classic client gets the 5 s heartbeat of the group, not its own default of 3 s.
         var classic = new ConsumerSettings(Protocol.CLASSIC, "", false, "", 0, 20, 300_000);
-        // The heartbeat interval keeps the client default of 3000 ms.
-        var runner = runner(classic, new ConsumerRunner.ClassicTimeouts(OptionalInt.of(2_000), OptionalInt.empty()));
-
-        runner.start(services, resources);
-
-        assertThat(clients).isEmpty();
-        assertThat(threads()).isEmpty();
-        var state = runner.localState();
-        assertThat(state.failure()).isEqualTo(
-            "The heartbeat interval of a classic consumer, 3000 ms (the client default), must be lower than its "
-                + "session timeout, 2000 ms"
-        );
-        assertThat(StatusDeriver.status(state, ConsumerStatus.JOINING, Set.of(), Set.of()))
-            .isEqualTo(ConsumerStatus.FAILED);
-
-        // The consumer protocol takes the timeouts from the group configs, so its client starts.
-        runner.switchProtocol(Protocol.CONSUMER);
-
-        assertThat(clients).hasSize(1);
-        assertThat(runner.localState().failed()).isFalse();
-
-        runner.stop();
-    }
-
-    @Test
-    void theHeartbeatCheckTakesTheClientPropertiesOfTheSimulator() {
-        var shared = Map.of(
-            ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
-            "10000",
-            ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
-            "500"
-        );
-
-        // The group sets only the heartbeat: the session timeout is the one of the simulator.
-        var heartbeatOnly = new ConsumerRunner.ClassicTimeouts(OptionalInt.empty(), OptionalInt.of(12_000));
-        assertThat(heartbeatOnly.refusal(shared)).contains(
-            "The heartbeat interval of a classic consumer, 12000 ms, must be lower than its session timeout, "
-                + "10000 ms (a client property of the simulator)"
-        );
-        assertThat(heartbeatOnly.refusal(Map.of())).isEmpty();
-
-        // The group sets only the session timeout: the heartbeat is the one of the simulator.
-        var sessionOnly = new ConsumerRunner.ClassicTimeouts(OptionalInt.of(2_000), OptionalInt.empty());
-        assertThat(sessionOnly.refusal(shared)).isEmpty();
-        assertThat(sessionOnly.refusal(Map.of())).contains(
-            "The heartbeat interval of a classic consumer, 3000 ms (the client default), must be lower than its "
-                + "session timeout, 2000 ms"
-        );
-
-        // A setting of the group wins over the client property of the simulator.
-        var both = new ConsumerRunner.ClassicTimeouts(OptionalInt.of(20_000), OptionalInt.of(12_000));
-        assertThat(both.refusal(shared)).isEmpty();
-
-        // A property that is not a number is left to the client, which refuses it with its own error.
-        var invalid = Map.of(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "soon");
-        assertThat(heartbeatOnly.refusal(invalid)).isEmpty();
-    }
-
-    @Test
-    void aClassicConsumerStartsWithTheHeartbeatOfTheSimulator() throws InterruptedException {
-        var shared = new ConsumerRunner.Services(
-            this::newClient,
-            threads,
-            network,
-            Map.of(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "500")
-        );
-        var classic = new ConsumerSettings(Protocol.CLASSIC, "", false, "", 0, 20, 300_000);
-        var runner = runner(classic, new ConsumerRunner.ClassicTimeouts(OptionalInt.of(2_000), OptionalInt.empty()));
-
-        runner.start(shared, resources);
-
-        assertThat(clients).hasSize(1);
-        assertThat(runner.localState().failed()).isFalse();
-
-        runner.stop();
+        assertThat(
+            ConsumerRunner.clientProperties(
+                "g",
+                "c",
+                classic,
+                ConsumerRunner.ClassicTimeouts.of(defaults),
+                Protocol.CLASSIC
+            )
+        )
+            .containsEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 45_000)
+            .containsEntry(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 5_000);
     }
 
     @Test

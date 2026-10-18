@@ -128,7 +128,7 @@ class GroupRuntimeTest {
         var spec = new GroupSpec("g", List.of("orders"), 45000, 5000, 1000, null, List.of(ConsumerSpec.inheriting()));
         group = new GroupRuntime(spec, List.of(new TopicSpec("orders", 1)), new Harness());
         var services = new GroupRuntime.Services(
-            new ConsumerRunner.Services(this::newClient, threads, new NetworkFaults(), Map.of()),
+            new ConsumerRunner.Services(this::newClient, threads, new NetworkFaults()),
             new GroupConfigManager(new NoConfigs()),
             new GroupCleanup(admin, Duration.ofMillis(100))
         );
@@ -170,8 +170,7 @@ class GroupRuntimeTest {
                 return newClient(given);
             },
             threads,
-            new NetworkFaults(),
-            Map.of()
+            new NetworkFaults()
         );
         var resources = new Resources("test");
 

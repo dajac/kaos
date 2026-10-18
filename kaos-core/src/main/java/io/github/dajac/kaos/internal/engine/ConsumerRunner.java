@@ -23,8 +23,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -45,7 +43,6 @@ import io.github.dajac.kaos.Protocol;
 import io.github.dajac.kaos.SimulationException;
 import io.github.dajac.kaos.SimulationStateException;
 import io.github.dajac.kaos.internal.config.Assignors;
-import io.github.dajac.kaos.internal.kafka.GroupConfigManager;
 import io.github.dajac.kaos.internal.proxy.NetworkFaults;
 import io.github.dajac.kaos.internal.state.ConsumerLocalState;
 import io.github.dajac.kaos.internal.state.EventLog;
@@ -106,113 +103,39 @@ public final class ConsumerRunner implements ConsumerHandle {
      * @param clients creates the Kafka consumer for the given settings
      * @param threads creates the loop thread
      * @param network the faults of the proxy the consumers connect through
-     * @param clientProperties the client properties of the simulator, which every client gets
-     *     under the settings of its consumer
      */
     public record Services(
         Function<Map<String, Object>, Consumer<String, String>> clients,
         Threads threads,
-        NetworkFaults network,
-        Map<String, String> clientProperties
+        NetworkFaults network
     ) {
         public Services {
             Objects.requireNonNull(clients, "clients");
             Objects.requireNonNull(threads, "threads");
             Objects.requireNonNull(network, "network");
-            clientProperties = Map.copyOf(clientProperties);
         }
     }
 
     /**
      * The session timeout and heartbeat interval of a member that speaks the classic protocol. Such
-     * a member takes them from its client, not from the group configs, so the runner sets them on
-     * the client. As for the group configs, only the explicit settings of the group are set: those
-     * whose value differs from their default in {@link ConfigMetadata}, as given by {@link
-     * GroupConfigManager#explicitConfigs}. The others keep the value of the client: the client
-     * property of the simulator, or else the default of the client.
+     * a member takes them from its client, not from the group configs, so the runner sets those of
+     * its group on the client, their defaults included: a classic client gets the same values as a
+     * member of the consumer protocol, 45 s and 5 s unless the group sets others. The client
+     * validates them, as the broker validates the group configs.
      *
-     * @param sessionTimeoutMs the explicit session timeout of the group, empty when there is none
-     * @param heartbeatIntervalMs the explicit heartbeat interval of the group, empty when there is
-     *     none
+     * @param sessionTimeoutMs the session timeout of the group
+     * @param heartbeatIntervalMs the heartbeat interval of the group
      */
-    public record ClassicTimeouts(OptionalInt sessionTimeoutMs, OptionalInt heartbeatIntervalMs) {
-        /** No explicit setting: the values of the client apply. */
-        public static final ClassicTimeouts NONE = new ClassicTimeouts(OptionalInt.empty(), OptionalInt.empty());
+    public record ClassicTimeouts(int sessionTimeoutMs, int heartbeatIntervalMs) {
+        /** The defaults of {@link ConfigMetadata}. */
+        public static final ClassicTimeouts DEFAULTS = new ClassicTimeouts(
+            ConfigMetadata.SESSION_TIMEOUT_MS.intDefault(),
+            ConfigMetadata.HEARTBEAT_INTERVAL_MS.intDefault()
+        );
 
-        public ClassicTimeouts {
-            Objects.requireNonNull(sessionTimeoutMs, "sessionTimeoutMs");
-            Objects.requireNonNull(heartbeatIntervalMs, "heartbeatIntervalMs");
-        }
-
-        /** The explicit settings of a group. */
+        /** The settings of a group. */
         public static ClassicTimeouts of(GroupSpec group) {
-            var configs = GroupConfigManager.explicitConfigs(group);
-            return new ClassicTimeouts(
-                explicit(configs, GroupConfigManager.SESSION_TIMEOUT),
-                explicit(configs, GroupConfigManager.HEARTBEAT_INTERVAL)
-            );
-        }
-
-        private static OptionalInt explicit(Map<String, String> configs, String key) {
-            var value = configs.get(key);
-            return value == null ? OptionalInt.empty() : OptionalInt.of(Integer.parseInt(value));
-        }
-
-        /**
-         * Why a classic client cannot be created with these settings, or empty when it can: the
-         * client refuses a heartbeat interval that is not lower than the session timeout. A value
-         * the group does not set is the one the client gets: the client property of the simulator,
-         * or else the default of the client.
-         *
-         * @param clientProperties the client properties of the simulator
-         */
-        Optional<String> refusal(Map<String, String> clientProperties) {
-            var session = resolve(sessionTimeoutMs, ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, clientProperties);
-            var heartbeat = resolve(
-                heartbeatIntervalMs,
-                ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
-                clientProperties
-            );
-            if (session.isEmpty() || heartbeat.isEmpty() || heartbeat.get().ms() < session.get().ms()) {
-                return Optional.empty();
-            }
-            return Optional.of(
-                "The heartbeat interval of a classic consumer, " + heartbeat.get()
-                    + ", must be lower than its session timeout, " + session.get()
-            );
-        }
-
-        /**
-         * The value a classic client gets for a key, empty when the client property of the
-         * simulator is not a number: the client then refuses it with its own error.
-         */
-        private static Optional<ClientValue> resolve(
-            OptionalInt explicit,
-            String key,
-            Map<String, String> clientProperties
-        ) {
-            if (explicit.isPresent()) {
-                return Optional.of(new ClientValue(explicit.getAsInt(), ""));
-            }
-            var property = clientProperties.get(key);
-            if (property == null) {
-                var clientDefault = (Integer) ConsumerConfig.configDef().defaultValues().get(key);
-                return Optional.of(new ClientValue(clientDefault, " (the client default)"));
-            }
-            try {
-                return Optional.of(
-                    new ClientValue(Integer.parseInt(property.trim()), " (a client property of the simulator)")
-                );
-            } catch (NumberFormatException e) {
-                return Optional.empty();
-            }
-        }
-
-        private record ClientValue(int ms, String origin) {
-            @Override
-            public String toString() {
-                return ms + " ms" + origin;
-            }
+            return new ClassicTimeouts(group.sessionTimeoutMs(), group.heartbeatIntervalMs());
         }
     }
 
@@ -527,20 +450,8 @@ public final class ConsumerRunner implements ConsumerHandle {
         }
     }
 
-    /**
-     * Starts a loop, or fails the consumer without one when its client would refuse its settings.
-     * The caller holds the switchLock.
-     */
+    /** The caller holds the switchLock. */
     private void startLoop() {
-        if (protocol == Protocol.CLASSIC) {
-            var refusal = timeouts.refusal(services.clientProperties());
-            if (refusal.isPresent()) {
-                failure = refusal.get();
-                EVENTS.warn("[{}] {} cannot start: {}", groupId, spec.id(), failure);
-                owner.changed();
-                return;
-            }
-        }
         var properties = clientProperties(groupId, clientId, spec.effective(), timeouts, protocol);
         var consumer = services.clients().apply(properties);
         var loop = new Loop(consumer);
@@ -634,12 +545,8 @@ public final class ConsumerRunner implements ConsumerHandle {
                 Assignors.classicAssignorClass(assignor).ifPresent(
                     name -> properties.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, name)
                 );
-                timeouts.sessionTimeoutMs().ifPresent(
-                    ms -> properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, ms)
-                );
-                timeouts.heartbeatIntervalMs().ifPresent(
-                    ms -> properties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, ms)
-                );
+                properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, timeouts.sessionTimeoutMs());
+                properties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, timeouts.heartbeatIntervalMs());
             }
             case CONSUMER -> Assignors.remoteAssignor(assignor).ifPresent(
                 name -> properties.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, name)
