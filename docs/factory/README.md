@@ -23,7 +23,7 @@ The factory turns this into a pipeline with GitHub as its only state:
 3. An accepted issue is spec'ed first when it needs one, implemented
    right away otherwise.
 4. Every PR is reviewed by several agents, each from one angle (code,
-   tests, rules, API, UX, Kafka semantics).
+   rules, and UX and Kafka semantics when the change touches them).
 5. David has the final word: he accepts issues, approves specs and PRs,
    and is the only one who merges.
 6. Every PR carries a description, screenshots when it touches the UI,
@@ -126,7 +126,7 @@ Each job runs in a worktree under `.claude/worktrees/`, which
 | `triage` | `triage-<N>`, detached at `main`, removed afterwards |
 | `spec` | `spec-<N>-<slug>` on branch `spec/<N>-<slug>` |
 | `build`, `address` | `<N>-<slug>` on branch `<N>-<slug>`, kept until the merge |
-| `review` | `review-<N>`, detached at the PR head, removed afterwards, so that the `tests` reviewer can revert the fix without touching the author's worktree |
+| `review` | `review-<N>`, detached at the PR head, removed afterwards, so that the `code` reviewer can revert the fix without touching the author's worktree |
 
 Why this shape:
 
@@ -440,10 +440,10 @@ the old stage label for the new one):
 | `spec-review` | David approves the spec PR on its head | `queued`, `needs-spec` removed, spec PR closed |
 | `queued`, no `needs-spec` | the job is chosen | `in-progress`, start `build` |
 | `in-progress` | a `build` or `address` handoff, PR pushed | `reviewing`, start `review` |
-| `reviewing` | a `review` handoff with open `blocker` or `major` findings, round 1; or CI red | `in-progress`, start `address` |
-| `reviewing` | nothing blocking, but CI has not reported 30 minutes after the review | `blocked` |
-| `reviewing` | a `review` handoff with only `minor` and `nit` left, CI green | `in-review`: PR ready, review requested from David |
-| `reviewing` | round 2 with an open `blocker` or `major` | `blocked` |
+| `reviewing` | round 2 or later with an open `blocker` or `major`, or round 3 or later with unanswered findings | `blocked` |
+| `reviewing` | a `review` handoff with open `blocker` or `major` findings, round 1; or with findings the address job has not answered, round 1 or 2; or CI red | `in-progress`, start `address` |
+| `reviewing` | nothing blocking or unanswered, but CI has not reported 30 minutes after the review | `blocked` |
+| `reviewing` | a `review` handoff with nothing blocking and every finding answered, CI green | `in-review`: PR ready, review requested from David |
 | `in-review` | David requests changes, opens a review thread, or mentions `@kaos-agent` | `changes-requested` |
 | `in-review` | CI red | `in-progress`, start `address` |
 | `changes-requested` | the job is chosen | `in-progress`, start `address` |
@@ -787,16 +787,14 @@ what the angle checks, the severities, and the JSON it returns.
 
 | Reviewer | When | Looks at |
 |---|---|---|
-| `code` | always | correctness, edge cases, concurrency and shutdown, error paths, simplicity, reuse |
-| `tests` | always | the new test fails without the change (it reverts the fix to check), coverage of the acceptance criteria, flakiness (sleeps, ports, timing) |
-| `rules` | always | `CLAUDE.md` rules (public vs `internal`, no kafka-clients type in the API or JSON, no static mutable state, the single `ThreadFactory`, `*Test` names, `@IntegrationTest`, `var`), `docs/ARCHITECTURE.md` matches the code, PR body complete |
-| `api` | public package of `kaos-core`, `kaos-server`, OpenAPI | naming and consistency with the existing API, compatibility, JSON shape, OpenAPI and `schema.d.ts` in sync, error responses |
+| `code` | always | correctness (edge cases, concurrency and shutdown, error paths, reuse of existing helpers); the tests (the new test fails without the change: it reverts the fix to check; the acceptance criteria covered; flakiness); the scope (the smallest change that meets the criteria: no code, test or file they do not need, no machinery out of proportion such as a parser to check what the screenshots show, comments of one line) |
+| `rules` | always | `CLAUDE.md` rules (public vs `internal`, no kafka-clients type in the API or JSON, no static mutable state, the single `ThreadFactory`, `*Test` names, `@IntegrationTest`, `var`), `docs/ARCHITECTURE.md` matches the code, PR body complete; when the PR changes the public Java or HTTP API, its naming, compatibility, JSON shape, OpenAPI and `schema.d.ts` in sync, error responses |
 | `ux` | `kaos-ui` | runs the PR with `try-pr.sh` and the scenario and takes its own shots with `capture.sh` (states only, it cannot click); the rows show the coordinator view (client-local facts only annotate); wording and labels consistent with the rest of the UI; WCAG AA contrast, keyboard focus styles in the CSS, states (loading, stale, stopped); the screenshots match what it sees |
 | `kafka` | the consumer, group, assignment, proxy and fault code of `kaos-core`, or `area:protocol` | the simulated behavior matches the real group coordinator and clients, checked against the Apache Kafka sources at the tag of the kafka-clients version in the `pom.xml` (KIP-848 and classic protocols, epochs, revocation, static membership) |
 
 Each reviewer is independent. It gets the issue, the spec, the
 acceptance criteria, the PR's body and reads the diff, not the build
-job's reasoning. Only the tests reviewer (in a worktree of its own) and
+job's reasoning. Only the code reviewer (in a worktree of its own) and
 the UX reviewer build: the others read the checkout they share. It
 does not trust the PR body's claims without checking them. It returns
 findings with a file, a line, a severity (`blocker`, `major`, `minor`,
@@ -808,33 +806,38 @@ overstated severities. The survivors are posted as one PR review per
 angle, with the event `COMMENT` and inline comments (findings on lines
 outside the diff go into the review's body). The round is counted from
 the issue's handoffs: 1, plus the `review` handoffs since the last
-build or David's last request for changes. On round 2, only the angles
+build or David's last request for changes. From round 2, only the angles
 that had findings re-review, with their previous findings, the
 replies, and the diff since their previous review.
 
 The review job's handoff carries `round`, `blocking` (the `blocker` and
 `major` findings still open: kept by the verifier, or earlier ones not
-resolved), `minor`, the list of open findings, the angles and the head
-it reviewed. Inline comments go only on lines of the diff's hunks; the
-others go into the review's body.
+resolved), `minor`, `unanswered` (the open findings of any severity
+that the address job has not replied to yet), the list of open
+findings, the angles and the head it reviewed. Inline comments go only
+on lines of the diff's hunks; the others go into the review's body.
 
-The `address` job replies once to each thread it addresses, the agent
-reviewers' and David's only (fixed in `<sha>`, or why
-not) and pushes new commits, never a force-push.
+The `address` job replies to every finding, whatever its severity, and
+to David's threads, once each (fixed in `<sha>`, or not changed and
+why), and pushes new commits, never a force-push. A reviewer counts a
+declined finding as resolved when the reason holds.
 
-After at most two rounds the orchestrator either hands the PR to David
-or blocks it. `blocker` and `major` findings must be fixed; `minor`
-and `nit` may be left open with a reason.
+The orchestrator hands the PR to David only once every finding is
+fixed or declined, and blocks it otherwise. `blocker` and `major`
+findings must be fixed; `minor` and `nit` are fixed or declined with a
+reason, never left without a reply.
 
-- **No `blocker` or `major` open:** it marks the PR ready for
-  review and requests David's review. The review job's last comment
-  summarizes it for David:
+- **Nothing blocking and every finding answered:** it marks the PR
+  ready for review and requests David's review. The review job's last
+  comment summarizes it for David:
   - each reviewer's verdict;
-  - the findings left open, with the reason;
+  - the findings left open, with the address job's reason;
+  - the findings declined with a reason the reviewer accepted;
   - the "Decisions for David";
   - what to look at first.
-- **A `blocker` or `major` still open after round 2:** the PR stays a
-  draft and the issue goes to `blocked` with the open question.
+- **A `blocker` or `major` still open after round 2, or findings
+  still unanswered after round 3:** the PR stays a draft and the issue
+  goes to `blocked` with the open question.
 
 What each angle checks lives in its agent file, versioned with the
 code. Lessons that sat in one user's local memory moved there: the UX
@@ -997,7 +1000,7 @@ scripts/factory/cleanup.sh            removes the local worktree and branch of a
 .claude/skills/factory-review/SKILL.md
 .claude/skills/factory-spec/SKILL.md
 .claude/skills/factory-address/SKILL.md
-.claude/agents/reviewer-{code,tests,rules,api,ux,kafka}.md
+.claude/agents/reviewer-{code,rules,ux,kafka}.md
 .claude/agents/review-verifier.md
 scripts/factory/try-pr.sh             ./factory try: a tree on its own broker, in a scenario's state
 scripts/factory/scenario.sh           runs a scenario against a server

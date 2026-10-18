@@ -46,21 +46,20 @@ Arguments: the issue number and the PR number.
    his, or a comment of his that mentions `@kaos-agent`). Read them from
    the issue's comments and the PR's reviews.
 3. Choose the reviewers:
-   - always `reviewer-code`, `reviewer-tests`, `reviewer-rules`;
-   - `reviewer-api` when a path is in the public package of `kaos-core`
-     (`kaos-core/src/main/java/io/github/dajac/kaos/`, not under
-     `internal/`), in `kaos-server/src/main/`, or is the OpenAPI
-     document;
+   - always `reviewer-code` (correctness, tests, scope) and
+     `reviewer-rules` (the rules, the docs, the public API);
    - `reviewer-ux` when a path is under `kaos-ui/`;
    - `reviewer-kafka` when a path is in the consumer, group,
      assignment, proxy or fault code of `kaos-core`, or the issue has
      `area:protocol`.
    On round 2 and later, only the angles whose previous review had
    open findings, each with its previous findings and the replies to
-   them (the PR's review comments of that angle and their replies), and
+   them (the PR's review comments of that angle and their replies, and
+   the bot's PR comments since that review, which answer the findings
+   that were in review bodies), and
    the diff since its previous review's commit (`sha` of the last
    review handoff). When no angle had open findings (the round follows
-   a red CI, say), run `code`, `tests` and `rules` on that diff.
+   a red CI, say), run `code` and `rules` on that diff.
 4. Run the chosen reviewers in parallel: one Agent call each, with
    `subagent_type` the reviewer's name, in a single message. Give each
    the issue number, the PR number, the PR's body, the acceptance
@@ -93,18 +92,25 @@ Arguments: the issue number and the PR number.
    (an earlier finding does not vanish by omission), plus the previous
    findings of the angles that did not re-run and were not resolved.
    `blocking` is the number of open `blocker` and `major` findings,
-   `minor` the rest.
-8. When `blocking` is 0, post a summary for David on the PR, with `gh
-   pr comment P --body-file .factory/summary.md`: each angle's verdict
-   in one line, the `minor` and `nit` findings left open and why they
-   can wait, the "Decisions for David" of the PR body, and what to look
-   at first.
+   `minor` the rest. `unanswered` is the number of open findings, of
+   any severity, that the address job has not replied to: those first
+   raised this round (`previous` null, not carried over), and earlier
+   ones whose thread, or line of a review body, has no reply of the
+   bot since they were raised. The address job fixes or declines each
+   of them before the PR goes to David.
+8. When `blocking` and `unanswered` are 0, post a summary for David on
+   the PR, with `gh pr comment P --body-file .factory/summary.md`: each
+   angle's verdict in one line, the findings still open with the
+   address job's reason and the reviewer's answer to it, one line per
+   finding declined with a reason the reviewer accepted, the
+   "Decisions for David" of the PR body, and what to look at first.
 9. Hand off: one comment on the issue with `gh issue comment N
    --body-file .factory/handoff.md`:
 
    ````
    **Review**, round <r> of #<P>: <angles and their verdicts in one
    line>. <"Nothing blocking." or "<n> blocking findings to address.">
+   <"<n> findings to answer." when `unanswered` is above 0>
 
    ```yaml
    factory:
@@ -113,6 +119,7 @@ Arguments: the issue number and the PR number.
      round: <r>
      blocking: <n>
      minor: <n>
+     unanswered: <n>
      open:
        - "<severity> <angle>: <title>"
      angles: [<the angles that reviewed>]

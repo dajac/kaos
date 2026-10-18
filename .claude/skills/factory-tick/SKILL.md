@@ -82,9 +82,10 @@ Arguments: `<snapshot.json> <previous.json> last-job=<kind,N,status,start,log|no
 In the table, `A` is the issue's `activity.sh` output; "David wrote"
 means `A.david` is not empty; "the handoff" is `A.handoff`, with its
 fields in `A.handoff.fields` (`job`, `route`, `round`, `blocking`,
-`blocked`, `resume`); "newer than the stage" means `A.handoff.at` is
-after `A.labeled[<the current stage>]`; a handoff with a `blocked`
-field is a *blocked handoff*; "the PR" is the open PR of `A.prs` whose
+`unanswered`, `blocked`, `resume`; an absent `unanswered` is `0`);
+"newer than the stage" means `A.handoff.at` is after
+`A.labeled[<the current stage>]`; a handoff with a `blocked` field is
+a *blocked handoff*; "the PR" is the open PR of `A.prs` whose
 head does not start with `spec/`, and "the spec PR" the one whose head
 does. "Block" means: `stage.sh N blocked`, then, only if it moved the
 issue, post the comment above (an issue already blocked gets no second
@@ -111,11 +112,11 @@ comment).
 | `in-progress` | `last-job` is an `ok` job of N, with no such handoff | block ("the job ended without a handoff"); `resume: in-progress` |
 | `in-progress` | the PR exists and the last handoff's `job` is `build`, `review`, `address` or `tick` (the build handed off once) | candidate for an `address` job (review findings, CI, David's changes) |
 | `in-progress` | otherwise: no PR, or a PR that an interrupted build opened before handing off (the last handoff is still the `triage` or the `spec`) | candidate for a `build` job, which reuses the PR |
-| `reviewing` | a `review` handoff newer than the stage, `blocking` is `0` and the PR's `checks` is `pass` | `gh pr ready <PR>`, `gh pr edit <PR> --add-reviewer dajac`, `stage.sh N in-review` |
-| `reviewing` | a `review` handoff newer than the stage, `blocking` is `0`, `checks` is `pending` or `none`, and the handoff is less than 30 minutes old | nothing: wait for CI |
-| `reviewing` | a `review` handoff newer than the stage, `blocking` is `0`, and `checks` is `pending` or `none` for 30 minutes or more | block ("CI has not reported for 30 minutes"); `resume: reviewing` |
-| `reviewing` | a `review` handoff newer than the stage with `blocking` above `0` and `round` `1`; or `checks` is `fail` | `stage.sh N in-progress`, candidate for an `address` job |
-| `reviewing` | a `review` handoff newer than the stage with `blocking` above `0` and `round` `2` or more | block, listing the open findings; `resume: reviewing` |
+| `reviewing` | a `review` handoff newer than the stage, `blocking` and `unanswered` are `0` and the PR's `checks` is `pass` | `gh pr ready <PR>`, `gh pr edit <PR> --add-reviewer dajac`, `stage.sh N in-review` |
+| `reviewing` | a `review` handoff newer than the stage, `blocking` and `unanswered` are `0`, `checks` is `pending` or `none`, and the handoff is less than 30 minutes old | nothing: wait for CI |
+| `reviewing` | a `review` handoff newer than the stage, `blocking` and `unanswered` are `0`, and `checks` is `pending` or `none` for 30 minutes or more | block ("CI has not reported for 30 minutes"); `resume: reviewing` |
+| `reviewing` | a `review` handoff newer than the stage with `blocking` above `0` and `round` `2` or more, or with `unanswered` above `0` and `round` `3` or more | block, listing the open findings; `resume: reviewing` |
+| `reviewing` | a `review` handoff newer than the stage with `blocking` above `0` and `round` `1`; or with `blocking` `0`, `unanswered` above `0` and `round` `1` or `2`; or `checks` is `fail` | `stage.sh N in-progress`, candidate for an `address` job |
 | `reviewing` | otherwise | candidate for a `review` job |
 | `in-review` | `A.david` (only what David wrote after the watermark) has a review that requests changes, a review comment, or a comment that mentions `@kaos-agent` | `stage.sh N changes-requested` |
 | `in-review` | the PR's `checks` is `fail` | `stage.sh N in-progress`, candidate for an `address` job |
