@@ -1,2 +1,4 @@
 # The locked config panel, the legend, the axis, a STOPPED row and "Actions" at rest.
 contrast stopped-consumer.json / 1440x900
+# The config panel before the simulation starts: editable, to compare with the locked one.
+idle none / 1440x900
