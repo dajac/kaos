@@ -35,7 +35,8 @@ import java.util.Objects;
  * @param subscribedTopics the names of the topics the group subscribes to
  * @param autopilot the autopilot of the group
  * @param lag the lag of each subscribed topic, in the order of {@code subscribedTopics}; the list
- *     of a topic has one entry per partition, indexed by partition number, and a lag that is not known is {@code -1}
+ *     of a topic has one entry per partition, indexed by partition number. A partition without a committed
+ *     offset has its end offset as lag; one whose end offset is not known yet has {@code -1}
  * @param consumers the consumers of the group
  */
 public record GroupSnapshot(

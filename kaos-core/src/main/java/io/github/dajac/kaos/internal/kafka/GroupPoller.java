@@ -230,8 +230,8 @@ public final class GroupPoller {
 
     /**
      * The lag of the partitions of the topics: the end offset minus the committed offset, never
-     * negative. A partition without a committed offset or without an end offset has no entry: its
-     * lag is not known.
+     * negative. A partition without a committed offset counts from offset 0, so its lag is its end
+     * offset. A partition without an end offset has no entry: its lag is not known.
      */
     static Map<PartitionRef, Long> lag(
         List<TopicSpec> topics,
@@ -244,8 +244,9 @@ public final class GroupPoller {
                 var key = new TopicPartition(topic.name(), partition);
                 var offset = committed.get(key);
                 var end = endOffsets.get(key);
-                if (offset != null && end != null) {
-                    lag.put(new PartitionRef(topic.name(), partition), Math.max(0, end - offset.offset()));
+                if (end != null) {
+                    var value = Math.max(0, end - (offset == null ? 0 : offset.offset()));
+                    lag.put(new PartitionRef(topic.name(), partition), value);
                 }
             }
         }

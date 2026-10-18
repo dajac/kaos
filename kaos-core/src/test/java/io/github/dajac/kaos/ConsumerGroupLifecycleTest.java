@@ -104,7 +104,7 @@ class ConsumerGroupLifecycleTest {
                 "kaos-" + groupId + "-consumer-1",
                 "kaos-" + groupId + "-consumer-2"
             );
-            // The lag of every partition becomes known once the consumers have committed.
+            // The lag of every partition becomes known once the poller has its end offset.
             group.awaitSnapshot(s -> s.lag().get(topic).stream().allMatch(lag -> lag >= 0), TIMEOUT);
 
             group.consumer(1).leave();

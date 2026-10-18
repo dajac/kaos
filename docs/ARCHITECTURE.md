@@ -899,7 +899,8 @@ Status: built.
    their subscribed topics. It produces an `AdminView` per group. A
    group the coordinator does not know yet (`GroupIdNotFoundException`)
    is `AdminView.unknown()` with its lag. The lag of a partition is
-   known once the group has a committed offset for it.
+   known once its end offset is: a partition without a committed offset
+   counts from offset 0, so its lag is its end offset.
 2. `SnapshotAssembler`, a pure function, merges each group's
    `AdminView` with the group's `GroupLocalState` into a
    `GroupSnapshot`. The publisher puts the group snapshots together
@@ -930,7 +931,8 @@ fill them.
 - `AdminView` is what the coordinator and the offsets say about one
   group: `type`, `state`, `epoch`, `targetAssignmentEpoch`, the
   `members` and the `lag` per `PartitionRef` (end offset minus committed
-  offset, never negative).
+  offset, never negative, and the end offset without a committed
+  offset).
   - A member has `clientId`, `memberId`, `instanceId`, `memberEpoch`,
     `assignment` and an optional `targetAssignment`.
   - `AdminView.unknown()` stands for a group that is not reported yet.
@@ -994,8 +996,9 @@ for free):
   consumer has a failure message. It comes first because a failed runner
   no longer reacts to anything else.
 - Dense lag: one array per subscribed topic, indexed by partition. A
-  partition whose lag is not known yet has `-1`, which keeps it apart
-  from a partition that is caught up (`0`).
+  partition whose end offset is not known yet has `-1`, which keeps it
+  apart from a partition that is caught up (`0`). A partition without a
+  committed offset has its end offset.
 - Group generation: the highest generation its consumers report.
 - Effective config.
 - Consumer ids.
@@ -1282,7 +1285,9 @@ failed.
   - `autopilot{enabled,minIntervalMs,maxIntervalMs}`, the body of the
     autopilot endpoint; the intervals are the last ones given and are
     kept while it is off;
-  - `lag{topic:[…dense…]}`, where an unknown lag is `-1`;
+  - `lag{topic:[…dense…]}`, where a partition without a committed
+    offset has its end offset and an unknown lag (no end offset yet) is
+    `-1`;
   - `consumers[]`.
 - Each entry of `consumers[]` has:
   - `id`, `clientId`, `protocol`;
@@ -1409,11 +1414,13 @@ their styles.
   setting maps only when it was added. A violation that names no field
   of the panel goes to the banner.
 - `lag.ts`: the gauge rounds a lag up to a multiple of 5 and scales it
-  to 100; `-1`, an unknown lag, fills nothing.
+  to 100; `-1`, an unknown lag (the end offset is not known yet), fills
+  nothing.
 - `axis.ts`: the tick stride, 20 from 100 partitions, 10 from 40, 5
   from 15, and a quarter of the partitions below.
 - `tooltip.ts`: the tooltip is 8 px below the cell, centred on it and
-  clamped 4 px inside the viewport, and its text.
+  clamped 4 px inside the viewport, and its text, which ends with the
+  lag whenever it is known, `lag 0` included.
 - `rows.ts`: what the Rows view shows of a group snapshot. The states
   come from the core (the status of a consumer, the states of its
   partitions, with the out-of-group and mid-rebalance blanking already
@@ -1634,7 +1641,8 @@ Mixed-protocol groups are supported.
 
 **Load and lag**
 - The producer writes 1 record per partition every 500 ms.
-- Per-partition lag is the latest offset minus the committed offset.
+- Per-partition lag is the latest offset minus the committed offset; a
+  partition without a committed offset counts from offset 0.
 
 **Rows view**
 - Status: built (see [Frontend](#frontend-kaos-ui)), with the header
@@ -1666,10 +1674,8 @@ Mixed-protocol groups are supported.
   in a banner; the prototype ignored them.
 - A consumer whose runner failed shows a `FAILED` badge, with the
   failure as its title; the prototype had no such state.
-- Before the first commit of a partition, its lag is unknown (`-1`) and
-  its gauge is empty; the prototype counted a missing commit as 0, so
-  the gauge showed the whole log-end offset. Each gauge stays empty
-  until its partition's first commit; the steady-state lag is the same.
+- The tooltip of a cell shows `lag 0` too; the prototype showed the lag
+  only when it was positive.
 - A reload during a run restores the overrides of each consumer; the
   prototype restored only their number.
 - A start is validated first: out-of-range fields (topics above 20,

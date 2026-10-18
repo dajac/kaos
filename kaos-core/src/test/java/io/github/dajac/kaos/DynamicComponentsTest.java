@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -109,10 +110,9 @@ class DynamicComponentsTest {
                 "kaos-" + legacyId + "-consumer-0"
             );
 
-            // The lag of a partition is unknown (-1) until the group commits an offset for it, so
-            // both groups commit before the legacy consumers leave.
-            next.awaitSnapshot(s -> s.lag().get(topic).stream().allMatch(lag -> lag >= 0), TIMEOUT);
-            legacy.awaitSnapshot(s -> s.lag().get(topic).stream().allMatch(lag -> lag >= 0), TIMEOUT);
+            // A partition without a committed offset has a known lag too, so both groups commit an
+            // offset for every partition before the legacy consumers leave.
+            await().atMost(TIMEOUT).until(() -> committedPartitions(nextId) == 4 && committedPartitions(legacyId) == 4);
             legacy.consumer(0).leave();
             legacy.consumer(1).leave();
 
@@ -469,6 +469,13 @@ class DynamicComponentsTest {
         }
         var offsets = admin.listOffsets(request).all().get(30, TimeUnit.SECONDS);
         return offsets.values().stream().map(info -> info.offset()).toList();
+    }
+
+    /** The number of partitions the group has a committed offset for. */
+    private long committedPartitions(String groupId) throws Exception {
+        var committed = admin.listConsumerGroupOffsets(groupId).partitionsToOffsetAndMetadata()
+            .get(30, TimeUnit.SECONDS);
+        return committed.values().stream().filter(Objects::nonNull).count();
     }
 
     private Set<String> topicNames() throws Exception {
