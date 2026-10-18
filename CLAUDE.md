@@ -139,9 +139,11 @@ Issues become merged PRs through the software factory, described in
 - Every PR is developed in its own worktree,
   `.claude/worktrees/<branch>`, branched from `main` or, for a stacked
   PR, from its parent's branch. Never develop in the main checkout.
-- Claude never acts as David: no PR, comment, review, label, push or
-  commit under `dajac`. Once the bot `kaos-agent` exists (`./factory
-  setup`), every `gh` and `git` command runs with its identity, set by
-  `scripts/factory/identity.sh`.
+- The factory's jobs never act as David: no PR, comment, review,
+  label, push or commit under `dajac`. Every `gh` and `git` command of
+  a job runs with the identity of the bot `kaos-agent`, set by
+  `scripts/factory/identity.sh`, under the guard hook. An interactive
+  session is David's own: it uses his login, and he decides what it
+  posts.
 - The factory's scripts are bash; their tests run with
   `scripts/factory/test/run.sh`.

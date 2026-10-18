@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# PreToolUse hook of every Claude session in Kaos, jobs and interactive
-# sessions alike: refuses the Bash commands that only David may run, and
-# the ones that would act as David instead of the bot.
+# PreToolUse hook of the factory's jobs: refuses the Bash commands that
+# only David may run, and the ones that would act as David instead of
+# the bot. A job is a session that job.sh started, with FACTORY_TRUSTED
+# set; an interactive session is David's own, with his login, and the
+# guard lets it be.
 #
 # It reads the hook input on stdin and exits 2, with the reason on
 # stderr, to refuse a command. It is a guardrail, not a security
@@ -25,6 +27,7 @@
 set -uo pipefail
 shopt -s nocasematch
 
+[[ -n ${FACTORY_TRUSTED:-} ]] || exit 0
 input=$(cat)
 [[ $(jq -r '.tool_name // empty' <<<"$input") == Bash ]] || exit 0
 raw=$(jq -r '.tool_input.command // empty' <<<"$input")

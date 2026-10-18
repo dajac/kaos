@@ -4,7 +4,7 @@
 
 guard() {
     jq -n --arg c "$1" --arg cwd "$PWD/home" '{tool_name: "Bash", tool_input: {command: $c}, cwd: $cwd}' |
-        CLAUDE_PROJECT_DIR=$PWD/home "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/factory-guard.sh" 2>/dev/null
+        CLAUDE_PROJECT_DIR=$PWD/home FACTORY_TRUSTED=$PWD/home "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/factory-guard.sh" 2>/dev/null
 }
 
 refused() {
