@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# PreToolUse hook of every Claude session in Kaos, jobs and interactive
-# sessions alike: refuses the Bash commands that only David may run, and
-# the ones that would act as David instead of the bot.
+# PreToolUse hook of the factory's jobs: refuses the Bash commands that
+# only David may run, and the ones that would act as David instead of
+# the bot. A job is a session that job.sh started, with FACTORY_TRUSTED
+# set; an interactive session is David's own, with his login, and the
+# guard lets it be.
 #
 # It reads the hook input on stdin and exits 2, with the reason on
 # stderr, to refuse a command. It is a guardrail, not a security
@@ -26,6 +28,7 @@ set -uo pipefail
 shopt -s nocasematch
 
 input=$(cat)
+[[ -n ${FACTORY_TRUSTED:-} ]] || exit 0
 [[ $(jq -r '.tool_name // empty' <<<"$input") == Bash ]] || exit 0
 raw=$(jq -r '.tool_input.command // empty' <<<"$input")
 # The line as the guard reads it: newlines are separators; quotes and
@@ -87,8 +90,8 @@ line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*issue +close' && refuse "clos
 line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*pr +review[^;&|]*(--approve| -[a-z]*a[a-z]*( |$))' && refuse "approving a PR is David's"
 line_has '(^|[^a-z-])factory +merge' && refuse "merging a PR is David's"
 line_has '(^|[^a-z-])gh +alias' && refuse "gh aliases hide commands from the guard"
-line_has 'settings\.local\.json' && line_has '(>|tee|cp|mv|ln|install|rsync)' &&
-    refuse "a local settings file would loosen the session's permissions"
+line_has 'settings(\.local)?\.json' && line_has '(>|tee|cp|mv|ln|install|rsync|sed +-i|perl +-[a-z]*i)' &&
+    refuse "a settings file would loosen the session's permissions or hooks"
 
 # Labels through the API: the accepted label is David's whatever the
 # call; the stage labels change through stage.sh only. Reading labels is

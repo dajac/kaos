@@ -3,7 +3,7 @@
 
 guard() {
     jq -n --arg c "$1" --arg cwd "$PWD/home" '{tool_name: "Bash", tool_input: {command: $c}, cwd: $cwd}' |
-        CLAUDE_PROJECT_DIR=$PWD/home "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/factory-guard.sh" 2>/dev/null
+        CLAUDE_PROJECT_DIR=$PWD/home FACTORY_TRUSTED=$PWD/home "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/factory-guard.sh" 2>/dev/null
 }
 
 refused() {
@@ -32,6 +32,13 @@ with_bot() {
     echo "FACTORY_BOT_LOGIN='kaos-agent[bot]'" >home/.factory/bot.env
 }
 
+test_interactive_sessions_are_not_guarded() {
+    with_bot
+    jq -n --arg c 'gh pr merge 81 --squash' '{tool_name: "Bash", tool_input: {command: $c}}' |
+        CLAUDE_PROJECT_DIR=$PWD/home "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/factory-guard.sh" ||
+        fail "an interactive session was guarded"
+}
+
 test_davids_gates_are_refused() {
     without_bot
     refused 'gh pr merge 81 --squash' \
@@ -53,6 +60,8 @@ test_davids_gates_are_refused() {
         "gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"x\", event: APPROVE}) { clientMutationId } }'" \
         'echo {} > .claude/settings.local.json' \
         'cp /tmp/x .claude/settings.local.json' \
+        'echo {} > .claude/settings.json' \
+        'sed -i "" s/a/b/ .claude/settings.json' \
         "gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: \"x\"}) { thread { id } } }'"
 }
 

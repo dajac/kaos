@@ -22,7 +22,8 @@ test_job_settings_keep_the_hooks_and_deny_davids_commands() {
     assert_contains "$deny" 'Bash(gh pr merge*)'
     assert_contains "$deny" 'Bash(git push*main)'
     assert_contains "$deny" 'Bash(./factory merge*)'
-    assert_contains "$deny" 'Edit(./.claude/settings.local.json)'
+    assert_contains "$deny" 'Edit(./.claude/**)'
+    assert_contains "$deny" 'Write(./.claude/**)'
     if jq -e '.permissions.allow[] | select(. == "Bash" or . == "Bash(*)" or . == "Edit" or . == "Write" or test("^Bash\\(\\*"))' "$settings" >/dev/null; then
         fail "the jobs may run any command or edit any file"
     fi

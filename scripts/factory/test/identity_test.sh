@@ -183,13 +183,24 @@ test_pre_push_refuses_commits_not_by_the_bot() {
     git push -q local HEAD:refs/heads/bad
 }
 
-test_session_hook_sources_identity_before_every_command() {
+test_session_hook_leaves_interactive_sessions_alone() {
     git init -q project
-    export CLAUDE_ENV_FILE=$PWD/env CLAUDE_PROJECT_DIR=$PWD/project
     mkdir -p project/scripts/factory
     touch project/scripts/factory/identity.sh
+    export CLAUDE_ENV_FILE=$PWD/env CLAUDE_PROJECT_DIR=$PWD/project
     "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/session-identity.sh"
-    assert_eq "$(cat env)" "FACTORY_IDENTITY_DIR=$(pwd -P)/project/scripts/factory . $(pwd -P)/project/scripts/factory/identity.sh"
+    [[ ! -s env ]] || fail "an interactive session got the bot's identity: $(cat env)"
+}
+
+test_session_hook_fails_a_job_without_its_trusted_copy() {
+    git init -q project
+    export CLAUDE_ENV_FILE=$PWD/env CLAUDE_PROJECT_DIR=$PWD/project FACTORY_TRUSTED=$PWD/no-trusted-copy
+    mkdir -p project/scripts/factory
+    touch project/scripts/factory/identity.sh
+    if "$FACTORY_TEST_SCRIPTS/../../.claude/hooks/session-identity.sh" 2>/dev/null; then
+        fail "a job started without its trusted copy"
+    fi
+    [[ ! -s env ]] || fail "a job got the identity of its own worktree: $(cat env)"
 }
 
 test_session_hook_prefers_the_trusted_checkout() {

@@ -219,7 +219,8 @@ the tick.
     project hook could answer "allow". `--setting-sources user` would
     exclude them, but also the project's `CLAUDE.md` and skills, and
     keep David's user `CLAUDE.md`, so it is not used. Instead the deny
-    rules and the guard refuse `.claude/settings.local.json`, and
+    rules refuse any edit under `.claude/`, the guard refuses writing
+    `.claude/settings.json` or `settings.local.json`, and
     `job.sh` refuses to start a job whose worktree has one.
     A branch that changes `.claude/settings.json` is factory work,
     which goes through a spec and David's review.
@@ -279,11 +280,12 @@ and PRs show as `kaos-agent[bot]`.
   caches the token in `.factory/token` and mints a new one when fewer
   than ten minutes are left. `gh` and `git` call it on every use, so a
   job that outlives one token gets the next.
-- **`dajac` is David's only.** Nothing the factory or any Claude
-  session does appears under `dajac`: no PR, comment, review, label,
-  push or commit. This holds for jobs and for interactive Claude Code
-  sessions in the repository alike, so Claude can never fall back to
-  David's credentials:
+- **`dajac` is David's only.** Nothing the factory does appears under
+  `dajac`: no PR, comment, review, label, push or commit. A job can
+  never fall back to David's credentials. An interactive Claude Code
+  session is David's own: it keeps his login and is not guarded, so
+  what Claude posts there at his request counts as his, and the
+  factory reads it as such. In a job:
   - All of it is set by `scripts/factory/identity.sh`, sourced into
     the shell. It changes nothing until the bot is installed.
   - `GH_TOKEN` is the bot's installation token, exported before every
@@ -309,12 +311,14 @@ and PRs show as `kaos-agent[bot]`.
     (`kaos-agent[bot] <<app-user-id>+kaos-agent[bot]@users.noreply.github.com>`),
     through `GIT_AUTHOR_*` and `GIT_COMMITTER_*`, so the local
     `user.name` (David) is never used.
-  - Every Claude session in the repository gets this environment from
-    the `SessionStart` hook of the committed `.claude/settings.json`
-    (`.claude/hooks/session-identity.sh`), which writes a line sourcing
-    the main checkout's `identity.sh` to `CLAUDE_ENV_FILE`: Claude Code
-    runs it before every Bash command. Jobs and ticks get it the same
-    way, from the `SessionStart` hook of `factory-job.json`.
+  - Jobs and ticks get this environment from the `SessionStart` hook
+    (`.claude/hooks/session-identity.sh`, registered in
+    `factory-job.json` and in the committed `.claude/settings.json`),
+    which writes a line sourcing the trusted checkout's `identity.sh`
+    to `CLAUDE_ENV_FILE`: Claude Code runs it before every Bash
+    command. The hook acts only in a session that `job.sh` started,
+    with `FACTORY_TRUSTED` set, which a job cannot unset for its
+    hooks; it leaves an interactive session alone.
   - The guard hook (`.claude/hooks/factory-guard.sh`, see
     "Guardrails") refuses the commands that would undo it: setting
     `GH_TOKEN`, `GIT_CONFIG_*`, `GIT_AUTHOR_*` or `PATH`, `unset` or
@@ -893,9 +897,11 @@ a stacked PR are planned.
 ## Guardrails
 
 A `PreToolUse` hook, `.claude/hooks/factory-guard.sh`, refuses these
-commands. It is registered in the committed `.claude/settings.json`,
-for every session, and again in `.claude/factory-job.json`, which jobs
-load from the trusted checkout. It checks each simple command of the line on its own, so
+commands in the factory's jobs. It is registered in the committed
+`.claude/settings.json` and again in `.claude/factory-job.json`, which
+jobs load from the trusted checkout, and acts only when
+`FACTORY_TRUSTED` is set: an interactive session is David's and is not
+guarded. It checks each simple command of the line on its own, so
 that `git push origin x && git checkout main` is not mistaken for a
 push to `main`. The refused commands are:
 
@@ -979,7 +985,7 @@ scripts/factory/bin/                  the gh wrapper, the git credential helper,
 scripts/factory/git-hooks/pre-push    refuses commits not by the bot
 scripts/factory/labels.sh             the labels and their migration
 scripts/factory/test/                 the tests of the scripts (test/run.sh)
-.claude/settings.json                 the SessionStart and guard hooks, for every session
+.claude/settings.json                 the SessionStart and guard hooks, active in jobs only
 .claude/hooks/session-identity.sh     sources identity.sh before every command
 .claude/hooks/factory-guard.sh        the guard
 .claude/factory-job.json              settings of the jobs: allowlist, deny rules, hooks
@@ -1073,7 +1079,7 @@ Bootstrap exception: until step 1 has created `kaos-agent` and
 applies to everything, the remaining rollout steps included.
 
 1. Built. The bot: create the App, `token.sh`, `./factory setup`, the
-   identity of every session (`identity.sh`, the `SessionStart` hook)
+   identity of the jobs (`identity.sh`, the `SessionStart` hook)
    and the guard hook; the labels and their migration; issue forms;
    PR template; `docs/factory/README.md`; the `.gitignore` changes and
    the `CLAUDE.md` pointer.
