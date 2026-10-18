@@ -1520,7 +1520,8 @@ their styles.
 - `GroupHeader`: the type and state badges, then, for a consumer group,
   the epoch and target epoch; `STARTING` until the group is reported.
   A classic group shows no generation: `DescribeGroups` does not report
-  it, and the UI shows the coordinator's view only. Then the `Legend` and the `UiSettingsMenu` (⚙).
+  it, and the UI shows the coordinator's view only. Then the `Legend`
+  and the `UiSettingsMenu` (⚙).
 - `RowsGrid` renders one memoized `ConsumerRow` per consumer and sets
   `--strip-height`. The lag map of the group changes with the lag of any
   partition, so `ConsumerRow` compares it with `sameLagOf` (`rows.ts`):

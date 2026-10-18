@@ -23,8 +23,8 @@ import { AxisBand, PartitionStrip } from './PartitionStrip';
 
 // The row of a consumer: the strip is the row. The heatmap of each topic
 // fills it, the axis rail runs below, and the name with the state badge (and,
-// on hover, the member id, instance and, for a consumer group, epoch) floats on the
-// left, the "Actions ▾" menu on the right.
+// on hover, the member id, instance and, for a consumer protocol member, epoch)
+// floats on the left, the "Actions ▾" menu on the right.
 
 /** A subscribed topic and its number of partitions. */
 export interface TopicBand {
