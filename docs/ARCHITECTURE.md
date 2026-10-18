@@ -1543,7 +1543,7 @@ their styles.
   sidebar and the config panel, including the `#config-mode.locked`
   rules) and `rows.css` (the main area, the header, the legend, the
   empty state, the `#rows-grid` rules and `#pcell-tip`).
-- `config.css` and `rows.css` end with the only rules that are not the
+- `config.css` and `rows.css` end with rules that are not the
   prototype's: the inline field errors (`.field-error`,
   `.consumers-error`) and the error banner (`.config-banner`), which
   replace `alert()`, and the banners of the main area
