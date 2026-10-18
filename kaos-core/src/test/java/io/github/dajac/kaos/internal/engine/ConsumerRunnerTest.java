@@ -78,7 +78,7 @@ class ConsumerRunnerTest {
     }
 
     private ConsumerRunner runner(ConsumerSettings settings) {
-        return runner(settings, ConsumerRunner.ClassicTimeouts.DEFAULTS);
+        return runner(settings, new ConsumerRunner.ClassicTimeouts(45_000, 5_000));
     }
 
     private ConsumerRunner runner(ConsumerSettings settings, ConsumerRunner.ClassicTimeouts timeouts) {
@@ -350,8 +350,8 @@ class ConsumerRunnerTest {
     void theClientPropertiesFollowTheSettingsAndTheProtocol() {
         var settings = new ConsumerSettings(Protocol.CLASSIC, "roundrobin", true, "rack-a", 0, 1000, 7000);
 
-        var none = ConsumerRunner.ClassicTimeouts.DEFAULTS;
-        var classic = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, none, Protocol.CLASSIC);
+        var defaults = new ConsumerRunner.ClassicTimeouts(45_000, 5_000);
+        var classic = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, defaults, Protocol.CLASSIC);
 
         assertThat(classic)
             .containsEntry(ConsumerConfig.GROUP_ID_CONFIG, "g")
@@ -367,7 +367,7 @@ class ConsumerRunnerTest {
             .doesNotContainKey(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG);
 
         // The classic assignor does not exist for the consumer protocol, whose default applies.
-        var switched = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, none, Protocol.CONSUMER);
+        var switched = ConsumerRunner.clientProperties("g", "g-consumer-0", settings, defaults, Protocol.CONSUMER);
 
         assertThat(switched)
             .containsEntry(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer")
@@ -375,30 +375,17 @@ class ConsumerRunnerTest {
             .doesNotContainKey(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
 
         var dynamic = new ConsumerSettings(Protocol.CONSUMER, "range", false, "", 0, 1000, 300_000);
-        assertThat(ConsumerRunner.clientProperties("g", "c", dynamic, none, Protocol.CONSUMER))
+        assertThat(ConsumerRunner.clientProperties("g", "c", dynamic, defaults, Protocol.CONSUMER))
             .containsEntry(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "range")
             .doesNotContainKey(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG)
             .doesNotContainKey(ConsumerConfig.CLIENT_RACK_CONFIG);
         // A name both protocols list is kept across a switch.
-        assertThat(ConsumerRunner.clientProperties("g", "c", dynamic, none, Protocol.CLASSIC))
+        assertThat(ConsumerRunner.clientProperties("g", "c", dynamic, defaults, Protocol.CLASSIC))
             .containsEntry(
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "org.apache.kafka.clients.consumer.RangeAssignor"
             );
         assertThat(ConsumerRunner.assignorFor(dynamic, Protocol.CLASSIC)).isEqualTo("range");
         assertThat(ConsumerRunner.assignorFor(settings, Protocol.CONSUMER)).isEmpty();
-    }
-
-    @Test
-    void onlyAClassicClientGetsTheTimeoutsOfTheGroup() {
-        var settings = new ConsumerSettings(Protocol.CLASSIC, "", false, "", 0, 20, 300_000);
-        var timeouts = new ConsumerRunner.ClassicTimeouts(10_000, 1_000);
-
-        assertThat(ConsumerRunner.clientProperties("g", "c", settings, timeouts, Protocol.CLASSIC))
-            .containsEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10_000)
-            .containsEntry(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1_000);
-        assertThat(ConsumerRunner.clientProperties("g", "c", settings, timeouts, Protocol.CONSUMER))
-            .doesNotContainKey(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)
-            .doesNotContainKey(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 
     @Test
@@ -410,7 +397,6 @@ class ConsumerRunnerTest {
         );
 
         assertThat(ConsumerRunner.ClassicTimeouts.of(defaults))
-            .isEqualTo(ConsumerRunner.ClassicTimeouts.DEFAULTS)
             .isEqualTo(new ConsumerRunner.ClassicTimeouts(45_000, 5_000));
         assertThat(ConsumerRunner.ClassicTimeouts.of(set)).isEqualTo(new ConsumerRunner.ClassicTimeouts(10_000, 3_000));
         // A classic client gets the 5 s heartbeat of the group, not its own default of 3 s.

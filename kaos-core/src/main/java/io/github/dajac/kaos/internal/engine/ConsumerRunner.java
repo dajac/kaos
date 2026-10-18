@@ -127,12 +127,6 @@ public final class ConsumerRunner implements ConsumerHandle {
      * @param heartbeatIntervalMs the heartbeat interval of the group
      */
     public record ClassicTimeouts(int sessionTimeoutMs, int heartbeatIntervalMs) {
-        /** The defaults of {@link ConfigMetadata}. */
-        public static final ClassicTimeouts DEFAULTS = new ClassicTimeouts(
-            ConfigMetadata.SESSION_TIMEOUT_MS.intDefault(),
-            ConfigMetadata.HEARTBEAT_INTERVAL_MS.intDefault()
-        );
-
         /** The settings of a group. */
         public static ClassicTimeouts of(GroupSpec group) {
             return new ClassicTimeouts(group.sessionTimeoutMs(), group.heartbeatIntervalMs());

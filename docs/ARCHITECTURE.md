@@ -442,21 +442,12 @@ try (Simulator simulator = new Simulator("localhost:9092")
   apply and went on without; it is empty while the group does not run.
 - The session timeout and the heartbeat interval apply to both
   protocols. A consumer-protocol member takes them from the group
-  configs (`consumer.session.timeout.ms`,
-  `consumer.heartbeat.interval.ms`), and its client refuses them. A
-  classic member takes them from its client, so `ConsumerRunner` sets
-  `session.timeout.ms` and `heartbeat.interval.ms` on the client of a
-  consumer that speaks the classic protocol, defaults included: both
-  protocols get the same values, 45 s and 5 s unless the group sets
-  others. They take precedence over client properties of the simulator
-  with the same names. Kaos adds no check of its own: the client and the
-  broker validate them. The classic client refuses a heartbeat interval
-  that is not lower than the session timeout, so its creation fails. The
-  broker bounds the classic session timeout by
-  `group.min.session.timeout.ms` (6 s by default) and
-  `group.max.session.timeout.ms`, not by the consumer-protocol bounds,
-  so a timeout out of them leaves the classic consumer `FAILED` with
-  `InvalidSessionTimeoutException`.
+  configs; a classic member takes them from its client, so
+  `ConsumerRunner` sets the group's `session.timeout.ms` and
+  `heartbeat.interval.ms`, defaults included, on the client of a
+  classic consumer. They take precedence over the client properties of
+  the simulator with the same names. Kaos adds no check of its own:
+  Kafka's validation applies.
 - The consumers connect through the proxy. Their Kafka settings come
   from the effective settings of the consumer: `group.protocol`,
   `max.poll.interval.ms`, `client.rack`, `group.instance.id` (the
