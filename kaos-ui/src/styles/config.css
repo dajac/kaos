@@ -181,6 +181,7 @@
   background: transparent;
   border-style: dashed;
   border-color: var(--border);
+  color: var(--text-muted);
 }
 #config-mode.locked .field-input:focus { border-color: var(--accent); }
 #config-mode.locked .dd-chevron { visibility: hidden; }

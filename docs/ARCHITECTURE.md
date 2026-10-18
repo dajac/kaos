@@ -1550,7 +1550,7 @@ their styles.
   (`.rows-banner*`).
 - Departures for contrast (WCAG AA): `--text-muted` and `--text-dim`
   are lighter than the prototype's; the locked panel shows dashed
-  inputs instead of 45% opacity; a stopped row dims only its strip; the
+  inputs with values in `--text-muted` instead of 45% opacity; a stopped row dims only its strip; the
   axis, the hover meta and "Actions" have no opacity of their own.
 - The fonts are bundled from fontsource instead of Google Fonts.
   `--font-mono` and `--font-body` name the variable families,
@@ -1558,7 +1558,8 @@ their styles.
   families of the prototype.
 - The Bento rules, the lag gradient of the legend and the other dead
   rules are not carried over.
-- No CSS modules. The visual result is identical to the prototype.
+- No CSS modules. The visual result is the prototype's, except for the
+  departures above.
 
 **Dev loop**
 - The Vite dev server proxies `/api`, including SSE, to `localhost:8081`.
