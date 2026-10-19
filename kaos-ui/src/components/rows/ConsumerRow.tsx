@@ -23,8 +23,8 @@ import { AxisBand, PartitionStrip } from './PartitionStrip';
 
 // The row of a consumer: the strip is the row. The heatmap of each topic
 // fills it, the axis rail runs below, and the name with the state badge (and,
-// on hover, the member id, instance and epoch or generation) floats on the
-// left, the "Actions ▾" menu on the right.
+// on hover, the member id, instance and, for a consumer protocol member, epoch)
+// floats on the left, the "Actions ▾" menu on the right.
 
 /** A subscribed topic and its number of partitions. */
 export interface TopicBand {
@@ -121,11 +121,12 @@ export const ConsumerRow = memo(function ConsumerRow({ groupId, consumer, topics
             value={consumer.instanceId === '' ? DASH : consumer.instanceId}
             title={consumer.instanceId === '' ? undefined : consumer.instanceId}
           />
-          <Separator />
-          {classic ? (
-            <MetaItem kind="meta-epoch" label="generation" value={formatNumber(consumer.generation)} />
-          ) : (
-            <MetaItem kind="meta-epoch" label="epoch" value={formatNumber(consumer.memberEpoch)} />
+          {/* DescribeGroups reports no generation for a classic member. */}
+          {classic ? null : (
+            <>
+              <Separator />
+              <MetaItem kind="meta-epoch" label="epoch" value={formatNumber(consumer.memberEpoch)} />
+            </>
           )}
         </div>
       </div>

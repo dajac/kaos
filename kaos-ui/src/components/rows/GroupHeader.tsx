@@ -20,7 +20,7 @@ import { Legend } from './Legend';
 import { UiSettingsMenu } from './UiSettingsMenu';
 
 // The sticky header of the Rows view: the type and state badges of the group,
-// its epoch and target epoch (or its generation for a classic group), the
+// its epoch and target epoch (none for a classic group), the
 // legend and the ⚙ menu. Until the group is reported, it shows STARTING.
 
 interface StatusItemProps {
@@ -68,14 +68,8 @@ export function GroupHeader({ groupId }: { readonly groupId: string | undefined 
         <span id="status-state" className={`status-badge ${state.cls}`}>
           {state.text}
         </span>
-        {group.type === 'CLASSIC' ? (
-          <StatusItem
-            id="status-item-generation"
-            label="generation"
-            valueId="status-generation"
-            value={formatNumber(group.generation)}
-          />
-        ) : (
+        {/* DescribeGroups reports no generation for a classic group. */}
+        {group.type === 'CLASSIC' ? null : (
           <>
             <StatusItem id="status-item-epoch" label="epoch" valueId="status-epoch" value={formatNumber(group.epoch)} />
             <StatusItem
