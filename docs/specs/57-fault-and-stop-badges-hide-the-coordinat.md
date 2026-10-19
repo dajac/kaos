@@ -129,7 +129,7 @@ Today on the left, proposed on the right, from a throwaway prototype
 that uses the real `rows.css`. The cells are those of today: #54 and
 #55 change them, not this spec.
 
-![57-badges-and-tags](https://github.com/dajac/kaos/blob/issue-screenshots/pr-PR_NUMBER/57-badges-and-tags.png?raw=true)
+![57-badges-and-tags](https://github.com/dajac/kaos/blob/issue-screenshots/pr-109/57-badges-and-tags.png?raw=true)
 
 1. Freeze: `RECONCILING` + `frozen` (the override, since the frozen
    client never picks up p12–17; `STABLE` + `frozen` once #54 lands).
