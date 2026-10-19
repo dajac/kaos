@@ -1560,18 +1560,23 @@ their styles.
   sidebar and the config panel, including the `#config-mode.locked`
   rules) and `rows.css` (the main area, the header, the legend, the
   empty state, the `#rows-grid` rules and `#pcell-tip`).
-- `config.css` and `rows.css` end with the only rules that are not the
+- `config.css` and `rows.css` end with rules that are not the
   prototype's: the inline field errors (`.field-error`,
   `.consumers-error`) and the error banner (`.config-banner`), which
   replace `alert()`, and the banners of the main area
   (`.rows-banner*`).
+- Departures for contrast (WCAG AA): `--text-muted` and `--text-dim`
+  are lighter than the prototype's; the locked panel shows dashed
+  inputs with values in `--text-muted` instead of 45% opacity; a stopped row dims only its strip; the
+  axis, the hover meta and "Actions" have no opacity of their own.
 - The fonts are bundled from fontsource instead of Google Fonts.
   `--font-mono` and `--font-body` name the variable families,
   `'JetBrains Mono Variable'` and `'DM Sans Variable'`, first, then the
   families of the prototype.
 - The Bento rules, the lag gradient of the legend and the other dead
   rules are not carried over.
-- No CSS modules. The visual result is identical to the prototype.
+- No CSS modules. The visual result is the prototype's, except for the
+  departures above.
 
 **Dev loop**
 - The Vite dev server proxies `/api`, including SSE, to `localhost:8081`.

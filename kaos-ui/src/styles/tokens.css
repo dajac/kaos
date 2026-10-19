@@ -25,8 +25,9 @@
   --border: #2a3342;
   --border-subtle: #1e2736;
   --text: #d4dce8;
-  --text-muted: #6b7a8d;
-  --text-dim: #4a5568;
+  /* Lighter than the prototype's, to reach the 4.5:1 of WCAG AA. */
+  --text-muted: #929fb0;
+  --text-dim: #7d8a9c;
   --accent: #4c9aff;
   --accent-dim: rgba(76,154,255,0.12);
   --green: #34d399;
