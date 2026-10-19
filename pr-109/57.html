@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../kaos-ui/src/styles/tokens.css">
+<link rel="stylesheet" href="../../kaos-ui/src/styles/base.css">
+<link rel="stylesheet" href="../../kaos-ui/src/styles/rows.css">
+<style>
+  html, body { overflow: auto; }
+  .page { padding: 18px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  .col-title { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 1px; padding: 0 14px 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .case { font-family: var(--font-mono); font-size: 11px; color: var(--text); padding: 12px 14px 0; grid-column: 1 / span 2; }
+  .case span { color: var(--text-muted); }
+  .rows-grid { padding: 6px 14px; }
+  .note { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); padding: 0 14px 4px; }
+
+  /* Proposed: the tags of the local facts, after the name. */
+  #rows-grid .row-tag {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.4px;
+    pointer-events: auto;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    background: rgba(10,14,20,0.55);
+  }
+  #rows-grid .row-tag.failed       { color: var(--red); }
+  #rows-grid .row-tag.unsubscribed { color: var(--text-muted); }
+  #rows-grid .row-tag.frozen       { color: var(--fault); }
+  #rows-grid .row-tag.isolated     { color: var(--orange); }
+</style>
+</head>
+<body>
+<div class="page" id="page"></div>
+<script>
+  const P = 24;
+  function strip(assigned, pending) {
+    let html = '<div class="row-strip"><div class="row-strip-topic"><div class="row-strip-cells">';
+    for (let p = 0; p < P; p++) {
+      let cls = 'empty';
+      if (assigned.includes(p)) cls = 'assigned';
+      if (pending.includes(p)) cls = 'pending';
+      const fill = cls === 'empty' ? 0 : 20 + ((p * 37) % 60);
+      html += `<div class="pcell ${cls}" style="--fill:${fill}%"></div>`;
+    }
+    html += '</div></div></div><div class="row-axis"><div class="row-axis-topic"><span class="row-axis-topic-label">orders</span></div></div>';
+    return html;
+  }
+  const range = (a, b) => Array.from({ length: b - a }, (_, i) => a + i);
+  function row({ cls, badge, badgeText, name = 'consumer-0', tags = [], assigned = [], pending = [], hover = false }) {
+    const tagHtml = tags.map(([c, t, title]) => `<span class="row-tag ${c}"${title ? ` title="${title}"` : ''}>${t}</span>`).join('');
+    const meta = hover ? '<div class="row-header-meta" style="opacity:1;max-width:600px"><span class="row-header-meta-item"><span class="row-header-meta-label">protocol</span><span class="row-header-meta-value">consumer</span></span><span class="row-header-meta-sep">&middot;</span><span class="row-header-meta-item"><span class="row-header-meta-label">epoch</span><span class="row-header-meta-value">7</span></span></div>' : '';
+    const hov = hover ? ' style="max-width:85%;background:linear-gradient(to right, rgba(10,14,20,0.80) 55%, rgba(10,14,20,0))"' : '';
+    return `<div class="row-panel ${cls}">${strip(assigned, pending)}<div class="row-overlay-left"${hov}>` +
+      (badge ? `<span class="row-state-badge ${badge}">${badgeText}</span>` : '') +
+      `<span class="member-name">${name}</span>${tagHtml}${meta}</div>` +
+      '<div class="row-overlay-right"><div class="dd"><button class="dd-btn row-actions-btn"><span class="dd-value">Actions</span><span class="dd-chevron">▼</span></button></div></div></div>';
+  }
+  const cases = [
+    ['1. Freeze consumer', 'coordinator: STABLE, gave it p12–17 it does not hold: the override says RECONCILING (STABLE once #54 lands)',
+      row({ cls: 'frozen', badge: 'frozen', badgeText: 'FROZEN', assigned: range(0, 6), pending: range(12, 18) }),
+      row({ cls: 'reconciling', badge: 'reconciling', badgeText: 'RECONCILING', tags: [['frozen', 'frozen']], assigned: range(0, 6), pending: range(12, 18) })],
+    ['2. Partition network, 10 s later', 'coordinator: STABLE, 12 partitions',
+      row({ cls: 'partitioned', badge: 'partitioned', badgeText: 'PARTITIONED', assigned: range(0, 12) }),
+      row({ cls: 'stable', badge: 'stable', badgeText: 'STABLE', tags: [['isolated', 'network isolated']], assigned: range(0, 12) })],
+    ['3. Partition network, after the session timeout', 'coordinator: not listed (JOINING), epoch -1',
+      row({ cls: 'partitioned', badge: 'partitioned', badgeText: 'PARTITIONED' }),
+      row({ cls: 'joining', badge: 'joining', badgeText: 'JOINING', tags: [['isolated', 'network isolated']] })],
+    ['4. Stop consumer, static member', 'coordinator: still lists it (STOPPING) with p12–23; the cells stay blank until #55 lands',
+      row({ cls: 'stopped', badge: 'stopped', badgeText: 'STOPPED' }),
+      row({ cls: 'stopping', badge: 'stopping', badgeText: 'STOPPING', tags: [['unsubscribed', 'unsubscribed']] })],
+    ['5. Stop consumer, once the coordinator dropped it', 'coordinator: not listed, not subscribed (STOPPED)',
+      row({ cls: 'stopped', badge: 'stopped', badgeText: 'STOPPED' }),
+      row({ cls: 'stopped', badge: 'stopped', badgeText: 'STOPPED', tags: [['unsubscribed', 'unsubscribed']] })],
+    ['6. Failed consumer (title: the failure message)', 'coordinator: not listed, subscribed (JOINING)',
+      row({ cls: 'stopping', badge: 'stopping', badgeText: 'FAILED' }),
+      row({ cls: 'joining', badge: 'joining', badgeText: 'JOINING', tags: [['failed', 'failed', 'FencedInstanceIdException: fenced']] })],
+    ['7. Two faults, during a rebalance, on hover', 'coordinator: RECONCILING',
+      row({ cls: 'frozen', badge: 'frozen', badgeText: 'FROZEN', assigned: range(0, 8), hover: true }),
+      row({ cls: 'reconciling', badge: 'reconciling', badgeText: 'RECONCILING', tags: [['frozen', 'frozen'], ['isolated', 'connection reset']], assigned: range(0, 8), hover: true })],
+    ['8. Classic member, frozen', 'coordinator: STABLE (classic group)',
+      row({ cls: 'frozen', badge: 'frozen', badgeText: 'FROZEN', assigned: range(0, 12) }),
+      row({ cls: 'stable', badge: 'stable', badgeText: 'STABLE', tags: [['frozen', 'frozen']], assigned: range(0, 12) })],
+  ];
+  let html = '<div class="col-title">Today</div><div class="col-title">Proposed</div>';
+  for (const [title, state, before, after] of cases) {
+    html += `<div class="case">${title} <span>— ${state}</span></div>`;
+    html += `<div class="rows-grid" id="rows-grid">${before}</div><div class="rows-grid" id="rows-grid">${after}</div>`;
+  }
+  document.getElementById('page').innerHTML = html;
+</script>
+</body>
+</html>
