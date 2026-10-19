@@ -25,6 +25,78 @@ refuses `session.timeout.ms` and `heartbeat.interval.ms` with
 `group.protocol=consumer`, and the coordinator takes them from the
 group configs. So the override exists only for a classic consumer.
 
+## Config rules
+
+The configs of a group and of its consumers follow two rules:
+
+1. Every config can be set at the group level, as the default of its
+   consumers.
+2. Every config that a consumer's protocol supports can be overridden
+   on that consumer. A config the protocol does not support is not
+   offered by the UI and is refused by the API.
+
+"Supported by the protocol" means what Kafka lets one member set for
+itself: a client config of that protocol, or a Kaos behavior of the
+consumer loop. A group config of the coordinator, which no member sets,
+has no consumer level. The Kafka client enforces the same split:
+`ConsumerConfig` throws a `ConfigException` for `session.timeout.ms`,
+`heartbeat.interval.ms` or `partition.assignment.strategy` with
+`group.protocol=consumer`, and for `group.remote.assignor` with
+`group.protocol=classic`.
+
+### Audit of the existing configs
+
+| Config | Group level | Consumer protocol | Classic protocol | Consumer level on `main` |
+|---|---|---|---|---|
+| `protocol` | `consumerDefaults` | `group.protocol` | `group.protocol` | override |
+| `assignor` | `consumerDefaults` | `group.remote.assignor` | `partition.assignment.strategy` | override; the names are checked against the effective protocol |
+| `staticMember` | `consumerDefaults` | `group.instance.id` | `group.instance.id` | override |
+| `rackId` | `consumerDefaults` | `client.rack` | `client.rack` | override |
+| `pollTimeoutMs` | `consumerDefaults` | Kaos loop | Kaos loop | override |
+| `pollDelayMs` | `consumerDefaults` | Kaos loop | Kaos loop | override |
+| `maxPollIntervalMs` | `consumerDefaults` | `max.poll.interval.ms` | `max.poll.interval.ms` | override |
+| `sessionTimeoutMs` | `GroupSpec` | group config `consumer.session.timeout.ms`, no client config | `session.timeout.ms` | **none** |
+| `heartbeatIntervalMs` | `GroupSpec` | group config `consumer.heartbeat.interval.ms`, no client config | `heartbeat.interval.ms` | **none** |
+| `assignmentIntervalMs` | `GroupSpec` | group config `consumer.assignment.interval.ms`, no client config | not used | none, as rule 2 wants |
+
+What the audit finds:
+- Rule 1 holds for every config: the consumer settings are in
+  `consumerDefaults`, the others in `GroupSpec`.
+- Rule 2 holds for the seven consumer settings: both protocols support
+  them, so the panel offers all seven on every consumer, and the
+  assignor, whose names depend on the protocol, is already refused by
+  `ConfigValidator` when it does not fit the effective protocol.
+- Rule 2 is broken by `sessionTimeoutMs` and `heartbeatIntervalMs` on
+  a classic consumer: the classic protocol supports them per member,
+  and Kaos has no override. This spec closes that gap, and only that
+  one.
+- Outside the configs, the subscription (`subscribedTopics`) is per
+  member in Kafka too, in both protocols, and Kaos has it only on the
+  group. It is the group's shape rather than a setting, so this spec
+  leaves it alone; see the open questions.
+
+### How this spec follows them
+
+- Rule 1: the group's `sessionTimeoutMs` and `heartbeatIntervalMs` stay
+  the defaults of every consumer, as since #94.
+- Rule 2: a classic consumer can override both; a consumer-protocol
+  consumer cannot. The panel does not offer them on a consumer-protocol
+  consumer and removes them when the consumer protocol is selected
+  (UX), and the API refuses them with a `Violation` (Validation).
+
+The API refusal is Kaos's own check, not the client's, although the
+client would refuse the two configs too:
+- a `Violation` is a 400 before anything starts, with the path of the
+  override, which the panel maps to its field; the client's
+  `ConfigException` would come only when the consumer is built, after
+  the spec is accepted, as a failed consumer;
+- Kaos never sets the two configs on a consumer-protocol client anyway
+  (the runtime `switchProtocol` included), so the client would never
+  see them to refuse them.
+
+The rules go into `docs/ARCHITECTURE.md` (Architecture), so that the
+next config follows them too.
+
 ## Proposal
 
 ### Model
@@ -224,6 +296,10 @@ those of the existing number overrides, so there is no prototype.
 ## Architecture
 
 `docs/ARCHITECTURE.md`:
+- "Configuration metadata": the two config rules above, before the
+  table, and a column of the table saying where each field can be set
+  (group, consumer, and for which protocol), so that a new field
+  states its levels.
 - "Consumer groups" (the session timeout paragraph and the Kafka
   settings list): a classic consumer's own override wins over the
   group's value; the consumer-protocol client gets neither.
@@ -295,7 +371,9 @@ spec that has them (it would drop them on a reload). It is built on
    are.
 2. **An override on a consumer-protocol consumer: violation or
    ignored?** Recommendation: a violation on the override, computed
-   from the effective protocol, inherited included.
+   from the effective protocol, inherited included. Kaos's own check
+   rather than the client's `ConfigException`, for the reasons in
+   "Config rules".
 3. **A `consumerDefaults` lambda that sets them**: throw
    `IllegalArgumentException` (recommended), or copy them to the
    group's settings when the group does not set its own?
@@ -305,3 +383,11 @@ spec that has them (it would drop them on a reload). It is built on
    `ConsumerOverrides` changes. Recommendation: no `!` and no
    compatibility constructor, since nothing is released; say so if you
    want the `!` (or a 7-argument constructor kept).
+6. **The config rules**: do the two rules of "Config rules" read as
+   you meant them, in particular "supported" as "settable by one
+   member in Kafka", which keeps `assignmentIntervalMs` group-only?
+   Recommendation: yes, written into `docs/ARCHITECTURE.md` by this PR.
+7. **Per-consumer subscription**: Kafka lets each member subscribe to
+   its own topics, in both protocols. Recommendation: out of this spec;
+   a separate issue if you want it, since it changes the group's shape
+   (and the Rows view) rather than a setting.
