@@ -1,0 +1,54 @@
+{
+  "description": "One topic of 6 partitions fed at 2 records/s per partition, and a classic group of 3 consumers, each holding the partitions the coordinator assigns to it.",
+  "steps": [
+    {
+      "request": "POST /api/v1/simulator",
+      "body": {
+        "topics": [
+          {
+            "name": "orders",
+            "partitions": 6
+          }
+        ],
+        "producers": [
+          {
+            "topics": [
+              "orders"
+            ],
+            "ratePerPartition": 2
+          }
+        ],
+        "groups": [
+          {
+            "id": "legacy-app",
+            "subscribedTopics": [
+              "orders"
+            ],
+            "consumerDefaults": {
+              "protocol": "classic"
+            },
+            "consumers": [
+              {},
+              {},
+              {}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator",
+        "jq": ".phase == \"RUNNING\"",
+        "timeout_s": 90
+      }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator/snapshot",
+        "jq": "[.groups[] | select(.id == \"legacy-app\") | .consumers[]] as $c | ($c | length) == 3 and all($c[]; (.raw.assignment | length) > 0 and (.raw.assignment | sort) == (.raw.localAssignment | sort)) and ([$c[].raw.assignment[]] | length) == 6",
+        "timeout_s": 90
+      }
+    }
+  ]
+}
