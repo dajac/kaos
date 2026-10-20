@@ -137,7 +137,8 @@ class ConsumerGroupLifecycleTest {
                 .consumers(2)
             );
             simulator.start();
-            // A classic client holds its partitions once its join completed, which can lag the coordinator.
+            // A classic client holds its partitions once its SyncGroup completed and its listener ran, which can
+            // lag the coordinator.
             var classic = group.awaitSnapshot(
                 allAssigned(4, "consumer-0", "consumer-1").and(
                     s -> s.consumers().stream().allMatch(c -> c.raw().localAssignment().equals(c.raw().assignment()))

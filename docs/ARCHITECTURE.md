@@ -892,8 +892,7 @@ built with the runner, and so is the removal.
   leave request, a protocol switch, a fault injected or cleared, a
   member joining, leaving or rejoining (the member id changes), the
   member epoch, the status, a failure and the partitions assigned and
-  revoked. The autopilot logs its own flips
-  there too.
+  revoked. The autopilot logs its own flips there too.
 - `EventLog` is a snapshot listener registered first by the engine, so
   every line is the difference between two published snapshots and the
   log has the same source as the listeners. `EventLog.diff` is a pure
@@ -952,9 +951,10 @@ fill them.
   consumer.
 - `ConsumerLocalState` is the copy of a runner's state: `id`,
   `clientId`, the current `protocol`, the effective `assignor`,
-  `subscribed`, `faults`, `failure` and `localAssignment`. `failure` is the message of the unrecoverable error
-  of the runner. It is never empty for a failed runner and empty
-  otherwise, so it is the single source of "failed".
+  `subscribed`, `faults`, `failure` and `localAssignment`. `failure` is
+  the message of the unrecoverable error of the runner. It is never
+  empty for a failed runner and empty otherwise, so it is the single
+  source of "failed".
 - A consumer and a member are matched by `client.id`. A member without a
   simulated consumer behind it is ignored.
 

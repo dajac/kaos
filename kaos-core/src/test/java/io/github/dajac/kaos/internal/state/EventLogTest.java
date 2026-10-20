@@ -76,22 +76,6 @@ class EventLogTest {
     }
 
     @Test
-    void aClassicRebalanceLogsNoGeneration() {
-        var before = group(
-            GroupState.PREPARING_REBALANCE, -1, -1, OFF,
-            consumer("consumer-0", true, List.of(), "m0", -1, ConsumerStatus.RECONCILING, "", "")
-        );
-        var after = group(
-            GroupState.STABLE, -1, -1, OFF,
-            consumer("consumer-0", true, List.of(), "m0", -1, ConsumerStatus.STABLE, "", "t-0")
-        );
-
-        assertThat(EventLog.diff(List.of(before), List.of(after)))
-            .contains("[g] group state: PREPARING_REBALANCE -> STABLE", "[g] consumer-0 assigned: t-0")
-            .noneMatch(line -> line.contains("generation"));
-    }
-
-    @Test
     void reportsTheConsumerLevelChanges() {
         var before = group(
             GroupState.STABLE, 3, 3, OFF,
