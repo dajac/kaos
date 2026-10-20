@@ -1,0 +1,2 @@
+# The after shot: consumer-0 of a classic group shows its chips.
+overrides classic-overrides.json / 1440x900

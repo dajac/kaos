@@ -1,0 +1,2 @@
+# The before shot: main refuses the overrides, so it shows the same group without them.
+overrides classic-group.json / 1440x900

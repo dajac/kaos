@@ -1,0 +1,34 @@
+{
+  "description": "A classic group of 3 consumers on one topic of 6 partitions; consumer-0 overrides the session timeout (10 s) and the heartbeat interval (2 s) of the group (45 s and 5 s).",
+  "steps": [
+    {
+      "request": "POST /api/v1/simulator",
+      "body": {
+        "topics": [{ "name": "orders", "partitions": 6 }],
+        "producers": [{ "topics": ["orders"], "ratePerPartition": 2 }],
+        "groups": [
+          {
+            "id": "orders-app",
+            "subscribedTopics": ["orders"],
+            "consumerDefaults": { "protocol": "classic", "assignor": "range" },
+            "consumers": [
+              { "overrides": { "sessionTimeoutMs": 10000, "heartbeatIntervalMs": 2000 } },
+              {},
+              {}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "wait": { "path": "/api/v1/simulator", "jq": ".phase == \"RUNNING\"", "timeout_s": 90 }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator/snapshot",
+        "jq": "[.groups[] | select(.id == \"orders-app\") | .consumers[]] as $c | ($c | length) == 3 and ([$c[].raw.assignment[]] | length) == 6",
+        "timeout_s": 90
+      }
+    }
+  ]
+}

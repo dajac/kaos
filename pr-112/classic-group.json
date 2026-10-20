@@ -1,0 +1,30 @@
+{
+  "description": "The classic group of classic-overrides.json without the overrides, which main refuses: a classic group of 3 consumers on one topic of 6 partitions.",
+  "steps": [
+    {
+      "request": "POST /api/v1/simulator",
+      "body": {
+        "topics": [{ "name": "orders", "partitions": 6 }],
+        "producers": [{ "topics": ["orders"], "ratePerPartition": 2 }],
+        "groups": [
+          {
+            "id": "orders-app",
+            "subscribedTopics": ["orders"],
+            "consumerDefaults": { "protocol": "classic", "assignor": "range" },
+            "consumers": [{}, {}, {}]
+          }
+        ]
+      }
+    },
+    {
+      "wait": { "path": "/api/v1/simulator", "jq": ".phase == \"RUNNING\"", "timeout_s": 90 }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator/snapshot",
+        "jq": "[.groups[] | select(.id == \"orders-app\") | .consumers[]] as $c | ($c | length) == 3 and ([$c[].raw.assignment[]] | length) == 6",
+        "timeout_s": 90
+      }
+    }
+  ]
+}
