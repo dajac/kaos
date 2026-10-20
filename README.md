@@ -5,12 +5,11 @@ new consumer rebalance protocol of
 [KIP-848](https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol).
 It runs real Kafka consumers and producers against your cluster, lets you
 disturb them (stop a consumer, freeze it, cut it off the network, upgrade
-or downgrade its protocol), and
-shows live how the group rebalances, which partitions each consumer owns,
-receives or gives up, and how the lag evolves. Groups can mix consumers
-of the `consumer` and `classic` protocols, with any assignor. Kaos ships
-as one runnable jar with a web UI, a versioned HTTP API and an
-embeddable Java library.
+or downgrade its protocol), and shows live how the group rebalances,
+which partitions each consumer owns, receives or gives up, and how the
+lag evolves. Groups can mix consumers of the `consumer` and `classic`
+protocols, with any assignor. Kaos ships as one runnable jar with a web
+UI, a versioned HTTP API and an embeddable Java library.
 
 ![The Rows view: one row per consumer, one strip per topic, the lag of each partition as a gauge](docs/images/rows-view.png)
 

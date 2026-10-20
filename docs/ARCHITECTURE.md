@@ -434,10 +434,10 @@ try (Simulator simulator = new Simulator("localhost:9092")
   simulator knows it: its type and state `UNKNOWN`, its consumers
   `JOINING` and its lag unknown.
 - Starting a group sets its group configs and starts its consumers.
-  The group configs it sets are the explicit
-  settings of the spec, those whose value differs from the default in
-  `ConfigMetadata`; a setting with that default is left to the broker,
-  even when the user set it to that value. `warnings()` lists what the start could not
+  The group configs it sets are the explicit settings of the spec,
+  those whose value differs from the default in `ConfigMetadata`; a
+  setting with that default is left to the broker, even when the user
+  set it to that value. `warnings()` lists what the start could not
   apply and went on without; it is empty while the group does not run.
 - The session timeout and the heartbeat interval apply to both
   protocols. A consumer-protocol member takes them from the group
@@ -766,11 +766,10 @@ built with the runner, and so is the removal.
   - `NetworkFaults`;
   - the `AtomicReference` holding the latest snapshot.
 - Component collections are immutable lists. They are swapped atomically
-  under the structure lock (copy-on-write). Readers such as the poller and
-  the publisher never see a list being mutated. The
-  engine keeps the phase, `lastError` and the lists in one immutable
-  state record behind a single volatile reference, so a reader sees them
-  change together.
+  under the structure lock (copy-on-write). Readers such as the poller
+  and the publisher never see a list being mutated. The engine keeps the
+  phase, `lastError` and the lists in one immutable state record behind
+  a single volatile reference, so a reader sees them change together.
 
 **Locks**
 - A single `structureLock` per `Simulator` serializes `start`, `stop`,
@@ -812,9 +811,10 @@ built with the runner, and so is the removal.
   consumer to stop, and each consumer, added later or not, has its
   sub-stack there: stopping the consumer, then removing its static
   member if the coordinator still lists it. Undoing a group asks every
-  consumer loop to end, then closes the stack of the consumers, which waits for each and
-  removes its static member, deletes the group, and reverts the group
-  configs. Removing a consumer closes its sub-stack only.
+  consumer loop to end, then closes the stack of the consumers, which
+  waits for each and removes its static member, deletes the group, and
+  reverts the group configs. Removing a consumer closes its sub-stack
+  only.
 - A failed `start`, a failed `add…`, `remove()` and `close()` all unwind
   through the same code. An `add…` while running starts the component on
   a new sub-stack (`Resources.start`) before the component joins the

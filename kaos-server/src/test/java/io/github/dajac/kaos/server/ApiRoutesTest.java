@@ -156,6 +156,7 @@ class ApiRoutesTest {
         assertThat(problem.get("title").asText()).isEqualTo("Not Found");
         assertThat(problem.get("detail").asText()).contains("/api/v1/unknown");
     }
+
     @ParameterizedTest(name = "{0} {1}")
     @MethodSource("dynamicRoutes")
     void dynamicRoutesAre409WhenIdle(String method, String path, String body) {
