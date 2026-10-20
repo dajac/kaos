@@ -50,10 +50,10 @@ class SnapshotAssemblerTest {
             TOPICS,
             AUTOPILOT_ON,
             List.of(
-                consumer(0, Protocol.CONSUMER, "uniform", true, Set.of(), 4, "t-0"),
-                consumer(1, Protocol.CONSUMER, "uniform", true, Set.of(), -1, "t-1|t-2"),
-                consumer(2, Protocol.CONSUMER, "uniform", true, Set.of(Fault.freeze()), -1, ""),
-                consumer(3, Protocol.CONSUMER, "uniform", false, Set.of(), -1, "a-0")
+                consumer(0, Protocol.CONSUMER, "uniform", true, Set.of(), "t-0"),
+                consumer(1, Protocol.CONSUMER, "uniform", true, Set.of(), "t-1|t-2"),
+                consumer(2, Protocol.CONSUMER, "uniform", true, Set.of(Fault.freeze()), ""),
+                consumer(3, Protocol.CONSUMER, "uniform", false, Set.of(), "a-0")
             )
         );
         var view = new AdminView(
@@ -77,7 +77,6 @@ class SnapshotAssemblerTest {
         assertThat(snapshot.state()).isEqualTo(GroupState.RECONCILING);
         assertThat(snapshot.epoch()).isEqualTo(12);
         assertThat(snapshot.targetAssignmentEpoch()).isEqualTo(11);
-        assertThat(snapshot.generation()).isEqualTo(4);
         assertThat(snapshot.subscribedTopics()).containsExactly("t", "a");
         assertThat(snapshot.autopilot()).isEqualTo(AUTOPILOT_ON);
         assertThat(snapshot.consumers()).extracting(ConsumerSnapshot::id)
@@ -93,7 +92,6 @@ class SnapshotAssemblerTest {
             "member-0",
             "instance-0",
             11,
-            4,
             ConsumerStatus.STABLE,
             ConsumerStatus.STABLE,
             "",
@@ -141,7 +139,7 @@ class SnapshotAssemblerTest {
             "g",
             TOPICS,
             AUTOPILOT_OFF,
-            List.of(consumer(0, Protocol.CONSUMER, "uniform", true, Set.of(), -1, "t-0"))
+            List.of(consumer(0, Protocol.CONSUMER, "uniform", true, Set.of(), "t-0"))
         );
         var view = new AdminView(
             GroupType.CONSUMER,
@@ -182,8 +180,8 @@ class SnapshotAssemblerTest {
             TOPICS,
             AUTOPILOT_OFF,
             List.of(
-                consumer(0, Protocol.CLASSIC, "range", true, Set.of(), 3, ""),
-                consumer(1, Protocol.CLASSIC, "cooperative-sticky", true, Set.of(), 2, "t-1")
+                consumer(0, Protocol.CLASSIC, "range", true, Set.of(), ""),
+                consumer(1, Protocol.CLASSIC, "cooperative-sticky", true, Set.of(), "t-1")
             )
         );
         var view = new AdminView(
@@ -199,11 +197,9 @@ class SnapshotAssemblerTest {
 
         assertThat(snapshot.type()).isEqualTo(GroupType.CLASSIC);
         assertThat(snapshot.epoch()).isEqualTo(-1);
-        assertThat(snapshot.generation()).isEqualTo(3);
 
         var eager = snapshot.consumers().get(0);
         assertThat(eager.status()).isEqualTo(expectedStatus);
-        assertThat(eager.generation()).isEqualTo(3);
         assertThat(eager.raw().targetAssignment()).isEqualTo(eager.raw().assignment()).isEqualTo(sortedRefs("t-0"));
         if (eagerBlanked) {
             assertThat(eager.partitions()).isEmpty();
@@ -223,8 +219,8 @@ class SnapshotAssemblerTest {
             TOPICS,
             AUTOPILOT_OFF,
             List.of(
-                consumer(0, Protocol.CONSUMER, "", true, Set.of(), -1, ""),
-                consumer(1, Protocol.CONSUMER, "", false, Set.of(), -1, "")
+                consumer(0, Protocol.CONSUMER, "", true, Set.of(), ""),
+                consumer(1, Protocol.CONSUMER, "", false, Set.of(), "")
             )
         );
 
@@ -234,7 +230,6 @@ class SnapshotAssemblerTest {
         assertThat(snapshot.state()).isEqualTo(GroupState.UNKNOWN);
         assertThat(snapshot.epoch()).isEqualTo(-1);
         assertThat(snapshot.targetAssignmentEpoch()).isEqualTo(-1);
-        assertThat(snapshot.generation()).isEqualTo(-1);
         assertThat(snapshot.consumers()).extracting(ConsumerSnapshot::status)
             .containsExactly(ConsumerStatus.JOINING, ConsumerStatus.STOPPED);
         assertThat(snapshot.consumers()).extracting(ConsumerSnapshot::coordinatorState)
@@ -249,7 +244,6 @@ class SnapshotAssemblerTest {
         );
 
         assertThat(snapshot.consumers()).isEmpty();
-        assertThat(snapshot.generation()).isEqualTo(-1);
         assertThat(snapshot.lag()).isEmpty();
     }
 
@@ -308,7 +302,6 @@ class SnapshotAssemblerTest {
             subscribed,
             Set.of(),
             failure,
-            -1,
             Set.of()
         );
         var group = new GroupLocalState("g", TOPICS, AUTOPILOT_OFF, List.of(consumer));
@@ -331,7 +324,6 @@ class SnapshotAssemblerTest {
                 "",
                 true,
                 Set.of(Fault.connectionReset(), Fault.freeze(), Fault.networkIsolation()),
-                -1,
                 ""
             ))
         );
@@ -348,7 +340,6 @@ class SnapshotAssemblerTest {
         String assignor,
         boolean subscribed,
         Set<Fault> faults,
-        int generation,
         String localAssignment
     ) {
         return new ConsumerLocalState(
@@ -359,7 +350,6 @@ class SnapshotAssemblerTest {
             subscribed,
             faults,
             "",
-            generation,
             refs(localAssignment)
         );
     }

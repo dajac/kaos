@@ -61,7 +61,7 @@ class EventLogTest {
     void reportsTheGroupLevelChanges() {
         var before = group(GroupState.STABLE, 3, 3, OFF);
         var after = new GroupSnapshot(
-            "g", GroupType.CLASSIC, GroupState.PREPARING_REBALANCE, 4, 4, 7, List.of("t"),
+            "g", GroupType.CLASSIC, GroupState.PREPARING_REBALANCE, 4, 4, List.of("t"),
             new AutopilotSnapshot(true, 100, 200), Map.of("t", List.of(0L)), List.of()
         );
 
@@ -70,10 +70,25 @@ class EventLogTest {
             "[g] group state: STABLE -> PREPARING_REBALANCE",
             "[g] group epoch: 3 -> 4",
             "[g] target assignment epoch: 3 -> 4",
-            "[g] generation: -1 -> 7",
             "[g] autopilot on, every 100..200 ms"
         );
         assertThat(EventLog.diff(List.of(after), List.of(before))).contains("[g] autopilot off");
+    }
+
+    @Test
+    void aClassicRebalanceLogsNoGeneration() {
+        var before = group(
+            GroupState.PREPARING_REBALANCE, -1, -1, OFF,
+            consumer("consumer-0", true, List.of(), "m0", -1, ConsumerStatus.RECONCILING, "", "")
+        );
+        var after = group(
+            GroupState.STABLE, -1, -1, OFF,
+            consumer("consumer-0", true, List.of(), "m0", -1, ConsumerStatus.STABLE, "", "t-0")
+        );
+
+        assertThat(EventLog.diff(List.of(before), List.of(after)))
+            .contains("[g] group state: PREPARING_REBALANCE -> STABLE", "[g] consumer-0 assigned: t-0")
+            .noneMatch(line -> line.contains("generation"));
     }
 
     @Test
@@ -110,7 +125,7 @@ class EventLogTest {
             consumer("consumer-1", true, List.of(), "m1", 3, ConsumerStatus.STABLE, "", "")
         );
         var failed = new ConsumerSnapshot(
-            "consumer-0", "g-consumer-0", Protocol.CLASSIC, true, List.of(), "m0b", "", 3, 5,
+            "consumer-0", "g-consumer-0", Protocol.CLASSIC, true, List.of(), "m0b", "", 3,
             ConsumerStatus.STABLE, ConsumerStatus.FAILED, "FencedInstanceIdException: fenced", List.of(),
             new ConsumerSnapshot.Raw(List.of(), List.of(), List.of())
         );
@@ -121,7 +136,6 @@ class EventLogTest {
             "[g] consumer-0 switched protocol: CONSUMER -> CLASSIC",
             "[g] consumer-0 fault network-isolation cleared",
             "[g] consumer-0 rejoined the group (member m0 -> m0b)",
-            "[g] consumer-0 generation: -1 -> 5",
             "[g] consumer-0 status: ISOLATED -> FAILED",
             "[g] consumer-0 failed: FencedInstanceIdException: fenced",
             "[g] consumer-2 added",
@@ -147,7 +161,7 @@ class EventLogTest {
         ConsumerSnapshot... consumers
     ) {
         return new GroupSnapshot(
-            "g", GroupType.CONSUMER, state, epoch, targetEpoch, -1, List.of("t"), autopilot, Map.of("t", List.of(0L)),
+            "g", GroupType.CONSUMER, state, epoch, targetEpoch, List.of("t"), autopilot, Map.of("t", List.of(0L)),
             List.of(consumers)
         );
     }
@@ -166,7 +180,7 @@ class EventLogTest {
             ? List.<PartitionRef>of()
             : Arrays.stream(assignment.split("\\|")).map(EventLogTest::ref).toList();
         return new ConsumerSnapshot(
-            id, "g-" + id, Protocol.CONSUMER, subscribed, faults, memberId, "", memberEpoch, -1, status, status,
+            id, "g-" + id, Protocol.CONSUMER, subscribed, faults, memberId, "", memberEpoch, status, status,
             failure, List.of(), new ConsumerSnapshot.Raw(assigned, assigned, assigned)
         );
     }

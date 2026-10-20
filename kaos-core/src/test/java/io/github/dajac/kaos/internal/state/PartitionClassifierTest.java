@@ -175,7 +175,6 @@ class PartitionClassifierTest {
             subscribed,
             Set.of(),
             "",
-            -1,
             localAssignment
         );
     }

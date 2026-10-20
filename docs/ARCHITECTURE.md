@@ -887,12 +887,12 @@ built with the runner, and so is the removal.
 
 **Change log**
 - The logger `kaos.events` reports what changes in the groups: a group
-  or a consumer added or removed, the group type, state, epoch, target
-  assignment epoch and generation, the autopilot, and, per consumer, a
-  join or leave request, a protocol switch, a fault injected or
-  cleared, a member joining, leaving or rejoining (the member id
-  changes), the member epoch, the generation, the status, a failure and
-  the partitions assigned and revoked. The autopilot logs its own flips
+  or a consumer added or removed, the group type, state, epoch and
+  target assignment epoch, the autopilot, and, per consumer, a join or
+  leave request, a protocol switch, a fault injected or cleared, a
+  member joining, leaving or rejoining (the member id changes), the
+  member epoch, the status, a failure and the partitions assigned and
+  revoked. The autopilot logs its own flips
   there too.
 - `EventLog` is a snapshot listener registered first by the engine, so
   every line is the difference between two published snapshots and the
@@ -952,8 +952,7 @@ fill them.
   consumer.
 - `ConsumerLocalState` is the copy of a runner's state: `id`,
   `clientId`, the current `protocol`, the effective `assignor`,
-  `subscribed`, `faults`, `failure`, `generation` and
-  `localAssignment`. `failure` is the message of the unrecoverable error
+  `subscribed`, `faults`, `failure` and `localAssignment`. `failure` is the message of the unrecoverable error
   of the runner. It is never empty for a failed runner and empty
   otherwise, so it is the single source of "failed".
 - A consumer and a member are matched by `client.id`. A member without a
@@ -1009,7 +1008,6 @@ for free):
   partition whose end offset is not known yet has `-1`, which keeps it
   apart from a partition that is caught up (`0`). A partition without a
   committed offset has its end offset.
-- Group generation: the highest generation its consumers report.
 - Effective config.
 - Consumer ids.
 
@@ -1280,7 +1278,7 @@ GET    /api/v1/openapi.yaml             this API as an OpenAPI 3.1 document (app
 **Snapshot shape**
 
 Status: built. Unknown values follow two conventions: a
-number (epoch, generation, lag) is `-1`, and a string (member id,
+number (epoch, lag) is `-1`, and a string (member id,
 instance id) is empty. `failure` is empty when the consumer has not
 failed.
 
@@ -1289,8 +1287,7 @@ failed.
 - `topics[{name,partitions}]` (`TopicSpec`).
 - `producers[{id,topics,state,ratePerPartition}]`.
 - `groups[]`, each with:
-  - `id`, `type`, `state`, `epoch`, `targetAssignmentEpoch`,
-    `generation`;
+  - `id`, `type`, `state`, `epoch`, `targetAssignmentEpoch`;
   - `subscribedTopics`;
   - `autopilot{enabled,minIntervalMs,maxIntervalMs}`, the body of the
     autopilot endpoint; the intervals are the last ones given and are
@@ -1302,7 +1299,7 @@ failed.
 - Each entry of `consumers[]` has:
   - `id`, `clientId`, `protocol`;
   - `subscribed`, `faults[]`;
-  - `memberId`, `instanceId`, `memberEpoch`, `generation`;
+  - `memberId`, `instanceId`, `memberEpoch`;
   - `coordinatorState`, `status` (both a `ConsumerStatus`), `failure`;
   - `partitions[{topic,partition,state}]`, sorted, without the `EMPTY`
     ones;

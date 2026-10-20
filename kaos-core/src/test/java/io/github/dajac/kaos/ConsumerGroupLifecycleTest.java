@@ -137,9 +137,11 @@ class ConsumerGroupLifecycleTest {
                 .consumers(2)
             );
             simulator.start();
-            // The generation is reported by the consumer after its poll returns, so it can lag the assignment.
+            // A classic client holds its partitions once its join completed, which can lag the coordinator.
             var classic = group.awaitSnapshot(
-                allAssigned(4, "consumer-0", "consumer-1").and(s -> s.generation() > 0),
+                allAssigned(4, "consumer-0", "consumer-1").and(
+                    s -> s.consumers().stream().allMatch(c -> c.raw().localAssignment().equals(c.raw().assignment()))
+                ),
                 TIMEOUT
             );
             assertThat(classic.type()).isEqualTo(GroupType.CLASSIC);

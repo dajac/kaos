@@ -21,8 +21,8 @@ import java.util.Objects;
 /**
  * The live view of one consumer. It is immutable.
  *
- * <p>The member id and the instance id are empty, and the member epoch and the generation are
- * {@code -1}, when they are not known. The failure is empty when the consumer has not failed.
+ * <p>The member id and the instance id are empty, and the member epoch is {@code -1}, when they are
+ * not known. The failure is empty when the consumer has not failed.
  *
  * @param id the consumer id, unique within the group
  * @param clientId the {@code client.id} of the consumer, unique across groups
@@ -33,7 +33,6 @@ import java.util.Objects;
  * @param memberId the member id given by the coordinator
  * @param instanceId the {@code group.instance.id} of a static member
  * @param memberEpoch the member epoch reported by the coordinator
- * @param generation the generation the consumer itself reports
  * @param coordinatorState the membership of the consumer as the coordinator sees it: one of
  *     {@code STOPPED}, {@code STOPPING}, {@code JOINING}, {@code RECONCILING} and {@code STABLE}
  * @param status the single state to show for the consumer, which also accounts for the faults and
@@ -52,7 +51,6 @@ public record ConsumerSnapshot(
     String memberId,
     String instanceId,
     int memberEpoch,
-    int generation,
     ConsumerStatus coordinatorState,
     ConsumerStatus status,
     String failure,

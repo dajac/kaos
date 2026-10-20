@@ -36,7 +36,6 @@ import io.github.dajac.kaos.Protocol;
  * @param faults the active faults
  * @param failure the message of the unrecoverable error the runner stopped on, never empty for a
  *     failed runner; empty while the runner has not failed
- * @param generation the generation the consumer reports; {@code -1} when it has none
  * @param localAssignment the partitions the consumer holds, as its rebalance listener saw them
  */
 public record ConsumerLocalState(
@@ -47,7 +46,6 @@ public record ConsumerLocalState(
     boolean subscribed,
     Set<Fault> faults,
     String failure,
-    int generation,
     Set<PartitionRef> localAssignment
 ) {
     public ConsumerLocalState {

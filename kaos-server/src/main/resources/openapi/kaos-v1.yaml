@@ -1002,7 +1002,7 @@ components:
     GroupSnapshot:
       type: object
       additionalProperties: false
-      required: [id, type, state, epoch, targetAssignmentEpoch, generation, subscribedTopics, autopilot, lag, consumers]
+      required: [id, type, state, epoch, targetAssignmentEpoch, subscribedTopics, autopilot, lag, consumers]
       properties:
         id:
           type: string
@@ -1019,11 +1019,6 @@ components:
           type: integer
           format: int32
           minimum: -1
-        generation:
-          type: integer
-          format: int32
-          minimum: -1
-          description: The highest generation reported by the consumers; the classic counterpart of the epoch.
         subscribedTopics:
           type: array
           items:
@@ -1074,7 +1069,6 @@ components:
         - memberId
         - instanceId
         - memberEpoch
-        - generation
         - coordinatorState
         - status
         - failure
@@ -1104,10 +1098,6 @@ components:
           type: string
           description: The `group.instance.id` of a static member.
         memberEpoch:
-          type: integer
-          format: int32
-          minimum: -1
-        generation:
           type: integer
           format: int32
           minimum: -1

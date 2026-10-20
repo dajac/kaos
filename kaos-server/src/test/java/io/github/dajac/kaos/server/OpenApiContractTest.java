@@ -444,7 +444,7 @@ class OpenApiContractTest {
         var orders1 = new PartitionRef("orders", 1);
         var orders2 = new PartitionRef("orders", 2);
         var reconciling = new ConsumerSnapshot(
-            "consumer-1", "app-consumer-1", Protocol.CONSUMER, true, List.of(), "m-1", "", 12, -1,
+            "consumer-1", "app-consumer-1", Protocol.CONSUMER, true, List.of(), "m-1", "", 12,
             ConsumerStatus.RECONCILING, ConsumerStatus.RECONCILING, "",
             List.of(
                 new PartitionView("orders", 0, PartitionState.ASSIGNED),
@@ -454,12 +454,12 @@ class OpenApiContractTest {
         );
         var frozen = new ConsumerSnapshot(
             "consumer-2", "app-consumer-2", Protocol.CONSUMER, true, List.of(Fault.freeze(), Fault.networkIsolation()),
-            "m-2", "app-consumer-2", 11, -1, ConsumerStatus.JOINING, ConsumerStatus.FROZEN, "",
+            "m-2", "app-consumer-2", 11, ConsumerStatus.JOINING, ConsumerStatus.FROZEN, "",
             List.of(new PartitionView("orders", 2, PartitionState.PENDING)),
             new ConsumerSnapshot.Raw(List.of(), List.of(orders1, orders2), List.of())
         );
         var consumerGroup = new GroupSnapshot(
-            "app", GroupType.CONSUMER, GroupState.RECONCILING, 12, 12, -1, List.of("orders"),
+            "app", GroupType.CONSUMER, GroupState.RECONCILING, 12, 12, List.of("orders"),
             new AutopilotSnapshot(true, 1_000, 5_000), Map.of("orders", List.of(0L, 17L, -1L)),
             List.of(reconciling, frozen)
         );
@@ -467,17 +467,17 @@ class OpenApiContractTest {
         var audit0 = new PartitionRef("audit", 0);
         var stable = new ConsumerSnapshot(
             "consumer-1", "legacy-consumer-1", Protocol.CLASSIC, true, List.of(Fault.connectionReset()), "m-3", "", -1,
-            4, ConsumerStatus.STABLE, ConsumerStatus.STABLE, "",
+            ConsumerStatus.STABLE, ConsumerStatus.STABLE, "",
             List.of(new PartitionView("audit", 0, PartitionState.ASSIGNED)),
             new ConsumerSnapshot.Raw(List.of(audit0), List.of(audit0), List.of(audit0))
         );
         var failed = new ConsumerSnapshot(
-            "consumer-2", "legacy-consumer-2", Protocol.CLASSIC, false, List.of(), "", "", -1, -1,
+            "consumer-2", "legacy-consumer-2", Protocol.CLASSIC, false, List.of(), "", "", -1,
             ConsumerStatus.STOPPED, ConsumerStatus.FAILED, "The assignor bogus is not supported", List.of(),
             new ConsumerSnapshot.Raw(List.of(), List.of(), List.of())
         );
         var classicGroup = new GroupSnapshot(
-            "legacy", GroupType.CLASSIC, GroupState.STABLE, -1, -1, 4, List.of("audit"),
+            "legacy", GroupType.CLASSIC, GroupState.STABLE, -1, -1, List.of("audit"),
             new AutopilotSnapshot(false, 2_000, 10_000), Map.of("audit", List.of(3L)), List.of(stable, failed)
         );
 

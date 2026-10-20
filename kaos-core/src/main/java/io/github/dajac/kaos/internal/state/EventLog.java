@@ -92,9 +92,6 @@ public final class EventLog implements SnapshotListener {
                 "target assignment epoch: " + before.targetAssignmentEpoch() + " -> " + after.targetAssignmentEpoch()
             );
         }
-        if (before.generation() != after.generation()) {
-            lines.add("generation: " + before.generation() + " -> " + after.generation());
-        }
         if (!before.autopilot().equals(after.autopilot())) {
             var autopilot = after.autopilot();
             lines.add(
@@ -145,9 +142,6 @@ public final class EventLog implements SnapshotListener {
         }
         if (before.memberEpoch() != after.memberEpoch() && after.memberEpoch() >= 0) {
             lines.add("member epoch: " + before.memberEpoch() + " -> " + after.memberEpoch());
-        }
-        if (before.generation() != after.generation() && after.generation() >= 0) {
-            lines.add("generation: " + before.generation() + " -> " + after.generation());
         }
         if (before.status() != after.status()) {
             lines.add("status: " + before.status() + " -> " + after.status());

@@ -37,7 +37,7 @@ describe('shareStructure', () => {
     if (nextGroup === undefined) {
       throw new Error('no group');
     }
-    nextGroup.consumers[1] = consumer('consumer-1', { protocol: 'classic', memberEpoch: -1, generation: 5 });
+    nextGroup.consumers[1] = consumer('consumer-1', { protocol: 'classic', memberEpoch: -1, status: 'RECONCILING' });
     nextGroup.lag['orders-1'] = [0, 13, -1, 3];
 
     const shared = shareStructure(prev, next);
