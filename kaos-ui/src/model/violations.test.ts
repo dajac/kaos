@@ -23,6 +23,7 @@ import {
   newGroup,
   removeConsumer,
   setNumTopics,
+  setOverride,
   updateGroup,
   type ConfigForm,
 } from './configModel';
@@ -69,6 +70,20 @@ describe('violationField', () => {
     expect(violationField(form, 'groups[0].consumers[0].overrides.maxPollIntervalMs')).toBeUndefined();
     expect(violationField(form, 'groups[0].consumers[9].overrides.maxPollIntervalMs')).toBeUndefined();
     expect(violationField(form, 'groups[0].consumers[1].id')).toBeUndefined();
+  });
+
+  it('maps the classic-only overrides of a consumer', () => {
+    let form = config();
+    form = updateGroup(form, 0, (g) => setOverride(META, g, 2, 'protocol', 'classic'));
+    form = updateGroup(form, 0, (g) => addOverride(META, g, 2, 'sessionTimeoutMs'));
+    form = updateGroup(form, 0, (g) => addOverride(META, g, 2, 'heartbeatIntervalMs'));
+
+    expect(violationField(form, 'groups[0].consumers[1].overrides.sessionTimeoutMs')).toBe(
+      overrideFieldKey(0, 2, 'sessionTimeoutMs'),
+    );
+    expect(violationField(form, 'groups[0].consumers[1].overrides.heartbeatIntervalMs')).toBe(
+      overrideFieldKey(0, 2, 'heartbeatIntervalMs'),
+    );
   });
 
   it('maps the topics to the group that names them', () => {

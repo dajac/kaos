@@ -18,6 +18,7 @@ package io.github.dajac.kaos.server;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -90,6 +91,7 @@ class JsonTest {
             .subscribe("orders")
             .consumerDefaults(c -> c.protocol(Protocol.CLASSIC).assignor("range"))
             .consumer(c -> c.rackId("a").protocol(Protocol.CONSUMER).assignor("uniform"))
+            .consumer(c -> c.sessionTimeout(Duration.ofSeconds(10)).heartbeatInterval(Duration.ofSeconds(2)))
             .consumers(2));
         var spec = new SimulatorSpec(
             List.of(new TopicSpec("orders", 3)),
@@ -106,7 +108,12 @@ class JsonTest {
         var overrides = tree.get("groups").get(0).get("consumers").get(0).get("overrides");
         assertThat(overrides.fieldNames()).toIterable().containsExactlyInAnyOrder("protocol", "assignor", "rackId");
         assertThat(overrides.get("protocol").asText()).isEqualTo("consumer");
-        assertThat(tree.get("groups").get(0).get("consumers").get(1).get("overrides").isEmpty()).isTrue();
+        var classic = tree.get("groups").get(0).get("consumers").get(1).get("overrides");
+        assertThat(classic.get("sessionTimeoutMs").asInt()).isEqualTo(10_000);
+        assertThat(classic.get("heartbeatIntervalMs").asInt()).isEqualTo(2_000);
+        assertThat(tree.get("groups").get(0).get("consumers").get(1).get("effective").has("sessionTimeoutMs"))
+            .isFalse();
+        assertThat(tree.get("groups").get(0).get("consumers").get(2).get("overrides").isEmpty()).isTrue();
     }
 
     @Test

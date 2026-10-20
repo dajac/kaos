@@ -202,6 +202,14 @@ public final class ConfigValidator {
             value -> checkRange(overridesPath, ConfigMetadata.MAX_POLL_INTERVAL_MS, value, violations)
         );
         var effective = consumer.effective();
+        overrides.sessionTimeoutMs().ifPresent(
+            value -> checkClassicOnly(overridesPath, ConfigMetadata.SESSION_TIMEOUT_MS, "session timeout", value,
+                effective.protocol(), violations)
+        );
+        overrides.heartbeatIntervalMs().ifPresent(
+            value -> checkClassicOnly(overridesPath, ConfigMetadata.HEARTBEAT_INTERVAL_MS, "heartbeat interval",
+                value, effective.protocol(), violations)
+        );
         var assignorFits = Assignors.isValid(effective.protocol(), effective.assignor());
         if (overrides.assignor().isPresent()) {
             checkAssignor(overridesPath, effective.protocol(), effective.assignor(), violations);
@@ -211,6 +219,28 @@ public final class ConfigValidator {
                 "the inherited assignor '" + effective.assignor() + "' is unknown for the "
                     + effective.protocol().id() + " protocol; override the assignor with one of: "
                     + knownAssignors(effective.protocol())
+            ));
+        }
+    }
+
+    /**
+     * Checks an override of a group field that only a classic member sets for itself: the range of
+     * the group field, and the effective protocol, whether the consumer overrides it or inherits it.
+     */
+    private static void checkClassicOnly(
+        String path,
+        Field field,
+        String name,
+        int value,
+        Protocol protocol,
+        List<Violation> violations
+    ) {
+        checkRange(path, field, value, violations);
+        if (protocol != Protocol.CLASSIC) {
+            violations.add(new Violation(
+                join(path, field.key()),
+                "applies only to the classic protocol; the " + protocol.id() + " protocol takes the " + name
+                    + " of the group"
             ));
         }
     }

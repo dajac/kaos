@@ -259,6 +259,27 @@ describe('overrides', () => {
     await user.click(toggleOf(0));
     expect(chipsOf(0)).toEqual(['protocol=classic', 'assignor=range']);
   });
+
+  it('offers the session timeout and the heartbeat interval on a classic consumer only', async () => {
+    await user.click(toggleOf(0));
+    const section = sectionOf(0);
+    const addMenu = () => within(section).getByRole('button', { name: '+ Add override▾' }).parentElement!;
+    expect(within(addMenu()).queryByRole('button', { name: /^Session Timeout/ })).toBeNull();
+
+    await pick(section, '+ Add override', 'Protocolconsumer');
+    await pick(section, 'consumer', 'classic');
+    await pick(section, '+ Add override', 'Session Timeout (ms)45000');
+    await pick(section, '+ Add override', 'Heartbeat Interval (ms)5000');
+    await user.click(toggleOf(0));
+    expect(chipsOf(0)).toEqual(['protocol=classic', 'assignor=range', 'sessionTimeout=45000', 'heartbeat=5000']);
+
+    await user.click(toggleOf(0));
+    await pick(section, 'classic', 'consumer');
+    expect(within(section).queryByText('Session Timeout (ms)')).toBeNull();
+    expect(within(addMenu()).queryByRole('button', { name: /^Heartbeat Interval/ })).toBeNull();
+    await user.click(toggleOf(0));
+    expect(chipsOf(0)).toEqual(['protocol=consumer', 'assignor=range']);
+  });
 });
 
 describe('group assignor', () => {

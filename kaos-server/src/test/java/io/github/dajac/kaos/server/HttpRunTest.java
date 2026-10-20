@@ -131,8 +131,16 @@ class HttpRunTest {
         awaitSnapshot(s -> consumer(s, groupId, "consumer-1").get("protocol").asText().equals("classic"));
 
         // Add a consumer, then remove it.
-        assertThat(api.post(group + "/consumers", "{\"overrides\": {\"rackId\": \"b\"}}").statusCode()).isEqualTo(202);
+        var added = api.post(group + "/consumers",
+            """
+                {"overrides": {"rackId": "b", "protocol": "classic", "sessionTimeoutMs": 10000, "heartbeatIntervalMs": 2000}}
+                """);
+        assertThat(added.statusCode()).as(added.body()).isEqualTo(202);
         awaitSnapshot(s -> consumers(s, groupId).size() == 3);
+        var addedOverrides = api.getJson("/api/v1/simulator").get("spec").get("groups").get(0).get("consumers").get(2)
+            .get("overrides");
+        assertThat(addedOverrides.get("sessionTimeoutMs").asInt()).isEqualTo(10_000);
+        assertThat(addedOverrides.get("heartbeatIntervalMs").asInt()).isEqualTo(2_000);
         assertThat(api.delete(group + "/consumers/consumer-2").statusCode()).isEqualTo(202);
         awaitSnapshot(s -> consumers(s, groupId).size() == 2);
 

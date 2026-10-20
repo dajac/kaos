@@ -101,6 +101,20 @@ class ApiRoutesTest {
     }
 
     @Test
+    void aClassicOnlyOverrideOnAConsumerOfTheConsumerProtocolIs400() {
+        var response = api.post("/api/v1/simulator", """
+            {"topics": [{"name": "orders", "partitions": 1}],
+             "groups": [{"id": "app", "subscribedTopics": ["orders"],
+                         "consumers": [{"overrides": {"protocol": "consumer", "sessionTimeoutMs": 10000}}]}]}
+            """);
+
+        var problem = assertProblem(response, 400);
+        assertThat(problem.get("violations")).singleElement().satisfies(
+            v -> assertThat(v.get("field").asText()).isEqualTo("groups[0].consumers[0].overrides.sessionTimeoutMs")
+        );
+    }
+
+    @Test
     void anUnknownPropertyIs400WithItsPath() {
         var response = api.post("/api/v1/simulator", """
             {"groups": [{"id": "app", "subscribedTopics": ["orders"], "consumers": [{"overrides": {"bogus": 1}}]}]}

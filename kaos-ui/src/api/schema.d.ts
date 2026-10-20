@@ -486,7 +486,9 @@ export interface components {
         /**
          * @description The settings a consumer sets itself; the others are inherited from
          *     the `consumerDefaults` of its group. A setting that is not
-         *     overridden is left out.
+         *     overridden is left out. `sessionTimeoutMs` and `heartbeatIntervalMs`
+         *     inherit from the group instead, and only a classic consumer can set
+         *     them.
          */
         ConsumerOverrides: {
             protocol?: components["schemas"]["Protocol"];
@@ -499,6 +501,16 @@ export interface components {
             pollDelayMs?: number;
             /** Format: int32 */
             maxPollIntervalMs?: number;
+            /**
+             * Format: int32
+             * @description Classic protocol only; overrides the group's session timeout.
+             */
+            sessionTimeoutMs?: number;
+            /**
+             * Format: int32
+             * @description Classic protocol only; overrides the group's heartbeat interval.
+             */
+            heartbeatIntervalMs?: number;
         };
         /**
          * @description The whole simulation. A missing list is empty. It has the shape of

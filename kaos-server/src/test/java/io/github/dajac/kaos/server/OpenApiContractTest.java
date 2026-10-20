@@ -495,8 +495,8 @@ class OpenApiContractTest {
     /** A spec with consumer defaults, a consumer that overrides every setting and consumers that inherit. */
     static SimulatorSpec spec() {
         var overrides = new ConsumerOverrides(
-            Optional.of(Protocol.CONSUMER), Optional.of("uniform"), Optional.of(true), Optional.of("a"),
-            OptionalInt.of(10), OptionalInt.of(20), OptionalInt.of(30_000)
+            Optional.of(Protocol.CLASSIC), Optional.of("sticky"), Optional.of(true), Optional.of("a"),
+            OptionalInt.of(10), OptionalInt.of(20), OptionalInt.of(30_000), OptionalInt.of(6_000), OptionalInt.of(2_000)
         );
         var group = new GroupSpec(
             "app", List.of("orders"), 10_000, 1_000, 0,

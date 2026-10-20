@@ -443,18 +443,20 @@ try (Simulator simulator = new Simulator("localhost:9092")
 - The session timeout and the heartbeat interval apply to both
   protocols. A consumer-protocol member takes them from the group
   configs; a classic member takes them from its client, so
-  `ConsumerRunner` sets the group's `session.timeout.ms` and
-  `heartbeat.interval.ms`, defaults included, on the client of a
-  classic consumer. They take precedence over the client properties of
-  the simulator with the same names. Kaos adds no check of its own:
-  Kafka's validation applies.
+  `ConsumerRunner` sets `session.timeout.ms` and
+  `heartbeat.interval.ms` on the client of a classic consumer: the
+  consumer's own override of each, or else the group's value, defaults
+  included. The client of a consumer-protocol consumer gets neither,
+  after a `switchProtocol` too. They take precedence over the client
+  properties of the simulator with the same names. Kaos adds no check
+  of its own: Kafka's validation applies.
 - The consumers connect through the proxy. Their Kafka settings come
   from the effective settings of the consumer: `group.protocol`,
   `max.poll.interval.ms`, `client.rack`, `group.instance.id` (the
   client id, for a static member), `partition.assignment.strategy` for
   a classic assignor and `group.remote.assignor` for a consumer-protocol
-  one, `session.timeout.ms` and `heartbeat.interval.ms` from the group
-  for a classic consumer, `auto.offset.reset=latest`, and a `request.timeout.ms` of 10 s
+  one, `session.timeout.ms` and `heartbeat.interval.ms` for a classic
+  consumer (above), `auto.offset.reset=latest`, and a `request.timeout.ms` of 10 s
   unless the client properties of the simulator set it, so that a
   consumer whose request the proxy dropped recovers within that time.
   The poll timeout and the poll delay drive the loop itself.
@@ -512,6 +514,10 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `consumerDefaults`. Values that `consumerDefaults` does not set keep
   the defaults of `ConfigMetadata`. The order of the calls in a group
   lambda does not matter.
+- `ConsumerOptions.sessionTimeout` and `heartbeatInterval` set the
+  classic-only overrides of a consumer. A `consumerDefaults` lambda that
+  calls either throws `IllegalArgumentException`: the group sets them
+  with `GroupOptions.sessionTimeout` and `heartbeatInterval`.
 
 **Records as the data view**
 - `simulator.describe()` returns an immutable `SimulatorSpec` with
@@ -526,8 +532,13 @@ try (Simulator simulator = new Simulator("localhost:9092")
 - There are no nullable values in the specs:
   - `ConsumerSettings` is a complete set of consumer settings. It is the
     type of `consumerDefaults` and of `effective`.
-  - `ConsumerOverrides` has the same components as `Optional`s. An empty
-    one inherits.
+  - `ConsumerOverrides` has the same components as `Optional`s, plus
+    the classic-only `sessionTimeoutMs` and `heartbeatIntervalMs`. An
+    empty one inherits: the classic-only ones from the `GroupSpec`
+    fields of the same names, the others from `consumerDefaults`.
+    These two are not in `ConsumerSettings`, so neither
+    `consumerDefaults` nor `effective` has them: the group would
+    otherwise hold two values of the same setting.
   - The empty assignor name selects the default of the protocol (of the
     broker for `CONSUMER`, of the client for `CLASSIC`). The empty rack
     id means no rack.
@@ -570,25 +581,41 @@ try (Simulator simulator = new Simulator("localhost:9092")
   - the fault ids.
 - The defaults of the specs and of the options, and every range check
   of `ConfigValidator`, read this table.
+- The configs of a group and of its consumers follow two rules:
+  1. Every config can be set at the group level, as the default of its
+     consumers.
+  2. Every config that a consumer's protocol supports can be overridden
+     on that consumer. A config the protocol does not support is not
+     offered by the UI and is refused by the API.
+
+  "Supported by the protocol" means what Kafka lets one member set for
+  itself: a client config of that protocol, or a Kaos behavior of the
+  consumer loop. A group config of the coordinator, which no member
+  sets, has no consumer level. A new config states its levels in the
+  last column of the table.
 - The defaults and ranges are the prototype's:
 
-| Scope | Key | Default | Range |
-|---|---|---|---|
-| simulator | `numTopics` | 1 | 1–20 |
-| topic | `partitions` | 36 | 1–100 |
-| producer | `ratePerPartition` | 2.0 (1 record every 500 ms) | > 0 |
-| group | `id` | `kaos` | the name rule |
-| group | `numConsumers` | 3 | |
-| group | `sessionTimeoutMs` | 45000 | 1000–300000 |
-| group | `heartbeatIntervalMs` | 5000 | 500–60000 |
-| group | `assignmentIntervalMs` | 1000 | 0–60000 |
-| consumer | `protocol` | `CONSUMER` | |
-| consumer | `assignor` | empty | see below |
-| consumer | `staticMember` | false | |
-| consumer | `rackId` | empty | |
-| consumer | `pollTimeoutMs` | 0 | 0–60000 |
-| consumer | `pollDelayMs` | 1000 | 0–120000 |
-| consumer | `maxPollIntervalMs` | 300000 | 1000–600000 |
+| Scope | Key | Default | Range | Set on |
+|---|---|---|---|---|
+| simulator | `numTopics` | 1 | 1–20 | |
+| topic | `partitions` | 36 | 1–100 | |
+| producer | `ratePerPartition` | 2.0 (1 record every 500 ms) | > 0 | |
+| group | `id` | `kaos` | the name rule | |
+| group | `numConsumers` | 3 | | |
+| group | `sessionTimeoutMs` | 45000 | 1000–300000 | group; classic consumer |
+| group | `heartbeatIntervalMs` | 5000 | 500–60000 | group; classic consumer |
+| group | `assignmentIntervalMs` | 1000 | 0–60000 | group |
+| consumer | `protocol` | `CONSUMER` | | group; consumer |
+| consumer | `assignor` | empty | see below | group; consumer |
+| consumer | `staticMember` | false | | group; consumer |
+| consumer | `rackId` | empty | | group; consumer |
+| consumer | `pollTimeoutMs` | 0 | 0–60000 | group; consumer |
+| consumer | `pollDelayMs` | 1000 | 0–120000 | group; consumer |
+| consumer | `maxPollIntervalMs` | 300000 | 1000–600000 | group; consumer |
+
+- The classic consumer overrides of `sessionTimeoutMs` and
+  `heartbeatIntervalMs` have the label, the default and the range of
+  the group field; `ConfigMetadata` has no consumer field for them.
 
 - `numTopics` and `numConsumers` are counts that a frontend uses for its
   form; they are not spec fields. The validation enforces only the
@@ -627,6 +654,12 @@ try (Simulator simulator = new Simulator("localhost:9092")
     that was sent: `consumerDefaults.assignor`, `overrides.assignor`,
     or `overrides.protocol` when the consumer overrides only its
     protocol and the inherited assignor does not fit it;
+  - the `sessionTimeoutMs` and `heartbeatIntervalMs` overrides of a
+    consumer: the range of the group field, and an effective protocol
+    of `classic`, whether the consumer overrides it or inherits it. The
+    violation is on the override, which is what must go. Kaos does not
+    check that the heartbeat interval is under the session timeout;
+    Kafka does;
   - a producer or a group names at least one topic, only topics of the
     spec, and none twice;
   - topic names, group ids, and assigned producer ids are unique; so are
@@ -1388,6 +1421,12 @@ their styles.
   module derives the chips of a collapsed consumer, the "inherits all
   settings" note and the entries of the "+ Add …" menus, and has
   duplicate-last and remove.
+- The session timeout and the heartbeat interval are classic-only
+  overrides: the menu offers them to a consumer whose effective
+  protocol is classic, with the group's values as hints. When the
+  effective protocol becomes consumer (the consumer's protocol
+  override, its removal, or the group's protocol for the consumers
+  that inherit it), they are removed for good.
 - `buildStartRequest` gives the body of `POST /simulator`: the topics
   of every group, one producer that writes to all of them at the rate
   of `/meta`, and each group with its `consumerDefaults` and the
@@ -1614,7 +1653,8 @@ removing components at runtime.
 - The consumer list has add, duplicate-last and remove.
 - Each consumer has collapsible per-consumer **overrides**: protocol,
   assignor, rack id, poll timeout, poll delay, max poll interval, static
-  member.
+  member, and, on a classic consumer only, session timeout and
+  heartbeat interval (chips `sessionTimeout` and `heartbeat`).
 - A collapsed consumer shows chips and a protocol tag. A consumer with no
   overrides shows the "inherits all settings" note.
 - The panel is locked while a simulation runs.
@@ -1811,7 +1851,9 @@ that the README example compiles.
   consumer rejoins once cleared; `Fault.networkIsolation()` fences the
   member and it rejoins once healed; an isolated classic static member
   leaves after the 10 s session timeout of the group, not the 45 s of
-  the client default; a classic session timeout under the broker's
+  the client default; of two isolated classic members, the one with a
+  6 s session timeout override leaves while the other, at the group's
+  45 s, is still listed; a classic session timeout under the broker's
   `group.min.session.timeout.ms` leaves the consumer `FAILED`; only the explicit group configs
   are set and they are reverted; a config the broker refuses is a
   warning; a quick stop and start with static members works with both
@@ -1890,8 +1932,9 @@ that the README example compiles.
   consumer in menu order, the "inherits all settings" note,
   duplicate-last and add, a custom assignor name, a preset one included
   and how the field leaves it, the fallback to the first preset after a
-  protocol switch (override and group), a violation of a refused start
-  on its field, cleared by an edit, and the locked panel.
+  protocol switch (override and group), the classic-only overrides and
+  their removal on a switch to the consumer protocol, a violation of a
+  refused start on its field, cleared by an edit, and the locked panel.
 - `ConsumerRow.test.tsx` checks the state badge of every status on both
   protocols (hidden for a healthy classic member), and the "Actions ▾"
   menu for every protocol, membership and set of faults, whatever the
