@@ -1652,8 +1652,8 @@ Mixed-protocol groups are supported.
 **Differences from the prototype**
 - The Bento view and the New/Old toggle do not exist.
 - The prototype's button that stops or starts a random consumer every
-  10 to 30 s does not exist; the actions of each consumer do the same
-  on purpose.
+  10 to 30 s does not exist; stop or start a consumer from its Actions
+  menu instead.
 - A classic group shows no generation, in the header or per row: the
   consumers report it, not the coordinator. (The prototype shows the
   highest generation the consumers report.)
