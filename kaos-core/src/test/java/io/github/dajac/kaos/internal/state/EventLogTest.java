@@ -21,7 +21,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import io.github.dajac.kaos.AutopilotSnapshot;
 import io.github.dajac.kaos.ConsumerSnapshot;
 import io.github.dajac.kaos.ConsumerStatus;
 import io.github.dajac.kaos.Fault;
@@ -37,12 +36,10 @@ import org.junit.jupiter.api.Test;
 /** The change log is a pure function of two group lists. */
 class EventLogTest {
 
-    private static final AutopilotSnapshot OFF = new AutopilotSnapshot(false, 10_000, 30_000);
-
     @Test
     void reportsNothingWhenNothingChanged() {
         var stable = consumer("consumer-0", true, List.of(), "m0", 3, ConsumerStatus.STABLE, "", "t-0");
-        var group = group(GroupState.STABLE, 3, 3, OFF, stable);
+        var group = group(GroupState.STABLE, 3, 3, stable);
 
         assertThat(EventLog.diff(List.of(group), List.of(group))).isEmpty();
         assertThat(EventLog.diff(List.of(), List.of())).isEmpty();
@@ -51,7 +48,7 @@ class EventLogTest {
     @Test
     void reportsGroupsThatAppearAndDisappear() {
         var joining = consumer("consumer-0", true, List.of(), "", -1, ConsumerStatus.JOINING, "", "");
-        var group = group(GroupState.UNKNOWN, -1, -1, OFF, joining);
+        var group = group(GroupState.UNKNOWN, -1, -1, joining);
 
         assertThat(EventLog.diff(List.of(), List.of(group))).containsExactly("[g] group added with 1 consumer(s)");
         assertThat(EventLog.diff(List.of(group), List.of())).containsExactly("[g] group removed");
@@ -59,10 +56,10 @@ class EventLogTest {
 
     @Test
     void reportsTheGroupLevelChanges() {
-        var before = group(GroupState.STABLE, 3, 3, OFF);
+        var before = group(GroupState.STABLE, 3, 3);
         var after = new GroupSnapshot(
             "g", GroupType.CLASSIC, GroupState.PREPARING_REBALANCE, 4, 4, 7, List.of("t"),
-            new AutopilotSnapshot(true, 100, 200), Map.of("t", List.of(0L)), List.of()
+            Map.of("t", List.of(0L)), List.of()
         );
 
         assertThat(EventLog.diff(List.of(before), List.of(after))).containsExactly(
@@ -70,21 +67,19 @@ class EventLogTest {
             "[g] group state: STABLE -> PREPARING_REBALANCE",
             "[g] group epoch: 3 -> 4",
             "[g] target assignment epoch: 3 -> 4",
-            "[g] generation: -1 -> 7",
-            "[g] autopilot on, every 100..200 ms"
+            "[g] generation: -1 -> 7"
         );
-        assertThat(EventLog.diff(List.of(after), List.of(before))).contains("[g] autopilot off");
     }
 
     @Test
     void reportsTheConsumerLevelChanges() {
         var before = group(
-            GroupState.STABLE, 3, 3, OFF,
+            GroupState.STABLE, 3, 3,
             consumer("consumer-0", true, List.of(), "m0", 3, ConsumerStatus.STABLE, "", "t-0|t-1"),
             consumer("consumer-1", true, List.of(), "", -1, ConsumerStatus.JOINING, "", "")
         );
         var after = group(
-            GroupState.STABLE, 3, 3, OFF,
+            GroupState.STABLE, 3, 3,
             consumer("consumer-0", false, List.of(Fault.freeze()), "", -1, ConsumerStatus.STOPPED, "", "t-1"),
             consumer("consumer-1", true, List.of(), "m1", 4, ConsumerStatus.STABLE, "", "t-0")
         );
@@ -105,7 +100,7 @@ class EventLogTest {
     @Test
     void reportsRejoinsSwitchesFailuresAndRemovals() {
         var before = group(
-            GroupState.STABLE, 3, 3, OFF,
+            GroupState.STABLE, 3, 3,
             consumer("consumer-0", true, List.of(Fault.networkIsolation()), "m0", 3, ConsumerStatus.ISOLATED, "", ""),
             consumer("consumer-1", true, List.of(), "m1", 3, ConsumerStatus.STABLE, "", "")
         );
@@ -115,7 +110,7 @@ class EventLogTest {
             new ConsumerSnapshot.Raw(List.of(), List.of(), List.of())
         );
         var added = consumer("consumer-2", true, List.of(), "", -1, ConsumerStatus.JOINING, "", "");
-        var after = group(GroupState.STABLE, 3, 3, OFF, failed, added);
+        var after = group(GroupState.STABLE, 3, 3, failed, added);
 
         assertThat(EventLog.diff(List.of(before), List.of(after))).containsExactly(
             "[g] consumer-0 switched protocol: CONSUMER -> CLASSIC",
@@ -132,7 +127,7 @@ class EventLogTest {
     @Test
     void asAListenerItLogsTheDifferenceWithTheLastSnapshot() {
         var log = new EventLog();
-        var group = group(GroupState.UNKNOWN, -1, -1, OFF);
+        var group = group(GroupState.UNKNOWN, -1, -1);
 
         log.onSnapshot(new SimulatorSnapshot(1, Phase.IDLE, false, "", List.of(), List.of(), List.of(group)));
         log.onSnapshot(new SimulatorSnapshot(2, Phase.IDLE, false, "", List.of(), List.of(), List.of(group)));
@@ -143,11 +138,10 @@ class EventLogTest {
         GroupState state,
         int epoch,
         int targetEpoch,
-        AutopilotSnapshot autopilot,
         ConsumerSnapshot... consumers
     ) {
         return new GroupSnapshot(
-            "g", GroupType.CONSUMER, state, epoch, targetEpoch, -1, List.of("t"), autopilot, Map.of("t", List.of(0L)),
+            "g", GroupType.CONSUMER, state, epoch, targetEpoch, -1, List.of("t"), Map.of("t", List.of(0L)),
             List.of(consumers)
         );
     }

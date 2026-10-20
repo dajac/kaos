@@ -244,30 +244,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/simulator/groups/{groupId}/autopilot": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The id of the group. */
-                groupId: components["parameters"]["GroupId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Turn the autopilot of a group on or off
-         * @description A missing interval keeps the current one. A `minIntervalMs` below 1
-         *     or a `maxIntervalMs` below `minIntervalMs` is a 400.
-         */
-        put: operations["setAutopilot"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/simulator/groups/{groupId}/consumers": {
         parameters: {
             query?: never;
@@ -593,20 +569,6 @@ export interface components {
         ProducerStateRequest: {
             paused: boolean;
         };
-        /** @description It has the shape of the `autopilot` of a group snapshot. */
-        AutopilotRequest: {
-            enabled: boolean;
-            /**
-             * Format: int32
-             * @description The shortest pause between two flips; the current one when left out.
-             */
-            minIntervalMs?: number;
-            /**
-             * Format: int32
-             * @description The longest pause between two flips, at least `minIntervalMs`; the current one when left out.
-             */
-            maxIntervalMs?: number;
-        };
         /** @description What a consumer does, chosen by `type`. */
         ActionRequest: components["schemas"]["JoinAction"] | components["schemas"]["LeaveAction"] | components["schemas"]["SwitchProtocolAction"];
         /** @description The consumer joins its group. Answers 204. */
@@ -674,7 +636,6 @@ export interface components {
              */
             generation: number;
             subscribedTopics: string[];
-            autopilot: components["schemas"]["AutopilotSnapshot"];
             /**
              * @description The lag of each subscribed topic, in the order of
              *     `subscribedTopics`: one entry per partition, indexed by
@@ -686,14 +647,6 @@ export interface components {
                 [key: string]: number[];
             };
             consumers: components["schemas"]["ConsumerSnapshot"][];
-        };
-        /** @description The intervals are the last ones given, kept while the autopilot is off. */
-        AutopilotSnapshot: {
-            enabled: boolean;
-            /** Format: int32 */
-            minIntervalMs: number;
-            /** Format: int32 */
-            maxIntervalMs: number;
         };
         ConsumerSnapshot: {
             /** @description Unique within the group. */
@@ -1151,35 +1104,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             202: components["responses"]["Accepted"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            500: components["responses"]["ServerError"];
-        };
-    };
-    setAutopilot: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The id of the group. */
-                groupId: components["parameters"]["GroupId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AutopilotRequest"];
-            };
-        };
-        responses: {
-            /** @description The autopilot is on or off. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["ServerError"];

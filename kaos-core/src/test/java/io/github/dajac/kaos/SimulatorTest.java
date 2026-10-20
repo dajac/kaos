@@ -136,7 +136,6 @@ class SimulatorTest {
             assertThat(group.consumer(0).clientId()).isEqualTo("next-consumer-0");
             assertThat(group.consumer(0).protocol()).isEqualTo(Protocol.CLASSIC);
             assertThat(group.consumer(0).subscribed()).isTrue();
-            assertThat(group.autopilot().enabled()).isFalse();
             assertThat(group.warnings()).isEmpty();
             assertThatThrownBy(() -> group.consumer(3)).isInstanceOf(IllegalArgumentException.class);
             assertThat(fromSpec.consumers()).isEmpty();
@@ -168,8 +167,6 @@ class SimulatorTest {
             assertThat(flipped.consumers().get(1).status()).isEqualTo(ConsumerStatus.STOPPED);
             assertThat(flipped.consumers().get(1).faults()).containsExactly(Fault.freeze());
             assertThat(flipped.consumers().get(1).protocol()).isEqualTo(Protocol.CONSUMER);
-            assertThatThrownBy(() -> group.autopilot().start(Duration.ofSeconds(1), Duration.ofSeconds(2)))
-                .isInstanceOf(SimulationStateException.class);
         }
     }
 

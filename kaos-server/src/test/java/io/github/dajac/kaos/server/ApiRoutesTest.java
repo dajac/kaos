@@ -156,7 +156,6 @@ class ApiRoutesTest {
         assertThat(problem.get("title").asText()).isEqualTo("Not Found");
         assertThat(problem.get("detail").asText()).contains("/api/v1/unknown");
     }
-
     @ParameterizedTest(name = "{0} {1}")
     @MethodSource("dynamicRoutes")
     void dynamicRoutesAre409WhenIdle(String method, String path, String body) {
@@ -181,7 +180,6 @@ class ApiRoutesTest {
             Arguments.of("PUT", "/api/v1/simulator/producers/producer-0/state", "{\"paused\": true}"),
             Arguments.of("POST", "/api/v1/simulator/groups", "{\"id\": \"other\", \"subscribedTopics\": [\"orders\"]}"),
             Arguments.of("DELETE", "/api/v1/simulator/groups/app", null),
-            Arguments.of("PUT", "/api/v1/simulator/groups/app/autopilot", "{\"enabled\": true}"),
             Arguments.of("POST", "/api/v1/simulator/groups/app/consumers", "{}"),
             Arguments.of("DELETE", consumer, null),
             Arguments.of("PUT", consumer + "/faults/freeze", null),

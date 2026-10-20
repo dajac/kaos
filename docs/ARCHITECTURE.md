@@ -14,7 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
-| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, `Autopilot`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
+| `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
 | `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`, and so is `StaticUi`, which serves the UI at `/` |
 | `kaos-ui` | built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, the layout shell, the generated `api/schema.d.ts` with its check, and Vitest; the pure UI model (`model/`: the config form, the assignors, the lag gauge, the axis, the tooltip placement, the rows and the structural sharing); the config panel (`api/client.ts`, `state/configStore.ts`, `components/config/`, `styles/config.css` and `styles/controls.css`); and the Rows view (`api/events.ts`, `state/simulationStore.ts`, `state/uiSettingsStore.ts`, `components/rows/`, `styles/rows.css`) |
 
@@ -183,8 +183,8 @@ snapshot records, the six enums next to `Protocol`, and the whole
 `engine/` (`SimulatorEngine`, `TopicComponent`, `ProducerRunner`,
 `Pacer`, `Resources`, `Threads`) and `kafka/` (`TopicManager`,
 `ClientFactory`). So does the harness for consumer groups:
-`ConsumerGroup`, `ConsumerHandle`, `Autopilot`, `engine/GroupRuntime`,
-`ConsumerRunner` and `AutopilotImpl`, `kafka/GroupConfigManager`,
+`ConsumerGroup`, `ConsumerHandle`, `engine/GroupRuntime` and
+`ConsumerRunner`, `kafka/GroupConfigManager`,
 `GroupPoller` and `GroupCleanup`, and `state/EventLog`. Everything else
 in the tree below is planned. `StaticUi` exists, and so does the
 `kaos-ui` scaffold with the `-DskipUi` switch: `package.json`,
@@ -205,18 +205,18 @@ kaos/
   .github/workflows/ci.yml     CI: ./mvnw verify on every PR and on push to main
   kaos-core/                   library: kafka-clients, kroxylicious-runtime, slf4j-api
     src/main/java/io/github/dajac/kaos/            PUBLIC API
-      Simulator, Topic, ProducerHandle, ConsumerGroup, ConsumerHandle, Autopilot, Fault
+      Simulator, Topic, ProducerHandle, ConsumerGroup, ConsumerHandle, Fault
       ProducerOptions, GroupOptions, ConsumerOptions, Registration, SnapshotListener
       SimulatorSpec, TopicSpec, ProducerSpec, GroupSpec, ConsumerSpec (records), ConfigMetadata
       ConsumerSettings, ConsumerOverrides (records), Violation
-      SimulatorSnapshot, ProducerSnapshot, GroupSnapshot, AutopilotSnapshot, ConsumerSnapshot,
+      SimulatorSnapshot, ProducerSnapshot, GroupSnapshot, ConsumerSnapshot,
       PartitionView, PartitionRef
       enums: Protocol, Phase, GroupState, GroupType, PartitionState, ConsumerStatus, ProducerState
       SimulationException, InvalidConfigException (List<Violation>), SimulationStateException
     src/main/java/io/github/dajac/kaos/internal/   NOT API
       config/   ConfigValidator, EffectiveConfigResolver, Assignors
       engine/   SimulatorEngine, TopicComponent, GroupRuntime, ConsumerRunner, ProducerRunner,
-                Pacer, AutopilotImpl, Resources, Threads
+                Pacer, Resources, Threads
       kafka/    TopicManager, GroupConfigManager, GroupPoller (-> AdminView), GroupCleanup, ClientFactory
       proxy/    NetworkProxy, ProxyLauncher, NetworkFaults, NetworkFaultFilterFactory,
                 BoundPluginRegistry (+ META-INF/services FilterFactory entry)
@@ -257,7 +257,7 @@ see [Snapshot pipeline](#snapshot-pipeline). The harness is built: the
 `with…` methods, `addTopic`, `addProducer`, `addGroup`, `start`,
 `stop`, `close`, `describe`, `snapshot`, the listeners and
 `awaitSnapshot`, and, on the groups, `consumer(..)`, `addConsumer`,
-`autopilot()`, `warnings()`, `snapshot()` and `awaitSnapshot`, every
+`warnings()`, `snapshot()` and `awaitSnapshot`, every
 method of `ConsumerHandle`, and `remove()` on every component, before
 `start()` and while the simulator runs.
 
@@ -269,7 +269,7 @@ and `close()` tears everything down.
 Simulator            harness: cluster connection, proxy, threads, snapshot, lifecycle
  ├─ Topic        0..n   created and owned by the simulator; shared by producers and groups
  ├─ ProducerHandle 0..n load generators writing to topics
- └─ ConsumerGroup  0..n group id + group settings + subscribed topics + autopilot
+ └─ ConsumerGroup  0..n group id + group settings + subscribed topics
       └─ ConsumerHandle 0..n   options, faults, join/leave, switchProtocol
 ```
 
@@ -304,7 +304,6 @@ try (Simulator simulator = new Simulator("localhost:9092")
   next.consumer(2).switchProtocol(CLASSIC);
 
   load.pause();  load.resume();          // watch lag drain in both groups
-  next.autopilot().start(Duration.ofSeconds(10), Duration.ofSeconds(30));
 
   // The same add/remove calls work while running.
   ConsumerHandle extra = next.addConsumer(c -> c.rackId("b"));   // joins immediately
@@ -364,8 +363,8 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `stop`, `close`, `with…`, `add…`, `remove()`, `awaitSnapshot`): they throw
   `SimulationStateException` on the publisher thread. See "Locks" in
   [Threading and failure model](#threading-and-failure-model).
-- `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle` and
-  `Autopilot` are interfaces, implemented in `internal/engine`.
+- `Topic`, `ProducerHandle`, `ConsumerGroup` and `ConsumerHandle` are
+  interfaces, implemented in `internal/engine`.
   `topics()`, `producers()` and `groups()` list the components.
 
 **Components**
@@ -388,9 +387,9 @@ try (Simulator simulator = new Simulator("localhost:9092")
 - `remove()` rules:
   - Removing a topic that a producer or group still uses throws
     `SimulationStateException`, and changes nothing.
-  - Removing a group turns its autopilot off, stops its consumers,
-    removes static members, deletes the group and reverts its group
-    configs (the Kafka steps best-effort).
+  - Removing a group stops its consumers, removes static members,
+    deletes the group and reverts its group configs (the Kafka steps
+    best-effort).
   - Removing a consumer stops it, which leaves the group, and removes
     its static member if the coordinator still lists it.
   - Removing a simulator-owned topic deletes it and waits for the
@@ -434,8 +433,8 @@ try (Simulator simulator = new Simulator("localhost:9092")
   A group that is declared but not published yet is shown as the
   simulator knows it: its type and state `UNKNOWN`, its consumers
   `JOINING` and its lag unknown.
-- Starting a group sets its group configs, starts its consumers and
-  opens its autopilot. The group configs it sets are the explicit
+- Starting a group sets its group configs and starts its consumers.
+  The group configs it sets are the explicit
   settings of the spec, those whose value differs from the default in
   `ConfigMetadata`; a setting with that default is left to the broker,
   even when the user set it to that value. `warnings()` lists what the start could not
@@ -469,18 +468,13 @@ try (Simulator simulator = new Simulator("localhost:9092")
   Switching to the current protocol does nothing. A switch whose Kafka
   consumer cannot be created throws `SimulationException` and leaves
   the consumer `FAILED`.
-- The autopilot is per group. `start(min, max)` validates
-  `1 ms ≤ min ≤ max`, throws `SimulationStateException` while the group
-  does not run, and gives new intervals to an autopilot that is on.
-  `stop()` keeps the intervals. The initial intervals are the
-  prototype's 10 s and 30 s.
 - Removing a static member that the coordinator still lists after its
   consumer is closed, deleting the group, and setting a group config the
   broker refuses are best-effort: they are logged (the config also as a
   warning) and never fail a start or a stop.
 
 **Multiple groups**
-- Settings, consumers, autopilot, snapshot and lag are per group.
+- Settings, consumers, snapshot and lag are per group.
 - Client ids are `<groupId>-<consumerId>`, so `<groupId>-consumer-N`
   for an assigned id. They must be unique across groups, because the
   network fault matches on `client.id`. A group id and a consumer id
@@ -733,8 +727,6 @@ built with the runner, and so is the removal.
   with nothing declared has no thread at all. `stop()` joins the thread
   before it returns, so a stop and start cycle never runs two
   publishers.
-- There is one `kaos-<groupId>-autopilot` thread while that group's
-  autopilot is on.
 - `inject`, `clear`, `join`, `leave`, `pause` and `resume` only flip
   atomics that the owning loop reads. The exceptions are `wakeup()` and
   `switchProtocol`.
@@ -774,8 +766,8 @@ built with the runner, and so is the removal.
   - `NetworkFaults`;
   - the `AtomicReference` holding the latest snapshot.
 - Component collections are immutable lists. They are swapped atomically
-  under the structure lock (copy-on-write). Readers such as the poller,
-  the publisher and the autopilot never see a list being mutated. The
+  under the structure lock (copy-on-write). Readers such as the poller and
+  the publisher never see a list being mutated. The
   engine keeps the phase, `lastError` and the lists in one immutable
   state record behind a single volatile reference, so a reader sees them
   change together.
@@ -815,13 +807,12 @@ built with the runner, and so is the removal.
   and a component has a sub-stack of the one of its kind; a component
   added while running goes there too, so `stop()` keeps that order
   whenever the components were added. Within a group: the group
-  configs are set, the consumers are started, the autopilot is opened.
-  The group keeps one stack for its consumers, created before the step
-  that asks every consumer to stop and the autopilot, and each consumer,
-  added later or not, has its sub-stack there: stopping the consumer,
-  then removing its static member if the coordinator still lists it.
-  Undoing a group turns the autopilot off, asks every consumer loop to
-  end, then closes the stack of the consumers, which waits for each and
+  configs are set, then the consumers are started. The group keeps one
+  stack for its consumers, created before the step that asks every
+  consumer to stop, and each consumer, added later or not, has its
+  sub-stack there: stopping the consumer, then removing its static
+  member if the coordinator still lists it. Undoing a group asks every
+  consumer loop to end, then closes the stack of the consumers, which waits for each and
   removes its static member, deletes the group, and reverts the group
   configs. Removing a consumer closes its sub-stack only.
 - A failed `start`, a failed `add…`, `remove()` and `close()` all unwind
@@ -881,19 +872,15 @@ built with the runner, and so is the removal.
   failures.
 - A poller error keeps the last `AdminView` and sets `stale` on the
   snapshot.
-- Autopilot validates `min ≤ max`. It does nothing when its group has no
-  consumers, and it stops when its group is removed. A consumer that is
-  removed while the autopilot picks it is skipped.
 
 **Change log**
 - The logger `kaos.events` reports what changes in the groups: a group
   or a consumer added or removed, the group type, state, epoch, target
-  assignment epoch and generation, the autopilot, and, per consumer, a
-  join or leave request, a protocol switch, a fault injected or
-  cleared, a member joining, leaving or rejoining (the member id
-  changes), the member epoch, the generation, the status, a failure and
-  the partitions assigned and revoked. The autopilot logs its own flips
-  there too.
+  assignment epoch and generation, and, per consumer, a join or leave
+  request, a protocol switch, a fault injected or cleared, a member
+  joining, leaving or rejoining (the member id changes), the member
+  epoch, the generation, the status, a failure and the partitions
+  assigned and revoked.
 - `EventLog` is a snapshot listener registered first by the engine, so
   every line is the difference between two published snapshots and the
   log has the same source as the listeners. `EventLog.diff` is a pure
@@ -947,9 +934,8 @@ fill them.
     `assignment` and an optional `targetAssignment`.
   - `AdminView.unknown()` stands for a group that is not reported yet.
 - `GroupLocalState` is what the simulator knows about the group: `id`,
-  the subscribed topics with their partition counts, the `autopilot`
-  state (an `AutopilotSnapshot`) and one `ConsumerLocalState` per
-  consumer.
+  the subscribed topics with their partition counts and one
+  `ConsumerLocalState` per consumer.
 - `ConsumerLocalState` is the copy of a runner's state: `id`,
   `clientId`, the current `protocol`, the effective `assignor`,
   `subscribed`, `faults`, `failure`, `generation` and
@@ -1157,7 +1143,6 @@ DELETE /api/v1/simulator/producers/{id}
 PUT    /api/v1/simulator/producers/{id}/state            {"paused": true|false}
 POST   /api/v1/simulator/groups                          GroupSpec
 DELETE /api/v1/simulator/groups/{groupId}
-PUT    /api/v1/simulator/groups/{groupId}/autopilot      {enabled, minIntervalMs, maxIntervalMs}
 POST   /api/v1/simulator/groups/{groupId}/consumers      ConsumerSpec
 DELETE /api/v1/simulator/groups/{groupId}/consumers/{id}
 PUT    /api/v1/simulator/groups/{groupId}/consumers/{id}/faults/{fault}   freeze | network-isolation | connection-reset
@@ -1174,7 +1159,7 @@ GET    /api/v1/openapi.yaml             this API as an OpenAPI 3.1 document (app
   adds a component, every `DELETE` that removes one, and the
   `switch-protocol` action.
 - An operation that only flips a flag answers 204: the producer state,
-  the autopilot, the faults, and the `join` and `leave` actions.
+  the faults, and the `join` and `leave` actions.
 - `DELETE /simulator` answers 204 when there is nothing to stop, and
   keeps `lastError` then.
 - `/` and every other path outside `/api` belong to the UI (see
@@ -1223,8 +1208,6 @@ GET    /api/v1/openapi.yaml             this API as an OpenAPI 3.1 document (app
   0. Consumers bind to `ConsumerSpec` directly; the `effective` settings
   a client sends back are accepted and ignored. So the `spec` of
   `GET /simulator` can be posted back as it is.
-- The autopilot body needs `enabled`; a missing interval keeps the
-  current one. A `min` below 1 or a `max` below `min` is a 400.
 - The actions need `type`; `switch-protocol` also needs `protocol`.
 
 **JSON**
@@ -1242,7 +1225,7 @@ GET    /api/v1/openapi.yaml             this API as an OpenAPI 3.1 document (app
   - `POST /simulator` with one group, one producer and the topics
     `<groupId>-1..N`;
   - `DELETE /simulator`;
-  - the faults, actions and autopilot endpoints;
+  - the faults and actions endpoints;
   - SSE.
 - The remaining endpoints exist for other frontends, and for a
   multi-group UI.
@@ -1292,9 +1275,6 @@ failed.
   - `id`, `type`, `state`, `epoch`, `targetAssignmentEpoch`,
     `generation`;
   - `subscribedTopics`;
-  - `autopilot{enabled,minIntervalMs,maxIntervalMs}`, the body of the
-    autopilot endpoint; the intervals are the last ones given and are
-    kept while it is off;
   - `lag{topic:[…dense…]}`, where a partition without a committed
     offset has its end offset and an unknown lag (no end offset yet) is
     `-1`;
@@ -1449,8 +1429,8 @@ their styles.
 **API client (`api/client.ts`)**
 - A thin `fetch` wrapper typed from `schema.d.ts`: `getMeta`,
   `getSimulator`, `startSimulator` and `stopSimulator` (which returns
-  `null` for a 204), and the requests of the Rows view: `setAutopilot`,
-  `injectFault`, `clearFault` and `runAction`. An error status throws an
+  `null` for a 204), and the requests of the Rows view: `injectFault`,
+  `clearFault` and `runAction`. An error status throws an
   `ApiError` with the problem detail when the body is one, and its
   `violations`.
 
@@ -1497,8 +1477,8 @@ their styles.
   groups, consumers and lag arrays keep their identity and `React.memo`
   holds. The revision is not used to skip a snapshot: it starts over
   when the server restarts.
-- It also sends the requests of the Rows view (actions, faults,
-  autopilot) and keeps the message of the last one that failed. That
+- It also sends the requests of the Rows view (actions and faults) and
+  keeps the message of the last one that failed. That
   message, or the `lastError` of the status while the simulation runs
   (a failed protocol switch, for instance), shows in a dismissible
   banner of the main area.
@@ -1538,9 +1518,6 @@ their styles.
   Unfreeze consumer (`freeze`). A consumer out of the group has only
   Start and the ways back from its faults. The menus share
   `useDropdown` with the config panel's `Dropdown`.
-- The Auto-Pilot button of the sidebar turns the autopilot of the shown
-  group on and off with `{enabled}`; the intervals are those of the
-  core, 10 to 30 s. It shows the `autopilot` of the snapshot.
 
 **Heatmap**
 - `PartitionStrip` is memoized on a cheap signature: the state and the
@@ -1586,7 +1563,7 @@ their styles.
 
 Status: built, and checked side by side against the prototype: every
 field of the config panel, every action in every state, classic,
-consumer and mixed groups, the Auto-Pilot, a reload during a run, the
+consumer and mixed groups, a reload during a run, the
 failed starts, the tooltip, the lag gauge and the S/M/L strip height.
 The differences that remain are intended and listed below.
 
@@ -1620,8 +1597,8 @@ removing components at runtime.
 - The panel is locked while a simulation runs.
 - Status: built (`components/config/`: `ConfigPanel`, `GroupSection`,
   `ConsumerSection`, `Dropdown`, `AssignorField`, `NumberInput`,
-  `FieldError`), with Start and Stop, the Auto-Pilot, inline validation
-  errors and the error banner.
+  `FieldError`), with Start and Stop, inline validation errors and the
+  error banner.
 - Keyboard: a dropdown closes on Escape and when the focus leaves it,
   and its button carries `aria-expanded`. The header of a consumer is
   a `div` that toggles on a click anywhere in it and holds two sibling
@@ -1649,17 +1626,13 @@ removing components at runtime.
 
 Mixed-protocol groups are supported.
 
-**Auto-Pilot**
-- Randomly flips one consumer's subscription every 10–30 s.
-
 **Load and lag**
 - The producer writes 1 record per partition every 500 ms.
 - Per-partition lag is the latest offset minus the committed offset; a
   partition without a committed offset counts from offset 0.
 
 **Rows view**
-- Status: built (see [Frontend](#frontend-kaos-ui)), with the header
-  and the Auto-Pilot.
+- Status: built (see [Frontend](#frontend-kaos-ui)), with the header.
 - Each consumer has a heatmap strip per topic.
 - Cell states are assigned, pending, revoking or empty.
 - The lag gauge rounds up to a multiple of 5 and scales to 100.
@@ -1678,6 +1651,9 @@ Mixed-protocol groups are supported.
 
 **Differences from the prototype**
 - The Bento view and the New/Old toggle do not exist.
+- The prototype's button that stops or starts a random consumer every
+  10 to 30 s does not exist; the actions of each consumer do the same
+  on purpose.
 - A classic group shows no generation, in the header or per row: the
   consumers report it, not the coordinator. (The prototype shows the
   highest generation the consumers report.)
@@ -1817,13 +1793,13 @@ that the README example compiles.
   warning; a quick stop and start with static members works with both
   protocols; listeners fire only on change; an unsupported
   consumer-protocol assignor leaves the consumer `FAILED` while the
-  simulator runs; the autopilot flips subscriptions.
+  simulator runs.
 - `DynamicComponentsTest` drives components added and removed while the
   simulator runs: two groups with different protocols on one topic, the
   second added while running, report independent assignments and lag;
   adding or removing a consumer triggers a rebalance that the snapshot
   shows, and a removed consumer's id is not assigned again; removing a
-  group (static members, group configs, autopilot) leaves the other
+  group (static members, group configs) leaves the other
   group's members and epoch untouched; every partition of a topic gets
   records right after `start()` and after an `addTopic` while running;
   topics and producers are added and removed while running, a topic in
@@ -1855,7 +1831,7 @@ that the README example compiles.
 - `HttpRunTest` (`@IntegrationTest`) drives a full run through HTTP
   against the broker: start, a second start refused, the 404s and 409s,
   a 400 on a dynamic add, a fault injected and cleared, leave and join,
-  a protocol switch, a consumer added and removed, the autopilot, the
+  a protocol switch, a consumer added and removed, the
   producer paused and resumed, a topic, a producer and a group added and
   removed, a failed add as `lastError`, and the stop, which deletes the
   topics and leaves no `kaos-` thread.

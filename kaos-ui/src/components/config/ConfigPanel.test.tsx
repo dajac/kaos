@@ -386,4 +386,19 @@ describe('start', () => {
     const stopping = await screen.findByRole('button', { name: 'Stopping…' });
     expect(stopping.hasAttribute('disabled')).toBe(true);
   });
+
+  it('holds only the start or stop button in the footer, in every phase', async () => {
+    for (const [phase, name] of [
+      ['IDLE', 'Start'],
+      ['STARTING', 'Starting…'],
+      ['RUNNING', 'Stop'],
+      ['STOPPING', 'Stopping…'],
+    ] as const) {
+      configStore.setState({ phase });
+      const button = await screen.findByRole('button', { name });
+      const footer = document.getElementById('config-footer')!;
+      expect(within(footer).getAllByRole('button')).toEqual([button]);
+      expect(button.id).toBe('btn-start-sim');
+    }
+  });
 });
