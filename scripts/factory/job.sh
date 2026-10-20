@@ -59,14 +59,14 @@ slug() {
 branch_worktree() {
     local dir=$1 branch=$2 start=$3
     if [[ -d $dir ]]; then
-        if git -C "$FACTORY_HOME" ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+        if remote_has_branch "$FACTORY_HOME" "$branch"; then
             git -C "$dir" fetch -q origin "$branch"
             git -C "$dir" merge -q --ff-only FETCH_HEAD ||
                 die "$dir has diverged from origin/$branch; fix it by hand"
         fi
         return
     fi
-    if git -C "$FACTORY_HOME" ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+    if remote_has_branch "$FACTORY_HOME" "$branch"; then
         git -C "$FACTORY_HOME" fetch -q origin "$branch"
         git -C "$FACTORY_HOME" worktree add -q -B "$branch" "$dir" "origin/$branch"
     else

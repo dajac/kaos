@@ -36,6 +36,14 @@ info() {
     echo "factory: $*" >&2
 }
 
+# Whether origin, as seen from the repository <git-dir>, has the branch
+# <branch>. The ref is matched in full: a pattern given to ls-remote
+# also matches the end of longer refs, so "101-x" would match
+# "spec/101-x".
+remote_has_branch() {
+    git -C "$1" ls-remote --exit-code origin "refs/heads/$2" >/dev/null 2>&1
+}
+
 # Loads the bot's configuration written by "factory setup".
 load_bot() {
     [[ -f $FACTORY_STATE/bot.env ]] || die "no bot configured, run ./factory setup"
