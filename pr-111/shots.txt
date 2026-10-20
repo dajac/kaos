@@ -1,0 +1,2 @@
+# The sidebar footer of a running simulation.
+running default / 1440x900
