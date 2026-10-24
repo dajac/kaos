@@ -1,0 +1,2 @@
+# The Rows view after adding a group whose heartbeat interval the broker refuses
+refused-add refused-group-config.json / 1440x900

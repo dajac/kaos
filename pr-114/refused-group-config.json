@@ -1,0 +1,75 @@
+{
+  "description": "The default scenario, then a group added with a heartbeat interval of 20 s, over the 15 s of the broker's group.consumer.max.heartbeat.interval.ms.",
+  "steps": [
+    {
+      "request": "POST /api/v1/simulator",
+      "body": {
+        "topics": [
+          {
+            "name": "orders",
+            "partitions": 6
+          }
+        ],
+        "producers": [
+          {
+            "topics": [
+              "orders"
+            ],
+            "ratePerPartition": 2
+          }
+        ],
+        "groups": [
+          {
+            "id": "orders-app",
+            "subscribedTopics": [
+              "orders"
+            ],
+            "consumers": [
+              {},
+              {},
+              {}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator",
+        "jq": ".phase == \"RUNNING\"",
+        "timeout_s": 90
+      }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator/snapshot",
+        "jq": "[.groups[] | select(.id == \"orders-app\") | .consumers[]] as $c | ($c | length) == 3 and all($c[]; (.raw.assignment | length) > 0 and (.raw.assignment | sort) == (.raw.targetAssignment | sort)) and ([$c[].raw.assignment[]] | length) == 6",
+        "timeout_s": 90
+      }
+    },
+    {
+      "request": "POST /api/v1/simulator/groups",
+      "body": {
+        "id": "refused-app",
+        "subscribedTopics": [
+          "orders"
+        ],
+        "sessionTimeoutMs": 50000,
+        "heartbeatIntervalMs": 20000,
+        "consumers": [
+          {}
+        ]
+      }
+    },
+    {
+      "wait": {
+        "path": "/api/v1/simulator",
+        "jq": ".lastError != \"\" or (.spec.groups | length) == 2",
+        "timeout_s": 60
+      }
+    },
+    {
+      "sleep_s": 5
+    }
+  ]
+}
