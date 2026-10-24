@@ -37,19 +37,16 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Sets the dynamic configs of a group, and puts them back.
  *
  * <p>Only the explicit settings are sent. A setting is explicit when its value differs from its
  * default in {@link ConfigMetadata}; a setting with that default is left to the broker, even when
- * the user set it to that value. Each key is sent on its own, so a key that the
- * broker refuses does not take the others with it. The broker refuses a key it does not know, as a
- * broker before 4.3 does with {@code consumer.assignment.interval.ms}, and a value outside the
- * bounds of its own configuration. Such a key becomes a warning and the group runs without it. Any
- * other failure is thrown.
+ * the user set it to that value. Each key is sent on its own. The broker refuses a key it does not
+ * know, as a broker before 4.3 does with {@code consumer.assignment.interval.ms}, and a value
+ * outside the bounds of its own configuration. A refused key, as any other failure, is thrown after
+ * the keys already set are reverted, so the group never runs without a config it was given.
  *
  * <p>The configs are those of the consumer protocol. The session timeout and the heartbeat interval
  * apply to the members of both protocols: those that speak the classic protocol take them from
@@ -82,20 +79,16 @@ public final class GroupConfigManager {
      *
      * @param previous the keys that were set, each with the value it had before; an empty value
      *     means that the key was not set on the group
-     * @param warnings one message per key that the broker refused
      */
-    public record Applied(Map<String, Optional<String>> previous, List<String> warnings) {
+    public record Applied(Map<String, Optional<String>> previous) {
         public Applied {
             previous = Collections.unmodifiableMap(new LinkedHashMap<>(previous));
-            warnings = List.copyOf(warnings);
         }
     }
 
     public static final String SESSION_TIMEOUT = "consumer.session.timeout.ms";
     public static final String HEARTBEAT_INTERVAL = "consumer.heartbeat.interval.ms";
     public static final String ASSIGNMENT_INTERVAL = "consumer.assignment.interval.ms";
-
-    private static final Logger LOG = LoggerFactory.getLogger(GroupConfigManager.class);
 
     private final Store store;
 
@@ -130,9 +123,8 @@ public final class GroupConfigManager {
     public Applied apply(GroupSpec spec) {
         var configs = explicitConfigs(spec);
         var previous = new LinkedHashMap<String, Optional<String>>();
-        var warnings = new ArrayList<String>();
         if (configs.isEmpty()) {
-            return new Applied(previous, warnings);
+            return new Applied(previous);
         }
         var existing = store.read(spec.id());
         try {
@@ -141,10 +133,11 @@ public final class GroupConfigManager {
                     store.write(spec.id(), key, Optional.of(value));
                     previous.put(key, Optional.ofNullable(existing.get(key)));
                 } catch (RefusedConfigException e) {
-                    var warning = "The broker refused the group config " + key + "=" + value + " of group "
-                        + spec.id() + ", which runs without it: " + e.getMessage();
-                    LOG.warn(warning);
-                    warnings.add(warning);
+                    throw new SimulationException(
+                        "The broker refused the group config " + key + "=" + value + " of group " + spec.id() + ": "
+                            + e.getMessage(),
+                        e
+                    );
                 }
             });
         } catch (RuntimeException e) {
@@ -156,7 +149,7 @@ public final class GroupConfigManager {
             }
             throw e;
         }
-        return new Applied(previous, warnings);
+        return new Applied(previous);
     }
 
     /**

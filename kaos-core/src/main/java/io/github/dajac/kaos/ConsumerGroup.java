@@ -84,12 +84,6 @@ public interface ConsumerGroup {
      */
     void remove();
 
-    /**
-     * What the start of the group could not apply and went on without, such as a group config that
-     * the broker refuses. It is empty while the group does not run.
-     */
-    List<String> warnings();
-
     /** The slice of the latest snapshot of the simulator that shows this group. */
     GroupSnapshot snapshot();
 

@@ -65,7 +65,7 @@ class ApiRoutesTest {
         var simulator = api.getJson("/api/v1/simulator");
         assertThat(simulator.get("phase").asText()).isEqualTo("IDLE");
         assertThat(simulator.get("lastError").asText()).isEmpty();
-        assertThat(simulator.get("warnings")).isEmpty();
+        assertThat(simulator.has("warnings")).isFalse();
         assertThat(simulator.get("spec").get("topics")).isEmpty();
         assertThat(simulator.get("spec").get("producers")).isEmpty();
         assertThat(simulator.get("spec").get("groups")).isEmpty();

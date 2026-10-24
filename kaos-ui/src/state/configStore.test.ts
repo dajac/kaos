@@ -28,10 +28,10 @@ import { META } from '../model/meta.fixture';
 import { groupFieldKey, overrideFieldKey } from '../model/violations';
 import { createConfigStore } from './configStore';
 
-const IDLE: Simulator = { phase: 'IDLE', spec: { topics: [], producers: [], groups: [] }, lastError: '', warnings: [] };
+const IDLE: Simulator = { phase: 'IDLE', spec: { topics: [], producers: [], groups: [] }, lastError: '' };
 
 function status(phase: Status['phase'], lastError = ''): Status {
-  return { phase, lastError, warnings: [] };
+  return { phase, lastError };
 }
 
 // A running simulation with the group `orders`, whose consumer-1 overrides its poll delay.
@@ -41,7 +41,6 @@ function running(): Simulator {
   return {
     phase: 'RUNNING',
     lastError: '',
-    warnings: [],
     spec: {
       topics: [{ name: 'orders-1', partitions: 36 }],
       producers: [{ id: 'producer-0', topics: ['orders-1'], ratePerPartition: 2 }],

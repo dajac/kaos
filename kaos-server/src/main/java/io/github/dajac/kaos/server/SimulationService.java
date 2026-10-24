@@ -104,11 +104,11 @@ final class SimulationService implements AutoCloseable {
     }
 
     StatusResponse status() {
-        return new StatusResponse(phase(), lastError, warnings());
+        return new StatusResponse(phase(), lastError);
     }
 
     SimulatorResponse describe() {
-        return new SimulatorResponse(phase(), simulator.describe(), lastError, warnings());
+        return new SimulatorResponse(phase(), simulator.describe(), lastError);
     }
 
     /**
@@ -122,10 +122,6 @@ final class SimulationService implements AutoCloseable {
             return current.lifecycle() == Lifecycle.START ? Phase.STARTING : Phase.STOPPING;
         }
         return simulator.snapshot().phase();
-    }
-
-    private List<String> warnings() {
-        return simulator.groups().stream().flatMap(group -> group.warnings().stream()).toList();
     }
 
     // Lifecycle

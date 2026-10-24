@@ -51,7 +51,7 @@ function fakeClient() {
 
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-const running = (lastError = ''): Status => ({ phase: 'RUNNING', lastError, warnings: [] });
+const running = (lastError = ''): Status => ({ phase: 'RUNNING', lastError });
 
 describe('ingest', () => {
   it('keeps the objects of the unchanged groups and consumers', () => {
@@ -175,7 +175,7 @@ describe('requests', () => {
     store.getState().ingestStatus(running('Another failure'));
     expect(selectRowsError(store.getState())).toBe('Another failure');
 
-    store.getState().ingestStatus({ phase: 'IDLE', lastError: 'Start failed', warnings: [] });
+    store.getState().ingestStatus({ phase: 'IDLE', lastError: 'Start failed' });
     expect(selectRowsError(store.getState())).toBeNull();
   });
 });

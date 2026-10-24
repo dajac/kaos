@@ -569,7 +569,7 @@ components:
       description: The status of the simulation, the body of the 202 answers and the data of the `status` event.
       type: object
       additionalProperties: false
-      required: [phase, lastError, warnings]
+      required: [phase, lastError]
       properties:
         phase:
           $ref: "#/components/schemas/Phase"
@@ -577,16 +577,11 @@ components:
         lastError:
           type: string
           description: The message of the last failed operation of the lifecycle thread, empty otherwise.
-        warnings:
-          type: array
-          description: What the groups could not apply at their start and went on without.
-          items:
-            type: string
     Simulator:
       description: The status, with the spec of the simulation.
       type: object
       additionalProperties: false
-      required: [phase, spec, lastError, warnings]
+      required: [phase, spec, lastError]
       properties:
         phase:
           $ref: "#/components/schemas/Phase"
@@ -594,10 +589,6 @@ components:
           $ref: "#/components/schemas/SimulatorSpec"
         lastError:
           type: string
-        warnings:
-          type: array
-          items:
-            type: string
 
     # Specs, as the server describes them
 

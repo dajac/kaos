@@ -257,7 +257,7 @@ see [Snapshot pipeline](#snapshot-pipeline). The harness is built: the
 `with…` methods, `addTopic`, `addProducer`, `addGroup`, `start`,
 `stop`, `close`, `describe`, `snapshot`, the listeners and
 `awaitSnapshot`, and, on the groups, `consumer(..)`, `addConsumer`,
-`autopilot()`, `warnings()`, `snapshot()` and `awaitSnapshot`, every
+`autopilot()`, `snapshot()` and `awaitSnapshot`, every
 method of `ConsumerHandle`, and `remove()` on every component, before
 `start()` and while the simulator runs.
 
@@ -438,8 +438,14 @@ try (Simulator simulator = new Simulator("localhost:9092")
   opens its autopilot. The group configs it sets are the explicit
   settings of the spec, those whose value differs from the default in
   `ConfigMetadata`; a setting with that default is left to the broker,
-  even when the user set it to that value. `warnings()` lists what the start could not
-  apply and went on without; it is empty while the group does not run.
+  even when the user set it to that value. A group config the broker
+  refuses, a value out of its bounds or a key it does not know (an
+  explicit `consumer.assignment.interval.ms` before 4.3), fails the
+  start of the group, after the keys already set are reverted: the
+  group never runs without a setting it was given. The
+  `SimulationException` names the key, the value, the group and the
+  broker's message, so `start()` fails and rolls back, and `addGroup`
+  on a running simulator fails and adds nothing.
 - The session timeout and the heartbeat interval apply to both
   protocols. A consumer-protocol member takes them from the group
   configs; a classic member takes them from its client, so
@@ -475,9 +481,8 @@ try (Simulator simulator = new Simulator("localhost:9092")
   `stop()` keeps the intervals. The initial intervals are the
   prototype's 10 s and 30 s.
 - Removing a static member that the coordinator still lists after its
-  consumer is closed, deleting the group, and setting a group config the
-  broker refuses are best-effort: they are logged (the config also as a
-  warning) and never fail a start or a stop.
+  consumer is closed, and deleting the group, are best-effort: they are
+  logged and never fail a start or a stop.
 
 **Multiple groups**
 - Settings, consumers, autopilot, snapshot and lag are per group.
@@ -1142,7 +1147,7 @@ holds one `Simulator`.
 
 ```
 GET    /api/v1/meta                     defaults, ranges, assignors per protocol, faults, version
-GET    /api/v1/simulator                {phase, spec (overrides + effective), lastError, warnings}
+GET    /api/v1/simulator                {phase, spec (overrides + effective), lastError}
 POST   /api/v1/simulator                SimulatorSpec {topics[], producers[], groups[]}
                                         declarative create + start, atomic -> 202 | 400 | 409
 DELETE /api/v1/simulator                stop and remove everything -> 202 | 204 if idle
@@ -1181,7 +1186,7 @@ GET    /api/v1/openapi.yaml             this API as an OpenAPI 3.1 document (app
   "Metadata and static files" below).
 
 **Status**
-- The status is `{phase, lastError, warnings}`. It is the body of the
+- The status is `{phase, lastError}`. It is the body of the
   202 answers and the data of the SSE `status` event, and
   `GET /simulator` returns it with the `spec` (`SimulatorSpec`, with the
   overrides and the effective settings of each consumer).
@@ -1193,8 +1198,9 @@ GET    /api/v1/openapi.yaml             this API as an OpenAPI 3.1 document (app
 - `lastError` is the message of the last failed operation of the
   executor: an operation clears it when it begins and sets it if it
   fails. It thus also reports a failed add, remove or protocol switch,
-  which the `lastError` of the snapshot does not.
-- `warnings` lists the `warnings()` of every group.
+  which the `lastError` of the snapshot does not. A group config the
+  broker refuses thus ends a start `IDLE`, and an add of a group
+  `RUNNING`, with the broker's refusal in `lastError`.
 
 **Requests**
 - The checks of a request run before it is accepted, against the
@@ -1813,8 +1819,8 @@ that the README example compiles.
   leaves after the 10 s session timeout of the group, not the 45 s of
   the client default; a classic session timeout under the broker's
   `group.min.session.timeout.ms` leaves the consumer `FAILED`; only the explicit group configs
-  are set and they are reverted; a config the broker refuses is a
-  warning; a quick stop and start with static members works with both
+  are set and they are reverted; a config the broker refuses fails the
+  start and the keys already set are reverted; a quick stop and start with static members works with both
   protocols; listeners fire only on change; an unsupported
   consumer-protocol assignor leaves the consumer `FAILED` while the
   simulator runs; the autopilot flips subscriptions.
@@ -1829,7 +1835,8 @@ that the README example compiles.
   topics and producers are added and removed while running, a topic in
   use refuses its removal, and a removed topic is deleted; a failed
   `add…` of a topic, a producer or a group leaves the simulator
-  unchanged. Each test checks that `close()` leaves no thread, topic or
+  unchanged, and so does adding a group whose config the broker
+  refuses. Each test checks that `close()` leaves no thread, topic or
   group behind.
 - `TopicManagerTest` checks that every partition of a topic accepts a
   produce request without retries once `awaitReady` returns, and that a
@@ -1851,7 +1858,9 @@ that the README example compiles.
 - `SimulationServiceTest` (`@IntegrationTest`) holds the lifecycle
   thread busy to show that a dynamic operation is refused once a stop is
   accepted, and that one queued before a stop that ran first does
-  nothing but set `lastError`.
+  nothing but set `lastError`; a start with a group config the broker
+  refuses ends `IDLE`, and such an add `RUNNING`, with the refusal in
+  `lastError`.
 - `HttpRunTest` (`@IntegrationTest`) drives a full run through HTTP
   against the broker: start, a second start refused, the 404s and 409s,
   a 400 on a dynamic add, a fault injected and cleared, leave and join,

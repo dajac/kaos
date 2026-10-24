@@ -121,7 +121,6 @@ public final class GroupRuntime implements ConsumerGroup {
     private final AutopilotImpl autopilot;
 
     private volatile List<ConsumerRunner> consumers;
-    private volatile List<String> warnings = List.of();
     private volatile boolean removed;
 
     // Guarded by the structure lock of the simulator.
@@ -244,11 +243,6 @@ public final class GroupRuntime implements ConsumerGroup {
     @Override
     public Autopilot autopilot() {
         return autopilot;
-    }
-
-    @Override
-    public List<String> warnings() {
-        return warnings;
     }
 
     @Override
@@ -393,11 +387,7 @@ public final class GroupRuntime implements ConsumerGroup {
         });
 
         var applied = services.configs().apply(spec);
-        warnings = applied.warnings();
-        resources.register("configs of group " + groupId, () -> {
-            warnings = List.of();
-            services.configs().revert(groupId, applied.previous());
-        });
+        resources.register("configs of group " + groupId, () -> services.configs().revert(groupId, applied.previous()));
         resources.register("group " + groupId, () -> services.cleanup().deleteGroup(groupId));
 
         consumerStacks = resources.child("consumers of group " + groupId);

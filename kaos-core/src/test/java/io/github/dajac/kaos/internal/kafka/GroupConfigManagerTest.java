@@ -82,7 +82,6 @@ class GroupConfigManagerTest {
         var applied = manager.apply(GroupSpec.of("g", g -> g.subscribe("t")));
 
         assertThat(applied.previous()).isEmpty();
-        assertThat(applied.warnings()).isEmpty();
         assertThat(store.writes).isEmpty();
     }
 
@@ -118,25 +117,81 @@ class GroupConfigManagerTest {
     }
 
     @Test
-    void aRefusedKeyIsAWarningAndTheOthersApply() {
-        store.refused.add("consumer.assignment.interval.ms");
+    void aRefusedFirstKeyIsThrownAndNothingElseIsWritten() {
+        store.refused.add("consumer.session.timeout.ms");
         var spec = GroupSpec.of("g", g -> g
             .subscribe("t")
             .sessionTimeout(Duration.ofSeconds(10))
             .assignmentInterval(Duration.ofSeconds(2))
         );
 
-        var applied = manager.apply(spec);
-
-        assertThat(store.configs).containsOnly(Map.entry("consumer.session.timeout.ms", "10000"));
-        assertThat(applied.previous()).containsOnlyKeys("consumer.session.timeout.ms");
-        assertThat(applied.warnings()).singleElement().asString()
-            .contains("consumer.assignment.interval.ms=2000")
-            .contains("unknown consumer.assignment.interval.ms");
-
-        manager.revert("g", applied.previous());
+        assertThatThrownBy(() -> manager.apply(spec))
+            .isInstanceOf(SimulationException.class)
+            .hasMessage(
+                "The broker refused the group config consumer.session.timeout.ms=10000 of group g: "
+                    + "unknown consumer.session.timeout.ms"
+            )
+            .hasCauseInstanceOf(RefusedConfigException.class);
 
         assertThat(store.configs).isEmpty();
+        assertThat(store.writes).containsExactly("consumer.session.timeout.ms=10000");
+    }
+
+    @Test
+    void aRefusedKeyRevertsTheKeysSetBeforeIt() {
+        store.configs.put("consumer.session.timeout.ms", "20000");
+        store.refused.add("consumer.assignment.interval.ms");
+        var spec = GroupSpec.of("g", g -> g
+            .subscribe("t")
+            .sessionTimeout(Duration.ofSeconds(10))
+            .heartbeatInterval(Duration.ofSeconds(1))
+            .assignmentInterval(Duration.ofSeconds(2))
+        );
+
+        assertThatThrownBy(() -> manager.apply(spec))
+            .isInstanceOf(SimulationException.class)
+            .hasMessageContaining("consumer.assignment.interval.ms=2000 of group g");
+
+        assertThat(store.configs).containsOnly(Map.entry("consumer.session.timeout.ms", "20000"));
+        assertThat(store.writes).containsExactly(
+            "consumer.session.timeout.ms=10000",
+            "consumer.heartbeat.interval.ms=1000",
+            "consumer.assignment.interval.ms=2000",
+            "consumer.session.timeout.ms=20000",
+            "consumer.heartbeat.interval.ms=<deleted>"
+        );
+    }
+
+    @Test
+    void aRefusalWhoseRevertFailsKeepsTheRevertFailureAsSuppressed() {
+        var spec = GroupSpec.of("g", g -> g
+            .subscribe("t")
+            .sessionTimeout(Duration.ofSeconds(10))
+            .heartbeatInterval(Duration.ofSeconds(1))
+        );
+        var failing = new GroupConfigManager(new GroupConfigManager.Store() {
+            @Override
+            public Map<String, String> read(String groupId) {
+                return store.read(groupId);
+            }
+
+            @Override
+            public void write(String groupId, String key, Optional<String> value) {
+                if (key.equals("consumer.heartbeat.interval.ms")) {
+                    throw new RefusedConfigException("out of bounds", null);
+                }
+                if (value.isEmpty()) {
+                    throw new SimulationException("broker down");
+                }
+                store.write(groupId, key, value);
+            }
+        });
+
+        assertThatThrownBy(() -> failing.apply(spec))
+            .isInstanceOf(SimulationException.class)
+            .hasMessageContaining("consumer.heartbeat.interval.ms=1000 of group g: out of bounds")
+            .satisfies(e -> assertThat(e.getSuppressed()).singleElement()
+                .satisfies(revert -> assertThat(revert).hasMessage("Could not revert the configs of group g")));
     }
 
     @Test
