@@ -115,11 +115,81 @@ this one only leaves the hook for it.
 | CI red after the approval | Not a candidate. The tick's existing rule (`in-review`, `checks` `fail`) starts an `address` job, whose new commits void the approval. |
 | CI pending | Not a candidate; the next poll tries again. |
 | A push after the approval | `--auto` holds without a comment: the PR is not approved on its head any more, and David reviews it again. |
-| GitHub refuses the merge as conflicting (`mergeable` is `CONFLICTING`) | `stage.sh <N> in-progress` and a comment ("conflicts with `main`; the address job brings `main` in, then David approves again"). The next tick sees `in-progress` and starts `address`, which merges `main` into the branch (a new commit, no force-push). |
+| The PR conflicts with `main` | See "Conflicts with `main`" below: back to `in-progress`, the `address` job merges `main` in, David approves again. |
 | Any other refusal (405, 409, 5xx, a lost token) | Logged in `loop.log`; retried on the next poll; one comment on the PR per approval and reason after three failed polls in a row. |
 | A stale base without a conflict | Merged, as `./factory merge` does today: there is no "up to date" rule without branch protection, and CI runs on the merge commit with `main`. |
 
 GitHub notifies David of the merge itself (he is the PR's reviewer).
+
+### Conflicts with `main`
+
+Nothing in the factory looks at conflicts today: `./factory merge`
+lets GitHub refuse the PUT, and David brings `main` in by hand. With
+the loop merging, a conflict shows up in two ways: `main` moved since
+the approval (another PR merged, possibly in the same pass), or the PR
+conflicted already when David approved it.
+
+**Detection, in `merge.sh --auto`.** After the gate passes, and before
+the PUT, it reads the PR's `mergeable` (GraphQL, in the same query as
+the threads). GitHub computes it asynchronously, so:
+
+- `MERGEABLE`: it merges, pinned to the head as above;
+- `UNKNOWN`: it holds without a comment (exit 3, "mergeability not
+  computed yet"); the next poll reads it again;
+- `CONFLICTING`: the conflict path below (exit 3).
+
+Within one pass, merging a lower PR can make a higher one conflict
+while GitHub still reports the old `MERGEABLE`. The PUT then answers
+405 ("not mergeable"); `--auto` logs it and does nothing else, and the
+next poll reads the recomputed `mergeable`. The pass never retries a
+PR in the same poll.
+
+**The conflict path.** `merge.sh --auto`:
+
+1. moves the issue back with `stage.sh <N> in-progress`;
+2. posts one comment on the PR, once per head (a hidden marker
+   `<!-- factory-merge-conflict: <head sha> -->`):
+
+   > Approved, but not merged: the branch conflicts with `main`. The
+   > address job merges `main` into it; review the new head and approve
+   > it again.
+
+The approval is not dismissed: the next push voids it, as any push
+does.
+
+**The resolution, in the `address` job.** The tick's existing rule
+(`in-progress`, the PR exists, the last handoff is a `build`,
+`review`, `address` or `tick`) starts `address`. The job does not
+take the conflict from the bot's comment, which is data: it reads
+`mergeable` itself (`gh pr view <PR> --json mergeable`) and, when it
+is `CONFLICTING`,
+
+- merges `origin/main` into the branch (`git merge origin/main`, a
+  merge commit, never a rebase or a force-push, so "changes since
+  last review" still works);
+- resolves the conflicts keeping the intent of both sides, runs the
+  checks of the PR as for any address commit, and pushes;
+- says in its handoff what it resolved and how, so that David sees it
+  in the review;
+- when it cannot resolve a conflict with confidence (the two sides
+  change the same behavior in incompatible ways), it aborts the merge,
+  pushes nothing, and blocks for David (`blocked: conflicts with main
+  in <files>`, `resume: in-progress`).
+
+From there the PR follows the usual path: `reviewing`, the review job,
+`in-review`, and David approves the new head before the loop merges
+it.
+
+**Conflicts before the approval.** The merge pass looks only at
+approved PRs, so a PR that conflicts while waiting for David is found
+when he approves it, and costs him a second approval. Catching it
+earlier needs `mergeable` in the snapshot (one more GraphQL field per
+open PR) and a tick rule (`in-review`, `CONFLICTING` → `in-progress`).
+It is left out of this PR (open question 3).
+
+Stacked children (base not `main`) are never candidates, so the merge
+pass never sees their conflicts; their rebase stays with "Stacked PRs
+(planned)".
 
 ### The squash message and `./factory merge`
 
@@ -221,15 +291,18 @@ No change to `docs/ARCHITECTURE.md` (Kaos itself is untouched).
   resolved, CI green, no note | the loop merges; the issue is closed by
   `Closes #N`, the next tick cleans up. And `in-review` | the merge
   conflicts | `in-progress`, start `address`.
-- Stage 6: the gate, the note rule and the held comment, the failures;
-  `./factory merge` as David's manual merge.
+- Stage 6: the gate, the note rule and the held comment, the failures,
+  a "Conflicts with `main`" part as above; `./factory merge` as
+  David's manual merge.
 - "Identity": the bot merges only from the loop.
 - "Guardrails": `merge.sh --auto` in the refused list; the loop is the
   only merger.
 - The breach check's new rule (still planned).
 - "Running it": `./factory merge` described as the manual merge.
-- `.claude/skills/factory-address/SKILL.md`: a conflict with `main` is
-  something the job resolves, by merging `main` into the branch.
+- `.claude/skills/factory-address/SKILL.md`: the job reads the PR's
+  `mergeable`; on `CONFLICTING` it merges `origin/main` into the
+  branch, resolves, reports the resolution in its handoff, or blocks
+  when it cannot resolve with confidence.
 - `scripts/factory/overview.sh`: the `merge by hand` action.
 - "Decisions": "David's approval on the head is the merge decision; the
   loop merges, never a Claude session."
@@ -251,7 +324,10 @@ No change to `docs/ARCHITECTURE.md` (Kaos itself is untouched).
     it;
   - posts the held comment once per approval, not on the next poll;
   - refuses to run without the bot's identity;
-  - on a conflict, calls `stage.sh <N> in-progress` and comments.
+  - `mergeable` `CONFLICTING`: no PUT, `stage.sh <N> in-progress`,
+    the conflict comment once per head (not again on the next poll,
+    again after a new head); `UNKNOWN`: exit 3, no PUT, no comment, no
+    stage change; a 405 on the PUT: logged, no stage change.
 - Interactive mode: the existing tests stay green, and one more shows
   that it merges an approval with a note.
 - `guard_test.sh`: `merge.sh --auto 90`, `scripts/factory/merge.sh
@@ -280,9 +356,14 @@ touches `scripts/factory/` and `.claude/`, so David builds it himself
    and comment once, or merge anyway and leave the note to David?
    *Recommendation: hold.* Is the list of bare approvals (`lgtm`, `looks
    good`, `looks good to me`, `ship it`) the right one?
-3. **A conflict with `main` at merge time.** Send the PR to `address`
-   (it merges `main` in, then David approves again), or block it for
-   David? *Recommendation: `address`; it is mechanical.*
+3. **Conflicts with `main`.** At merge time, send the PR to `address`
+   (it merges `main` in, blocks for you when it cannot resolve with
+   confidence, then you approve again), or block it for you right away?
+   *Recommendation: `address`; most conflicts are mechanical, and you
+   review the resolution anyway.* Should the tick also catch conflicts
+   before your approval (`mergeable` in the snapshot)?
+   *Recommendation: not in this PR; file it if second approvals turn
+   out frequent.*
 4. **Pause.** Does `./factory pause` stop the merges too?
    *Recommendation: yes; pause means the factory acts on nothing.*
 5. **`./factory merge` stays** for held PRs and David's own, without the
