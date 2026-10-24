@@ -107,8 +107,7 @@ class SimulationServiceTest {
 
         await().atMost(TIMEOUT).untilAsserted(() -> {
             assertThat(service.status().phase()).isEqualTo(Phase.IDLE);
-            assertThat(service.status().lastError()).contains(
-                "The broker refused the group config consumer.heartbeat.interval.ms=20000 of group " + groupId);
+            assertThat(service.status().lastError()).contains(REFUSED + groupId);
         });
         assertThat(simulator.describe().groups()).isEmpty();
     }
@@ -121,11 +120,15 @@ class SimulationServiceTest {
 
         service.addGroup(refusedGroup(groupId, topic));
 
-        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(service.status().lastError()).contains(
-            "The broker refused the group config consumer.heartbeat.interval.ms=20000 of group " + groupId));
+        await().atMost(TIMEOUT)
+            .untilAsserted(() -> assertThat(service.status().lastError()).contains(REFUSED + groupId));
         assertThat(service.status().phase()).isEqualTo(Phase.RUNNING);
         assertThat(simulator.describe().groups()).isEmpty();
     }
+
+    /** The start of the message of the refusal of {@link #refusedGroup}, before the group id. */
+    private static final String REFUSED = "The broker refused the group configs consumer.session.timeout.ms=30000, "
+        + "consumer.heartbeat.interval.ms=20000 of group ";
 
     /** A group whose heartbeat interval is over the group.consumer.max.heartbeat.interval.ms of the broker. */
     private static GroupSpec refusedGroup(String groupId, String topic) {

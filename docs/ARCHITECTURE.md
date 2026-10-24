@@ -438,14 +438,19 @@ try (Simulator simulator = new Simulator("localhost:9092")
   opens its autopilot. The group configs it sets are the explicit
   settings of the spec, those whose value differs from the default in
   `ConfigMetadata`; a setting with that default is left to the broker,
-  even when the user set it to that value. A group config the broker
-  refuses, a value out of its bounds or a key it does not know (an
-  explicit `consumer.assignment.interval.ms` before 4.3), fails the
-  start of the group, after the keys already set are reverted: the
-  group never runs without a setting it was given. The
-  `SimulationException` names the key, the value, the group and the
-  broker's message, so `start()` fails and rolls back, and `addGroup`
-  on a running simulator fails and adds nothing.
+  even when the user set it to that value. They are sent in one
+  `incrementalAlterConfigs`: the broker validates them together with
+  the other configs of the group (the session timeout must stay over
+  the heartbeat interval, so a short pair is refused key by key) and
+  sets all of them or none. A group config the broker refuses, a value
+  out of its bounds or a key it does not know (an explicit
+  `consumer.assignment.interval.ms` before 4.3), fails the start of the
+  group and sets none of them: the group never runs without a setting
+  it was given. The `SimulationException` names the keys, their
+  values, the group and the broker's message, so `start()` fails and
+  rolls back, and `addGroup` on a running simulator fails and adds
+  nothing. Another failure of the alter, a timeout for one, reverts the
+  keys, as the alter may have been applied.
 - The session timeout and the heartbeat interval apply to both
   protocols. A consumer-protocol member takes them from the group
   configs; a classic member takes them from its client, so
@@ -1819,8 +1824,10 @@ that the README example compiles.
   leaves after the 10 s session timeout of the group, not the 45 s of
   the client default; a classic session timeout under the broker's
   `group.min.session.timeout.ms` leaves the consumer `FAILED`; only the explicit group configs
-  are set and they are reverted; a config the broker refuses fails the
-  start and the keys already set are reverted; a quick stop and start with static members works with both
+  are set and they are reverted; a session timeout of 3 s with a
+  heartbeat interval of 1 s, under the default heartbeat interval, is
+  set; a config the broker refuses fails the start and sets none of
+  the keys; a quick stop and start with static members works with both
   protocols; listeners fire only on change; an unsupported
   consumer-protocol assignor leaves the consumer `FAILED` while the
   simulator runs; the autopilot flips subscriptions.

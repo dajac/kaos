@@ -43,10 +43,12 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
  *
  * <p>Only the explicit settings are sent. A setting is explicit when its value differs from its
  * default in {@link ConfigMetadata}; a setting with that default is left to the broker, even when
- * the user set it to that value. Each key is sent on its own. The broker refuses a key it does not
- * know, as a broker before 4.3 does with {@code consumer.assignment.interval.ms}, and a value
- * outside the bounds of its own configuration. A refused key, as any other failure, is thrown after
- * the keys already set are reverted, so the group never runs without a config it was given.
+ * the user set it to that value. The keys are sent in one alter: the broker validates them together
+ * with the other configs of the group, as the session timeout must stay over the heartbeat interval,
+ * and sets all of them or none. It refuses a key it does not know, as a broker before 4.3 does with
+ * {@code consumer.assignment.interval.ms}, and a value outside the bounds of its own configuration.
+ * A refused alter is thrown, so the group never runs without a config it was given; another failure
+ * is thrown after the keys are reverted, as the alter may have been applied.
  *
  * <p>The configs are those of the consumer protocol. The session timeout and the heartbeat interval
  * apply to the members of both protocols: those that speak the classic protocol take them from
@@ -60,11 +62,12 @@ public final class GroupConfigManager {
         Map<String, String> read(String groupId);
 
         /**
-         * Sets a dynamic config of the group, or deletes it when the value is empty.
+         * Sets the dynamic configs of the group, and deletes those whose value is empty, in one
+         * alter: all of them are written or none.
          *
-         * @throws RefusedConfigException if the broker refuses the key or its value
+         * @throws RefusedConfigException if the broker refuses a key or a value
          */
-        void write(String groupId, String key, Optional<String> value);
+        void write(String groupId, Map<String, Optional<String>> configs);
     }
 
     /** The broker refused a config: it does not know the key, or the value is out of its bounds. */
@@ -127,21 +130,21 @@ public final class GroupConfigManager {
             return new Applied(previous);
         }
         var existing = store.read(spec.id());
+        var writes = new LinkedHashMap<String, Optional<String>>();
+        configs.forEach((key, value) -> {
+            writes.put(key, Optional.of(value));
+            previous.put(key, Optional.ofNullable(existing.get(key)));
+        });
         try {
-            configs.forEach((key, value) -> {
-                try {
-                    store.write(spec.id(), key, Optional.of(value));
-                    previous.put(key, Optional.ofNullable(existing.get(key)));
-                } catch (RefusedConfigException e) {
-                    throw new SimulationException(
-                        "The broker refused the group config " + key + "=" + value + " of group " + spec.id() + ": "
-                            + e.getMessage(),
-                        e
-                    );
-                }
-            });
+            store.write(spec.id(), writes);
+        } catch (RefusedConfigException e) {
+            throw new SimulationException(
+                "The broker refused the group " + (configs.size() == 1 ? "config " : "configs ") + describe(configs)
+                    + " of group " + spec.id() + ": " + e.getMessage(),
+                e
+            );
         } catch (RuntimeException e) {
-            // The keys that were set before the failure are put back, as nobody else will.
+            // The alter may have been applied: the keys are put back, as nobody else will.
             try {
                 revert(spec.id(), previous);
             } catch (RuntimeException suppressed) {
@@ -152,24 +155,26 @@ public final class GroupConfigManager {
         return new Applied(previous);
     }
 
+    private static String describe(Map<String, String> configs) {
+        var parts = new ArrayList<String>();
+        configs.forEach((key, value) -> parts.add(key + "=" + value));
+        return String.join(", ", parts);
+    }
+
     /**
-     * Gives every key its previous value back, or deletes it when it had none. Every key is tried.
+     * Gives every key its previous value back, or deletes it when it had none, in one alter.
      *
-     * @throws SimulationException if keys could not be reverted
+     * @throws SimulationException if the keys could not be reverted
      */
     public void revert(String groupId, Map<String, Optional<String>> previous) {
-        var failures = new ArrayList<RuntimeException>();
-        previous.forEach((key, value) -> {
-            try {
-                store.write(groupId, key, value);
-            } catch (RuntimeException e) {
-                failures.add(e);
-            }
-        });
-        if (!failures.isEmpty()) {
-            var failure = new SimulationException("Could not revert the configs of group " + groupId);
-            failures.forEach(failure::addSuppressed);
-            throw failure;
+        if (previous.isEmpty()) {
+            return;
+        }
+        try {
+            store.write(groupId, previous);
+        } catch (RuntimeException e) {
+            throw new SimulationException("Could not revert the configs of group " + groupId + ": " + e.getMessage(),
+                e);
         }
     }
 
@@ -201,12 +206,14 @@ public final class GroupConfigManager {
         }
 
         @Override
-        public void write(String groupId, String key, Optional<String> value) {
-            var op = value
+        public void write(String groupId, Map<String, Optional<String>> configs) {
+            var ops = new ArrayList<AlterConfigOp>();
+            configs.forEach((key, value) -> ops.add(value
                 .map(set -> new AlterConfigOp(new ConfigEntry(key, set), AlterConfigOp.OpType.SET))
-                .orElseGet(() -> new AlterConfigOp(new ConfigEntry(key, ""), AlterConfigOp.OpType.DELETE));
+                .orElseGet(() -> new AlterConfigOp(new ConfigEntry(key, ""), AlterConfigOp.OpType.DELETE))));
+            var keys = String.join(", ", configs.keySet());
             try {
-                admin.incrementalAlterConfigs(Map.of(resource(groupId), List.of(op))).all()
+                admin.incrementalAlterConfigs(Map.of(resource(groupId), ops)).all()
                     .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             } catch (ExecutionException e) {
                 var cause = e.getCause();
@@ -217,12 +224,12 @@ public final class GroupConfigManager {
                 ) {
                     throw new RefusedConfigException(cause.getMessage(), cause);
                 }
-                throw new SimulationException("Could not set " + key + " on group " + groupId + ": " + cause, cause);
+                throw new SimulationException("Could not set " + keys + " on group " + groupId + ": " + cause, cause);
             } catch (TimeoutException e) {
-                throw new SimulationException("Timed out setting " + key + " on group " + groupId, e);
+                throw new SimulationException("Timed out setting " + keys + " on group " + groupId, e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new SimulationException("Interrupted while setting " + key + " on group " + groupId, e);
+                throw new SimulationException("Interrupted while setting " + keys + " on group " + groupId, e);
             }
         }
 

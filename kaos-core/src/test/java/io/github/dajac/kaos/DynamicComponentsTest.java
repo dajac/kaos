@@ -215,10 +215,11 @@ class DynamicComponentsTest {
             ))
                 .isInstanceOf(SimulationException.class)
                 .hasMessageContaining(
-                    "The broker refused the group config consumer.heartbeat.interval.ms=20000 of group " + refusedId);
+                    "The broker refused the group configs consumer.session.timeout.ms=30000, "
+                        + "consumer.heartbeat.interval.ms=20000 of group " + refusedId);
 
             assertThat(simulator.groups()).containsExactly(kept);
-            assertThat(dynamicGroupConfigs(refusedId)).isEmpty();
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(refusedId)).isEmpty());
             assertThat(groupIds()).doesNotContain(refusedId);
             assertThat(simulator.snapshot().phase()).isEqualTo(Phase.RUNNING);
             await().during(QUIET).atMost(TIMEOUT).until(() -> {

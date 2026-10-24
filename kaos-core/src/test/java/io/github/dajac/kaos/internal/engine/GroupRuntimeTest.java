@@ -90,7 +90,7 @@ class GroupRuntimeTest {
         }
 
         @Override
-        public void write(String groupId, String key, Optional<String> value) {
+        public void write(String groupId, Map<String, Optional<String>> configs) {
             throw new UnsupportedOperationException();
         }
     }
