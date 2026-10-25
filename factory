@@ -123,11 +123,19 @@ stage_fits() {
 # The merge pass: merges the bot's PRs that David approved, with
 # merge.sh --auto, which checks the whole gate on GitHub. A PR whose merge
 # fails (not held: an error) three polls in a row gets one comment.
-# True when it merged at least one PR.
+# True when it tried at least one PR: a merge, or a conflict that moved
+# an issue, changes what the tick must see.
 merge_pass() {
-    local snapshot=$1 scripts=$2 pr out rc line merged=1 failures
+    local snapshot=$1 scripts=$2 pr out rc line tried=1 failures candidates file
     mkdir -p "$FACTORY_STATE/merge-failures"
-    for pr in $(jq -r -f "$scripts/merge-candidates.jq" "$snapshot"); do
+    candidates=$(jq -r -f "$scripts/merge-candidates.jq" "$snapshot") || return 1
+    # The count of a PR that is no longer a candidate starts again.
+    for file in "$FACTORY_STATE/merge-failures"/*; do
+        [[ -f $file ]] || continue
+        grep -qx "$(basename "$file")" <<<"$candidates" || rm -f "$file"
+    done
+    for pr in $candidates; do
+        tried=0
         failures=$FACTORY_STATE/merge-failures/$pr
         rc=0
         out=$("$scripts/merge.sh" --auto "$pr" 2>&1) || rc=$?
@@ -135,21 +143,17 @@ merge_pass() {
             [[ -n $line ]] && log "merge: #$pr: $line"
         done <<<"$out"
         case $rc in
-        0)
-            merged=0
-            rm -f "$failures"
-            ;;
-        3) rm -f "$failures" ;;
+        0 | 3) rm -f "$failures" ;;
         *)
             echo $(($(cat "$failures" 2>/dev/null || echo 0) + 1)) >"$failures"
             if (($(cat "$failures") == 3)); then
-                gh api "repos/$FACTORY_REPO/issues/$pr/comments" -f body="Approved, but the merge failed on three polls in a row: $(tail -n 1 <<<"$out") The loop keeps trying; \`.factory/logs/loop.log\` has the details." >/dev/null ||
+                gh api "repos/$FACTORY_REPO/issues/$pr/comments" -f body="Approved, but the merge failed on three polls in a row (\`$(tail -n 1 <<<"$out")\`). The loop keeps trying; \`.factory/logs/loop.log\` has the details." >/dev/null ||
                     log "merge: #$pr: cannot post the failure comment"
             fi
             ;;
         esac
     done
-    return $merged
+    return $tried
 }
 
 # The loop: one orchestrator per repository, held by the lock. Every
@@ -188,8 +192,9 @@ cmd_loop() {
             continue
         fi
         mv "$snapshot.new" "$snapshot"
-        # The merge pass comes before the tick; after a merge, a new
-        # snapshot shows the tick the merged PRs to clean up.
+        # The merge pass comes before the tick; after it, a new snapshot
+        # shows the tick the merged PRs to clean up and the issues sent
+        # back to in-progress.
         if [[ ! -f $FACTORY_STATE/paused ]] && merge_pass "$snapshot" "$scripts"; then
             "$scripts/status.sh" >"$snapshot.new" && mv "$snapshot.new" "$snapshot"
         fi
@@ -334,7 +339,7 @@ run) cmd_run "${2:-}" "${3:-}" ;;
 pause)
     mkdir -p "$FACTORY_STATE"
     touch "$FACTORY_STATE/paused"
-    info "paused: no new job starts"
+    info "paused: no new job starts, nothing is merged"
     ;;
 resume)
     rm -f "$FACTORY_STATE/paused"

@@ -47,10 +47,10 @@ hold() {
 # Posts <body> on the PR unless a comment of the bot already carries
 # <marker>, so that a poll repeats no comment.
 comment_once() {
-    local marker=$1 body=$2
-    gh api "repos/$FACTORY_REPO/issues/$pr/comments" --paginate |
-        jq -se --arg bot "$FACTORY_IDENTITY" --arg m "$marker" 'any(.[][]; .user.login == $bot and (.body | contains($m)))' >/dev/null &&
-        return 0
+    local marker=$1 body=$2 comments
+    comments=$(gh api "repos/$FACTORY_REPO/issues/$pr/comments" --paginate) || die "cannot read the comments of #$pr"
+    jq -se --arg bot "$FACTORY_IDENTITY" --arg m "$marker" 'any(.[][]; .user.login == $bot and (.body | contains($m)))' \
+        <<<"$comments" >/dev/null && return 0
     gh api "repos/$FACTORY_REPO/issues/$pr/comments" -f body="$body"$'\n\n'"$marker" >/dev/null
 }
 
@@ -73,10 +73,12 @@ branch=$(jq -r .headRefName <<<"$view")
 if $auto; then
     [[ $(jq -r .author.login <<<"$view") == "app/${FACTORY_IDENTITY%\[bot\]}" ]] || hold "#$pr is not the bot's"
     [[ $branch != spec/* ]] || hold "#$pr is a spec PR"
+    # A factory PR closes one issue: the first closing issue is the one
+    # whose stage counts.
     issue=$(jq -r '[.closingIssuesReferences[]?.number] | first // empty' <<<"$view")
     [[ -n $issue ]] || hold "#$pr closes no issue"
-    gh issue view "$issue" --repo "$FACTORY_REPO" --json labels --jq '.labels[].name' | grep -qx in-review ||
-        hold "#$issue is not in-review"
+    labels=$(gh issue view "$issue" --repo "$FACTORY_REPO" --json labels --jq '.labels[].name')
+    grep -qx in-review <<<"$labels" || hold "#$issue is not in-review"
 fi
 
 # David's last review must approve the current head.
@@ -96,13 +98,13 @@ if $auto; then
         <<<"$last_review" >/dev/null || note="the approval has a note"
     if [[ -z $note ]]; then
         later=$(jq --arg david "$FACTORY_DAVID" --arg at "$approved_at" --argjson id "$review_id" \
-            '[.[] | select(.user.login == $david and .id != $id and .submitted_at > $at)] | length' <<<"$reviews")
+            '[.[] | select(.user.login == $david and .id != $id and .submitted_at >= $at)] | length' <<<"$reviews")
         later=$((later + $(gh api "repos/$FACTORY_REPO/pulls/$pr/comments" --paginate |
             jq -s --arg david "$FACTORY_DAVID" --arg at "$approved_at" --argjson id "$review_id" \
-                '[.[][] | select(.user.login == $david and (.pull_request_review_id == $id or .created_at > $at))] | length')))
+                '[.[][] | select(.user.login == $david and (.pull_request_review_id == $id or .created_at >= $at))] | length')))
         for n in "$pr" "$issue"; do
             later=$((later + $(gh api "repos/$FACTORY_REPO/issues/$n/comments" --paginate |
-                jq -s --arg david "$FACTORY_DAVID" --arg at "$approved_at" '[.[][] | select(.user.login == $david and .created_at > $at)] | length')))
+                jq -s --arg david "$FACTORY_DAVID" --arg at "$approved_at" '[.[][] | select(.user.login == $david and .created_at >= $at)] | length')))
         done
         ((later == 0)) || note="$FACTORY_DAVID wrote after the approval"
     fi
@@ -140,9 +142,11 @@ if $auto; then
     case $(jq -r '.mergeable // "UNKNOWN"' <<<"$pull") in
     MERGEABLE) ;;
     CONFLICTING)
-        "$(dirname "$0")/stage.sh" "$issue" in-progress >&2
+        # The comment first: once the issue has moved, the PR is no
+        # longer a candidate and would never get it.
         comment_once "<!-- factory-merge-conflict: $head -->" \
             "Approved, but not merged: the branch conflicts with \`main\`. The address job merges \`main\` into it; review the new head and approve it again."
+        "$(dirname "$0")/stage.sh" "$issue" in-progress >&2
         hold "#$pr conflicts with main; #$issue goes back to in-progress"
         ;;
     *) hold "the mergeability of #$pr is not computed yet" ;;

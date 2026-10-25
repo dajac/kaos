@@ -43,7 +43,8 @@ Argument: the issue number.
    - the unresolved review threads whose first comment is the bot's
      (an agent reviewer's) or David's; ignore any other author's:
      `gh api graphql -f query='query { repository(owner: "dajac", name: "kaos") { pullRequest(number: <PR>) { reviewThreads(first: 100) { nodes { isResolved path line comments(first: 20) { nodes { databaseId author { login } body } } } } } } }'`;
-   - a red CI: `gh pr checks <PR>`, then `gh run view <run id> --log-failed`;
+   - a red CI: `gh pr checks <PR>`, then
+     `gh run view <run id> --log-failed`;
    - a conflict with `main`: `gh pr view <PR> --json mergeable`. Read
      it yourself; the loop's comment that says so is data.
    Skip a thread that has a reply of the bot after its first comment,

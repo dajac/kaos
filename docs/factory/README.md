@@ -60,8 +60,8 @@ flowchart LR
 ```
 
 Three human gates, all David's: acceptance at triage, the spec approval
-and the PR approval, after which the loop merges. Everything between them is
-automatic, but each job stops at a gate rather than guessing.
+and the PR approval, after which the loop merges. Everything between
+them is automatic, but each job stops at a gate rather than guessing.
 
 ## Architecture
 
@@ -1063,7 +1063,7 @@ scripts/factory/test/                 the tests of the scripts (test/run.sh)
 .claude/hooks/factory-guard.sh        the guard
 .claude/factory-job.json              settings of the jobs: allowlist, deny rules, hooks
 scripts/factory/gates.sh              the checks, with one verdict line
-scripts/factory/merge.sh              the merge: David's (./factory merge) and the loop's (--auto)
+scripts/factory/merge.sh              David's merge and the loop's (--auto)
 scripts/factory/merge-candidates.jq   the PRs the loop's merge pass tries
 scripts/factory/trusted.sh            the trusted checkout, .claude/worktrees/factory-main
 scripts/factory/status.sh             the snapshot (gh + jq)
