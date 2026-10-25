@@ -30,12 +30,6 @@ render() {
             | if $d < 3600 then "\([($d / 60 | floor), 0] | max)m"
               elif $d < 86400 then "\($d / 3600 | floor)h"
               else "\($d / 86400 | floor)d" end;
-          def action:
-            if .stage == "triaged" then "accept the triage"
-            elif .stage == "spec-review" then "review the spec"
-            elif .stage == "in-review" then "review the PR"
-            elif .stage == "blocked" then "unblock"
-            else .stage end;
           def pad($n): if length < $n then . + (" " * ($n - length)) else . end;
           def cut($n): if length > $n then .[0:$n - 1] + "…" else . end;
           # One line per row, in aligned columns: the second column holds
@@ -56,6 +50,15 @@ render() {
         | .prs as $prs
         | def pr_of($n): [$prs[] | select(.closes | index($n))] + [$prs[] | select(.head | test("^(spec/)?\($n)-"))] | unique_by(.number);
           def prs_text($n): [pr_of($n)[] | "#\(.number)\(if .draft then " (draft)" else "" end), CI \(.checks)"] | join("; ");
+          # An approved, green PR still open after the loop'"'"'s merge pass
+          # was held by it: David merges it with ./factory merge.
+          def action:
+            if .stage == "triaged" then "accept the triage"
+            elif .stage == "spec-review" then "review the spec"
+            elif .stage == "in-review" and any(pr_of(.number)[]; (.head | test("^spec/") | not) and .review == "APPROVED" and .checks == "pass") then "merge by hand"
+            elif .stage == "in-review" then "review the PR"
+            elif .stage == "blocked" then "unblock"
+            else .stage end;
           .
         | .issues as $issues
         | ($job.issue // "") as $running
