@@ -961,7 +961,9 @@ refuses to run a spec,
 build or address job on such a branch (measured from where the branch
 forked from `main`, so a branch older than a change of main's is not
 taken for one), the tick blocks the issue with the reason, and David
-builds those changes himself. The review job replaces them with main's
+builds those changes himself. A new branch is still empty when its
+build starts, so `job.sh` also refuses a build or address job for an
+issue labelled `area:factory`, before it makes the worktree. The review job replaces them with main's
 (`git checkout --no-overlay`, which also removes the files a PR adds
 there). A branch cut from an older `main` keeps the skills of that
 `main` in its own jobs, with today's trusted scripts and hooks.

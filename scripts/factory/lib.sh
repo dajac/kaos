@@ -44,6 +44,14 @@ remote_has_branch() {
     git -C "$1" ls-remote --exit-code origin "refs/heads/$2" >/dev/null 2>&1
 }
 
+# Whether the issue <N> changes the factory itself: its triage gave it
+# the label area:factory. Fails when the labels cannot be read.
+factory_issue() {
+    local labels
+    labels=$(gh issue view "$1" --repo "$FACTORY_REPO" --json labels --jq '.labels[].name') || return 2
+    grep -qx 'area:factory' <<<"$labels"
+}
+
 # Loads the bot's configuration written by "factory setup".
 load_bot() {
     [[ -f $FACTORY_STATE/bot.env ]] || die "no bot configured, run ./factory setup"
