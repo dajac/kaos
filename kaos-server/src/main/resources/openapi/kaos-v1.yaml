@@ -683,7 +683,9 @@ components:
       description: |
         The settings a consumer sets itself; the others are inherited from
         the `consumerDefaults` of its group. A setting that is not
-        overridden is left out.
+        overridden is left out. `sessionTimeoutMs` and `heartbeatIntervalMs`
+        inherit from the group instead, and only a classic consumer can set
+        them.
       type: object
       additionalProperties: false
       properties:
@@ -710,6 +712,18 @@ components:
           format: int32
           minimum: 1000
           maximum: 600000
+        sessionTimeoutMs:
+          type: integer
+          format: int32
+          minimum: 1000
+          maximum: 300000
+          description: Classic protocol only; overrides the group's session timeout.
+        heartbeatIntervalMs:
+          type: integer
+          format: int32
+          minimum: 500
+          maximum: 60000
+          description: Classic protocol only; overrides the group's heartbeat interval.
 
     # Request bodies
 

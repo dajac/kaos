@@ -40,10 +40,21 @@ export type Scope = ConfigField['scope'];
 /** The settings of a consumer, all set. */
 export type ConsumerSettingsForm = Readonly<ConsumerSettings>;
 
-export type OverrideKey = keyof ConsumerSettingsForm;
+/**
+ * The settings a classic consumer can override over those of its group, and
+ * which a consumer of the consumer protocol takes from the group.
+ */
+export type ClassicOverrideKey = 'sessionTimeoutMs' | 'heartbeatIntervalMs';
+
+const CLASSIC_OVERRIDE_KEYS: readonly ClassicOverrideKey[] = ['sessionTimeoutMs', 'heartbeatIntervalMs'];
+
+/** The values a consumer runs with: its settings, and the session timeout and heartbeat interval it uses. */
+export type ConsumerValues = ConsumerSettingsForm & Readonly<Record<ClassicOverrideKey, number>>;
+
+export type OverrideKey = keyof ConsumerValues;
 
 /** The overrides of a consumer, in the order they were added. */
-export type Overrides = Partial<ConsumerSettingsForm>;
+export type Overrides = Partial<ConsumerValues>;
 
 /** The overridable settings, in the order of the "+ Add override" menu and of the chips. */
 export const OVERRIDE_KEYS: readonly OverrideKey[] = [
@@ -54,7 +65,12 @@ export const OVERRIDE_KEYS: readonly OverrideKey[] = [
   'pollTimeoutMs',
   'pollDelayMs',
   'maxPollIntervalMs',
+  ...CLASSIC_OVERRIDE_KEYS,
 ];
+
+function isClassicOverrideKey(key: OverrideKey): key is ClassicOverrideKey {
+  return (CLASSIC_OVERRIDE_KEYS as readonly string[]).includes(key);
+}
 
 /** How the form edits an override. */
 export type OverrideKind = 'protocol' | 'assignor' | 'boolean' | 'text' | 'number';
@@ -67,6 +83,8 @@ export const OVERRIDE_KINDS: Readonly<Record<OverrideKey, OverrideKind>> = {
   pollTimeoutMs: 'number',
   pollDelayMs: 'number',
   maxPollIntervalMs: 'number',
+  sessionTimeoutMs: 'number',
+  heartbeatIntervalMs: 'number',
 };
 
 /** The short names of the settings on the chips of a collapsed consumer. */
@@ -78,6 +96,8 @@ export const CHIP_LABELS: Readonly<Record<OverrideKey, string>> = {
   pollTimeoutMs: 'pollTimeout',
   pollDelayMs: 'pollDelay',
   maxPollIntervalMs: 'maxPoll',
+  sessionTimeoutMs: 'sessionTimeout',
+  heartbeatIntervalMs: 'heartbeat',
 };
 
 /** The optional settings of a group, added with "+ Add setting", in menu order. */
@@ -186,9 +206,9 @@ export function groupSettingField(meta: Meta, key: GroupSettingKey): FieldInfo<G
   return { ...metaField(meta, GROUP_SETTING_SCOPES[key], key), key };
 }
 
-/** The field of an override. */
+/** The field of an override; a classic-only one has the label and the range of the group field. */
 export function overrideField(meta: Meta, key: OverrideKey): FieldInfo<OverrideKey> {
-  return { ...metaField(meta, 'CONSUMER', key), key };
+  return { ...metaField(meta, isClassicOverrideKey(key) ? 'GROUP' : 'CONSUMER', key), key };
 }
 
 /** The integer that a number input holds: `parseInt`, and 0 for text that is not a number. */
@@ -251,9 +271,20 @@ export function setPartitions(group: GroupForm, partitions: number): GroupForm {
   return { ...group, partitions };
 }
 
-/** The group with `protocol`; its assignor falls back to the first preset when the protocol refuses it. */
+/**
+ * The group with `protocol`; its assignor falls back to the first preset when
+ * the protocol refuses it, and the consumers that inherit the consumer
+ * protocol lose their classic-only overrides.
+ */
 export function setGroupProtocol(meta: Meta, group: GroupForm, protocol: Protocol): GroupForm {
-  return { ...group, protocol, assignor: adaptAssignor(meta, protocol, group.assignor) };
+  const updated = { ...group, protocol, assignor: adaptAssignor(meta, protocol, group.assignor) };
+  return {
+    ...updated,
+    consumers: updated.consumers.map((consumer) => {
+      const overrides = withoutClassicOnly(updated, consumer.overrides);
+      return overrides === consumer.overrides ? consumer : { ...consumer, overrides };
+    }),
+  };
 }
 
 /** The group after picking `option` in its assignor picker. */
@@ -336,9 +367,25 @@ export function coordinationSettings(
   };
 }
 
-/** The settings of `consumer`: its overrides, and the settings of its group for the rest. */
-export function effectiveSettings(meta: Meta, group: GroupForm, consumer: ConsumerForm): ConsumerSettingsForm {
-  return { ...consumerDefaults(meta, group), ...consumer.overrides };
+/**
+ * The values of `consumer`: its overrides, and the settings of its group for
+ * the rest, the session timeout and the heartbeat interval included.
+ */
+export function effectiveSettings(meta: Meta, group: GroupForm, consumer: ConsumerForm): ConsumerValues {
+  const { sessionTimeoutMs, heartbeatIntervalMs } = coordinationSettings(meta, group);
+  return { ...consumerDefaults(meta, group), sessionTimeoutMs, heartbeatIntervalMs, ...consumer.overrides };
+}
+
+// A consumer of the consumer protocol takes the session timeout and the
+// heartbeat interval of its group, so its classic-only overrides go, for
+// good: switching back to classic does not restore them.
+function withoutClassicOnly(group: GroupForm, overrides: Overrides): Overrides {
+  if ((overrides.protocol ?? group.protocol) === 'classic' || !CLASSIC_OVERRIDE_KEYS.some((k) => k in overrides)) {
+    return overrides;
+  }
+  return Object.fromEntries(
+    Object.entries(overrides).filter(([key]) => !isClassicOverrideKey(key as OverrideKey)),
+  ) as Overrides;
 }
 
 // -- Consumers -------------------------------------------------------------
@@ -380,11 +427,12 @@ export function toggleConsumer(group: GroupForm, key: number): GroupForm {
 
 // After a change of the protocol override, the assignor that the consumer
 // ends up with must suit the protocol: when it does not, the consumer
-// overrides it with the first preset of the protocol.
+// overrides it with the first preset of the protocol. A switch to the
+// consumer protocol drops the classic-only overrides.
 function adaptOverriddenProtocol(meta: Meta, group: GroupForm, overrides: Overrides): Overrides {
   const effective = { ...consumerDefaults(meta, group), ...overrides };
   const adapted = adaptAssignor(meta, effective.protocol, effective.assignor);
-  return adapted === effective.assignor ? overrides : { ...overrides, assignor: adapted };
+  return withoutClassicOnly(group, adapted === effective.assignor ? overrides : { ...overrides, assignor: adapted });
 }
 
 /** The group with the override `key` added to the consumer `key`, at the value it inherits. */
@@ -401,7 +449,7 @@ export function setOverride<K extends OverrideKey>(
   group: GroupForm,
   consumerKey: number,
   key: K,
-  value: ConsumerSettingsForm[K],
+  value: ConsumerValues[K],
 ): GroupForm {
   return withConsumer(group, consumerKey, (consumer) => {
     const overrides = { ...consumer.overrides, [key]: value };
@@ -425,11 +473,15 @@ export function pickOverrideAssignor(meta: Meta, group: GroupForm, consumerKey: 
   );
 }
 
-/** The group without the override `key` of the consumer `consumerKey`, which inherits it again. */
+/**
+ * The group without the override `key` of the consumer `consumerKey`, which
+ * inherits it again; a consumer that then inherits the consumer protocol
+ * loses its classic-only overrides.
+ */
 export function removeOverride(group: GroupForm, consumerKey: number, key: OverrideKey): GroupForm {
   return withConsumer(group, consumerKey, (consumer) => {
     const { [key]: _removed, ...overrides } = consumer.overrides;
-    return { ...consumer, overrides };
+    return { ...consumer, overrides: withoutClassicOnly(group, overrides) };
   });
 }
 
@@ -444,7 +496,7 @@ export function inheritsAll(consumer: ConsumerForm): boolean {
 }
 
 /** A setting as a chip or a hint shows it. */
-export function formatSetting<K extends OverrideKey>(key: K, value: ConsumerSettingsForm[K]): string {
+export function formatSetting<K extends OverrideKey>(key: K, value: ConsumerValues[K]): string {
   if (key === 'staticMember') {
     return value ? 'on' : 'off';
   }
@@ -459,10 +511,15 @@ export function consumerChips(consumer: ConsumerForm): Chip[] {
   });
 }
 
-/** The entries of the "+ Add override" menu: the settings not overridden yet, with the values they inherit. */
+/**
+ * The entries of the "+ Add override" menu: the settings not overridden yet,
+ * with the values they inherit. The classic-only ones are offered to a
+ * classic consumer only.
+ */
 export function addOverrideOptions(meta: Meta, group: GroupForm, consumer: ConsumerForm): AddOption<OverrideKey>[] {
   const effective = effectiveSettings(meta, group, consumer);
-  return OVERRIDE_KEYS.filter((key) => consumer.overrides[key] === undefined).map((key) => ({
+  const offered = (key: OverrideKey) => effective.protocol === 'classic' || !isClassicOverrideKey(key);
+  return OVERRIDE_KEYS.filter((key) => consumer.overrides[key] === undefined && offered(key)).map((key) => ({
     key,
     label: overrideField(meta, key).label,
     hint: formatSetting(key, effective[key]),

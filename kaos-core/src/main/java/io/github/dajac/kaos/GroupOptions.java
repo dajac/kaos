@@ -92,9 +92,12 @@ public final class GroupOptions {
     /**
      * The settings the consumers inherit. What the lambda does not set keeps the default of
      * {@link ConfigMetadata}. A later call replaces an earlier one.
+     *
+     * @throws IllegalArgumentException if the lambda sets a session timeout or a heartbeat interval,
+     *     which the group sets with {@link #sessionTimeout} and {@link #heartbeatInterval}
      */
     public GroupOptions consumerDefaults(Consumer<ConsumerOptions> defaults) {
-        this.consumerDefaults = ConsumerOptions.overrides(defaults);
+        this.consumerDefaults = ConsumerOptions.defaults(defaults);
         return this;
     }
 

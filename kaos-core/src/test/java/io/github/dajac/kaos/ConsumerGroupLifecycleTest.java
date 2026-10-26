@@ -264,6 +264,33 @@ class ConsumerGroupLifecycleTest {
     }
 
     @Test
+    void anIsolatedClassicMemberLeavesAfterItsOwnSessionTimeout() {
+        var topic = cluster.uniqueName("classic-override");
+        var groupId = cluster.uniqueName("classic-override");
+
+        try (var simulator = newSimulator()) {
+            simulator.addTopic(topic, 4);
+            var group = simulator.addGroup(groupId, g -> g
+                .subscribe(topic)
+                .consumerDefaults(
+                    c -> c.protocol(Protocol.CLASSIC).staticMember(true).pollDelay(Duration.ofMillis(100)))
+                .consumer(c -> c.sessionTimeout(Duration.ofSeconds(6)).heartbeatInterval(Duration.ofSeconds(1)))
+                .consumers(1)
+            );
+            simulator.start();
+            group.awaitSnapshot(allAssigned(4, "consumer-0", "consumer-1"), TIMEOUT);
+
+            group.consumer(0).inject(Fault.networkIsolation());
+            group.consumer(1).inject(Fault.networkIsolation());
+
+            // consumer-0 times out after its own 6 s; consumer-1 keeps the 45 s of the group.
+            var evicted =
+                group.awaitSnapshot(s -> consumer(s, "consumer-0").memberId().isEmpty(), Duration.ofSeconds(30));
+            assertThat(consumer(evicted, "consumer-1").memberId()).isNotEmpty();
+        }
+    }
+
+    @Test
     void aClassicSessionTimeoutUnderTheBrokerMinimumFailsTheConsumer() {
         var topic = cluster.uniqueName("classic-min");
         var groupId = cluster.uniqueName("classic-min");

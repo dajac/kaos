@@ -310,7 +310,7 @@ public final class GroupRuntime implements ConsumerGroup {
             spec.id(),
             identified,
             spec.subscribedTopics(),
-            ConsumerRunner.ClassicTimeouts.of(spec),
+            ConsumerRunner.ClassicTimeouts.of(spec, identified),
             owner
         );
     }

@@ -85,7 +85,7 @@ class GroupRuntimeTest {
     }
 
     @Test
-    void aClassicConsumerTakesTheSessionTimeoutAndHeartbeatIntervalOfTheGroup() {
+    void aClassicConsumerTakesItsOwnSessionTimeoutAndHeartbeatIntervalOrThoseOfTheGroup() {
         var classic = new ConsumerSettings(Protocol.CLASSIC, "", true, "", 0, 20, 300_000);
         var spec = new GroupSpec(
             "g",
@@ -94,7 +94,11 @@ class GroupRuntimeTest {
             1_000,
             1000,
             classic,
-            List.of(ConsumerSpec.inheriting(), ConsumerSpec.of(c -> c.protocol(Protocol.CONSUMER)))
+            List.of(
+                ConsumerSpec.inheriting(),
+                ConsumerSpec.of(c -> c.protocol(Protocol.CONSUMER)),
+                ConsumerSpec.of(c -> c.sessionTimeout(Duration.ofSeconds(6)).heartbeatInterval(Duration.ofSeconds(2)))
+            )
         );
         var group = new GroupRuntime(spec, List.of(new TopicSpec("orders", 1)), new Harness());
         var settings = new CopyOnWriteArrayList<Map<String, Object>>();
@@ -118,5 +122,8 @@ class GroupRuntimeTest {
         assertThat(settings.get(1))
             .doesNotContainKey(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG)
             .doesNotContainKey(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+        assertThat(settings.get(2))
+            .containsEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 6_000)
+            .containsEntry(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 2_000);
     }
 }

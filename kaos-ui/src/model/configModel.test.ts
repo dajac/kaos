@@ -324,6 +324,8 @@ describe('consumers', () => {
       pollTimeoutMs: 0,
       pollDelayMs: 10,
       maxPollIntervalMs: 300000,
+      sessionTimeoutMs: 45000,
+      heartbeatIntervalMs: 5000,
     });
     expect(consumerChips(first)).toEqual([
       { key: 'staticMember', label: 'static', value: 'on' },
@@ -349,7 +351,9 @@ describe('consumers', () => {
         assignor: 'uniform',
         protocol: 'classic' as const,
         pollDelayMs: 0,
+        heartbeatIntervalMs: 2000,
         staticMember: false,
+        sessionTimeoutMs: 10000,
       },
     };
     expect(consumerChips(consumer).map((c) => `${c.label}=${c.value}`)).toEqual([
@@ -360,6 +364,8 @@ describe('consumers', () => {
       'pollTimeout=5',
       'pollDelay=0',
       'maxPoll=2000',
+      'sessionTimeout=10000',
+      'heartbeat=2000',
     ]);
     expect(overrideKeys(consumer)).toEqual([
       'maxPollIntervalMs',
@@ -368,7 +374,9 @@ describe('consumers', () => {
       'assignor',
       'protocol',
       'pollDelayMs',
+      'heartbeatIntervalMs',
       'staticMember',
+      'sessionTimeoutMs',
     ]);
   });
 
@@ -476,6 +484,63 @@ describe('overrides', () => {
       { key: 'maxPollIntervalMs', label: 'Max Poll Interval (ms)', hint: '300000' },
     ]);
   });
+
+  it('offers the session timeout and the heartbeat interval to a classic consumer, at the values of the group', () => {
+    let group = setGroupSetting(addGroupSetting(META, emptyGroup(), 'sessionTimeoutMs'), 'sessionTimeoutMs', 30000);
+    group = addConsumer(addConsumer(group));
+    group = setOverride(META, group, 1, 'protocol', 'classic');
+
+    expect(addOverrideOptions(META, group, group.consumers[0]!).map((o) => o.key)).not.toContain('sessionTimeoutMs');
+    expect(addOverrideOptions(META, group, group.consumers[1]!).slice(-2)).toEqual([
+      { key: 'sessionTimeoutMs', label: 'Session Timeout (ms)', hint: '30000' },
+      { key: 'heartbeatIntervalMs', label: 'Heartbeat Interval (ms)', hint: '5000' },
+    ]);
+    expect(overrideField(META, 'sessionTimeoutMs')).toMatchObject({ min: 1000, max: 300000 });
+
+    group = addOverride(META, group, 1, 'sessionTimeoutMs');
+    group = addOverride(META, group, 1, 'heartbeatIntervalMs');
+    expect(overridesOf(group, 1)).toEqual({
+      protocol: 'classic',
+      assignor: 'range',
+      sessionTimeoutMs: 30000,
+      heartbeatIntervalMs: 5000,
+    });
+    // Changing the group's value leaves the override as it is.
+    group = setGroupSetting(group, 'sessionTimeoutMs', 20000);
+    expect(overridesOf(group, 1)?.sessionTimeoutMs).toBe(30000);
+  });
+
+  it('drops the classic-only overrides when the consumer switches to the consumer protocol', () => {
+    let group = addConsumer(setGroupProtocol(META, emptyGroup(), 'classic'));
+    group = setOverride(META, group, 0, 'sessionTimeoutMs', 10000);
+    group = setOverride(META, group, 0, 'heartbeatIntervalMs', 2000);
+
+    group = setOverride(META, group, 0, 'protocol', 'consumer');
+    expect(overridesOf(group)).toEqual({ protocol: 'consumer' });
+    // Switching back does not restore them.
+    group = setOverride(META, group, 0, 'protocol', 'classic');
+    expect(overridesOf(group)).toEqual({ protocol: 'classic' });
+  });
+
+  it('drops the classic-only overrides when the consumer inherits the consumer protocol again', () => {
+    let group = addConsumer(emptyGroup());
+    group = setOverride(META, group, 0, 'protocol', 'classic');
+    group = setOverride(META, group, 0, 'sessionTimeoutMs', 10000);
+
+    group = removeOverride(group, 0, 'protocol');
+    expect(overridesOf(group)).toEqual({ assignor: 'range' });
+  });
+
+  it('drops the classic-only overrides of the consumers that inherit the consumer protocol of the group', () => {
+    let group = addConsumer(addConsumer(setGroupProtocol(META, emptyGroup(), 'classic')));
+    group = setOverride(META, group, 0, 'sessionTimeoutMs', 10000);
+    group = setOverride(META, group, 1, 'protocol', 'classic');
+    group = setOverride(META, group, 1, 'heartbeatIntervalMs', 2000);
+
+    group = setGroupProtocol(META, group, 'consumer');
+    expect(inheritsAll(group.consumers[0]!)).toBe(true);
+    expect(overridesOf(group, 1)).toEqual({ protocol: 'classic', heartbeatIntervalMs: 2000 });
+  });
 });
 
 // A classic group on `range`, static, with the max poll interval added, and
@@ -508,6 +573,8 @@ describe('start request', () => {
         pollDelayMs: 1000,
         maxPollIntervalMs: 300000,
         staticMember: true,
+        sessionTimeoutMs: 45000,
+        heartbeatIntervalMs: 5000,
       },
       {
         protocol: 'consumer',
@@ -517,6 +584,8 @@ describe('start request', () => {
         pollDelayMs: 1000,
         maxPollIntervalMs: 300000,
         staticMember: true,
+        sessionTimeoutMs: 45000,
+        heartbeatIntervalMs: 5000,
       },
     ]);
   });
@@ -614,7 +683,8 @@ function specOf(config: ConfigForm): SimulatorSpec {
         assignmentIntervalMs: r.assignmentIntervalMs,
         consumerDefaults: r.consumerDefaults!,
         consumers: group.consumers.map((c, i) => {
-          const effective = effectiveSettings(META, group, c);
+          // `effective` has the settings only: a consumer inherits the other values from the group.
+          const { sessionTimeoutMs: _s, heartbeatIntervalMs: _h, ...effective } = effectiveSettings(META, group, c);
           return {
             id: consumerName(i),
             overrides: r.consumers![i]!.overrides!,
@@ -638,9 +708,15 @@ describe('rehydration', () => {
     group = setGroupSetting(group, 'maxPollIntervalMs', 90000);
     group = setOverride(META, group, 0, 'assignor', 'sticky');
     group = setOverride(META, group, 0, 'maxPollIntervalMs', 5000);
+    group = setOverride(META, group, 0, 'heartbeatIntervalMs', 2000);
+    group = setOverride(META, group, 0, 'sessionTimeoutMs', 10000);
     group = toggleConsumer(group, 0);
     const config: ConfigForm = { ratePerPartition: 4, groups: [group] };
 
+    expect(buildStartRequest(META, config).groups?.[0]?.consumers?.[0]?.overrides).toMatchObject({
+      sessionTimeoutMs: 10000,
+      heartbeatIntervalMs: 2000,
+    });
     const rehydrated = configFromSimulator(META, running(specOf(config)));
 
     expect(rehydrated.ratePerPartition).toBe(4);
@@ -662,7 +738,11 @@ describe('rehydration', () => {
     // The prototype restored the number of consumers only; the spec has
     // their overrides, which come back in menu order.
     expect(g.consumers).toEqual([
-      { key: 0, expanded: false, overrides: { assignor: 'sticky', maxPollIntervalMs: 5000 } },
+      {
+        key: 0,
+        expanded: false,
+        overrides: { assignor: 'sticky', maxPollIntervalMs: 5000, sessionTimeoutMs: 10000, heartbeatIntervalMs: 2000 },
+      },
       { key: 1, expanded: false, overrides: { protocol: 'consumer', rackId: 'r1', pollTimeoutMs: 7 } },
     ]);
     expect(buildStartRequest(META, rehydrated)).toEqual(buildStartRequest(META, config));
