@@ -20,7 +20,6 @@ import type { Meta } from '../../api/client';
 import { addConsumer, duplicateLastConsumer, type GroupForm } from '../../model/configModel';
 import { groupFieldKey } from '../../model/violations';
 import { isLocked, useConfigStore } from '../../state/configStore';
-import { selectGroup, selectShownGroupId, useSimulationStore } from '../../state/simulationStore';
 import { ConsumerSection } from './ConsumerSection';
 import { FieldError } from './FieldError';
 import { GroupSection } from './GroupSection';
@@ -184,33 +183,6 @@ function Footer() {
   return (
     <div className="sidebar-footer" id="config-footer">
       {button}
-      <AutopilotButton />
     </div>
-  );
-}
-
-// The Auto-Pilot of the group of the Rows view, while the simulation runs.
-function AutopilotButton() {
-  const running = useConfigStore((s) => s.phase === 'RUNNING');
-  const groupId = useSimulationStore(selectShownGroupId);
-  const enabled = useSimulationStore((s) =>
-    groupId === undefined ? false : (selectGroup(s, groupId)?.autopilot.enabled ?? false),
-  );
-  const setAutopilot = useSimulationStore((s) => s.setAutopilot);
-
-  const disabled = !running || groupId === undefined;
-  return (
-    <button
-      className={enabled && !disabled ? 'btn btn-autopilot active' : 'btn btn-autopilot'}
-      id="btn-autopilot-config"
-      disabled={disabled}
-      onClick={() => {
-        if (groupId !== undefined) {
-          void setAutopilot(groupId, !enabled);
-        }
-      }}
-    >
-      Auto-Pilot
-    </button>
   );
 }

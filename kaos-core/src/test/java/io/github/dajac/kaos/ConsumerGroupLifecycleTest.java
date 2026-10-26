@@ -433,31 +433,6 @@ class ConsumerGroupLifecycleTest {
         }
     }
 
-    @Test
-    void theAutopilotFlipsSubscriptions() {
-        var topic = cluster.uniqueName("autopilot");
-        var groupId = cluster.uniqueName("autopilot");
-
-        try (var simulator = newSimulator()) {
-            simulator.addTopic(topic, 2);
-            var group = simulator.addGroup(groupId, g -> g.subscribe(topic).consumers(1));
-            simulator.start();
-
-            group.autopilot().start(Duration.ofMillis(100), Duration.ofMillis(200));
-
-            assertThat(group.autopilot().enabled()).isTrue();
-            assertThat(simulatorThreads()).contains("kaos-" + groupId + "-autopilot");
-            group.awaitSnapshot(s -> s.autopilot().equals(new AutopilotSnapshot(true, 100, 200)), TIMEOUT);
-            group.awaitSnapshot(s -> !consumer(s, "consumer-0").subscribed(), TIMEOUT);
-            group.awaitSnapshot(s -> consumer(s, "consumer-0").subscribed(), TIMEOUT);
-
-            group.autopilot().stop();
-
-            assertThat(simulatorThreads()).doesNotContain("kaos-" + groupId + "-autopilot");
-            group.awaitSnapshot(s -> s.autopilot().equals(new AutopilotSnapshot(false, 100, 200)), TIMEOUT);
-        }
-    }
-
     /** A simulator whose proxy requests the port block of this test JVM, away from the default one. */
     private Simulator newSimulator() {
         return new Simulator(cluster.bootstrapServers()).withProxyPort(cluster.proxyPort());

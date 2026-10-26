@@ -48,7 +48,6 @@ export function group(overrides: Partial<GroupSnapshot> = {}): GroupSnapshot {
     targetAssignmentEpoch: 7,
     generation: -1,
     subscribedTopics: ['orders-1', 'orders-2'],
-    autopilot: { enabled: false, minIntervalMs: 10000, maxIntervalMs: 30000 },
     lag: { 'orders-1': [0, 12, -1, 3], 'orders-2': [0, 0, 0, 0] },
     consumers: [
       consumer('consumer-0', {

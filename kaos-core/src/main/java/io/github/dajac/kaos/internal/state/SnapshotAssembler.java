@@ -57,7 +57,6 @@ public final class SnapshotAssembler {
             view.targetAssignmentEpoch(),
             generation,
             group.subscribedTopics().stream().map(TopicSpec::name).toList(),
-            group.autopilot(),
             denseLag(group.subscribedTopics(), view.lag()),
             consumers
         );

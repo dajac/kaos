@@ -35,8 +35,8 @@ import { shareStructure } from '../model/share';
 // consumers and lag arrays that did not change keep their identity and the
 // memoized rows do not render again.
 //
-// The store also sends the requests of the Rows view (the actions, the faults
-// and the autopilot), and keeps the message of the last one that failed.
+// The store also sends the requests of the Rows view (the actions and the
+// faults), and keeps the message of the last one that failed.
 
 /** `connecting` until the first stream opens; `disconnected` from a failure until a stream opens again. */
 export type Connection = 'connecting' | 'open' | 'disconnected';
@@ -58,7 +58,6 @@ export interface SimulationState {
 
   runAction(groupId: string, consumerId: string, action: ActionRequest): Promise<void>;
   setFault(groupId: string, consumerId: string, fault: FaultId, active: boolean): Promise<void>;
-  setAutopilot(groupId: string, enabled: boolean): Promise<void>;
   dismissErrors(): void;
 }
 
@@ -136,12 +135,6 @@ export function createSimulationStore(options: SimulationStoreOptions = {}): Sto
         return send(`${active ? 'Injecting' : 'Clearing'} ${fault} on ${consumerId}`, () =>
           active ? client.injectFault(groupId, consumerId, fault) : client.clearFault(groupId, consumerId, fault),
         );
-      },
-
-      setAutopilot(groupId, enabled) {
-        // The intervals are left out: the autopilot keeps its own, 10 to 30 s
-        // unless another client changed them.
-        return send(`Turning the autopilot ${enabled ? 'on' : 'off'}`, () => client.setAutopilot(groupId, { enabled }));
       },
 
       dismissErrors() {

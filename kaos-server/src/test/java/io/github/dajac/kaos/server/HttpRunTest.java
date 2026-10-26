@@ -136,20 +136,6 @@ class HttpRunTest {
         assertThat(api.delete(group + "/consumers/consumer-2").statusCode()).isEqualTo(202);
         awaitSnapshot(s -> consumers(s, groupId).size() == 2);
 
-        // The autopilot.
-        assertThat(api.put(group + "/autopilot", "{\"enabled\": true, \"minIntervalMs\": 60000}").statusCode())
-            .isEqualTo(400);
-        assertThat(
-            api.put(group + "/autopilot", "{\"enabled\": true, \"minIntervalMs\": 20000, \"maxIntervalMs\": 40000}")
-                .statusCode())
-            .isEqualTo(204);
-        awaitSnapshot(s -> {
-            var autopilot = groupSnapshot(s, groupId).get("autopilot");
-            return autopilot.get("enabled").asBoolean() && autopilot.get("minIntervalMs").asInt() == 20000;
-        });
-        assertThat(api.put(group + "/autopilot", "{\"enabled\": false}").statusCode()).isEqualTo(204);
-        awaitSnapshot(s -> !groupSnapshot(s, groupId).get("autopilot").get("enabled").asBoolean());
-
         // Pause and resume the producer.
         assertThat(api.put("/api/v1/simulator/producers/producer-0/state", "{\"paused\": true}").statusCode())
             .isEqualTo(204);

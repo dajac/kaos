@@ -143,7 +143,6 @@ class SnapshotRecordsTest {
             3,
             -1,
             List.of("t", "a"),
-            new AutopilotSnapshot(false, 10_000, 30_000),
             lag,
             consumers
         );

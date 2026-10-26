@@ -42,7 +42,6 @@ function fakeClient() {
     getSimulator: vi.fn<ApiClient['getSimulator']>(),
     startSimulator: vi.fn<ApiClient['startSimulator']>(),
     stopSimulator: vi.fn<ApiClient['stopSimulator']>(),
-    setAutopilot: vi.fn<ApiClient['setAutopilot']>().mockResolvedValue(undefined),
     injectFault: vi.fn<ApiClient['injectFault']>().mockResolvedValue(undefined),
     clearFault: vi.fn<ApiClient['clearFault']>().mockResolvedValue(undefined),
     runAction: vi.fn<ApiClient['runAction']>().mockResolvedValue(null),
@@ -135,19 +134,17 @@ describe('connect', () => {
 });
 
 describe('requests', () => {
-  it('sends the actions, the faults and the autopilot of a consumer', async () => {
+  it('sends the actions and the faults of a consumer', async () => {
     const client = fakeClient();
     const store = createSimulationStore({ client });
 
     await store.getState().runAction('orders', 'consumer-0', { type: 'leave' });
     await store.getState().setFault('orders', 'consumer-0', 'freeze', true);
     await store.getState().setFault('orders', 'consumer-0', 'network-isolation', false);
-    await store.getState().setAutopilot('orders', true);
 
     expect(client.runAction).toHaveBeenCalledWith('orders', 'consumer-0', { type: 'leave' });
     expect(client.injectFault).toHaveBeenCalledWith('orders', 'consumer-0', 'freeze');
     expect(client.clearFault).toHaveBeenCalledWith('orders', 'consumer-0', 'network-isolation');
-    expect(client.setAutopilot).toHaveBeenCalledWith('orders', { enabled: true });
     expect(store.getState().requestError).toBeNull();
   });
 
