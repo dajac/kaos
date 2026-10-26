@@ -949,22 +949,30 @@ pattern cannot tell `git push origin main` from every way to write it),
 and `stage.sh` checks the `accepted` gate against
 the timeline. The jobs' `factory-job.json` and hooks come from the
 trusted checkout, which the loop resets to `origin/main` on every poll,
-and `job.sh` reverts any change a tick makes there. Changes to the factory itself
-(`factory`, `.claude/`, `scripts/factory/`, `docs/factory/`,
-`.github/`) always go through a spec, and the `rules` reviewer flags
-them. Claude Code loads the hooks, skills, agents and `CLAUDE.md` of a
-job's worktree, and the job runs the worktree's scripts, so a branch
-that changes `.claude/`, `CLAUDE.md`, `scripts/factory/` or `./factory`
-would change the rules of its own jobs (so would a `CLAUDE.local.md`,
-a nested `CLAUDE.md` or a `.mcp.json`, committed or not): `job.sh`
-refuses to run a spec,
-build or address job on such a branch (measured from where the branch
-forked from `main`, so a branch older than a change of main's is not
-taken for one), the tick blocks the issue with the reason, and David
-builds those changes himself. The review job replaces them with main's
-(`git checkout --no-overlay`, which also removes the files a PR adds
-there). A branch cut from an older `main` keeps the skills of that
-`main` in its own jobs, with today's trusted scripts and hooks.
+and `job.sh` reverts any change a tick makes there. Changes to the
+factory itself (`factory`, `.claude/`, `scripts/factory/`,
+`docs/factory/`, `.github/`) always go through a spec, and the `rules`
+reviewer flags them. Claude Code loads the hooks, skills, agents and
+`CLAUDE.md` of a job's worktree, and the job runs the worktree's
+scripts, so a branch that changes `.claude/`, `CLAUDE.md`,
+`scripts/factory/` or `./factory` would change the rules of its own
+jobs (so would a `CLAUDE.local.md`, a nested `CLAUDE.md` or a
+`.mcp.json`, committed or not): `job.sh` refuses to run a spec, build
+or address job on such a branch (measured from where the branch forked
+from `main`, so a branch older than a change of main's is not taken for
+one), the tick blocks the issue with the reason, and David builds those
+changes himself. The review job replaces them with main's (`git
+checkout --no-overlay`, which also removes the files a PR adds there).
+A branch cut from an older `main` keeps the skills of that `main` in
+its own jobs, with today's trusted scripts and hooks.
+
+A new branch is still empty when its build starts, so `job.sh` also
+refuses a build or address job for an issue labelled `area:factory`,
+before it makes the worktree. Such an issue still goes through its
+spec; after the approval, the refused build blocks it, and a comment
+from David only repeats the refusal: he builds it, and its PR closes
+it. The label comes from the triage; when it is missing, the check of
+the branch catches the first job that follows a factory change.
 
 The guard reads command lines; it does not stop what it cannot see: a
 script the job writes and then runs, a payload in a file (`gh api
