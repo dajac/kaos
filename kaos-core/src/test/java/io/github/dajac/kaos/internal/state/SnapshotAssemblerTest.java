@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import io.github.dajac.kaos.AutopilotSnapshot;
 import io.github.dajac.kaos.ConsumerSnapshot;
 import io.github.dajac.kaos.ConsumerStatus;
 import io.github.dajac.kaos.Fault;
@@ -40,15 +39,12 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class SnapshotAssemblerTest {
     private static final List<TopicSpec> TOPICS = List.of(new TopicSpec("t", 3), new TopicSpec("a", 2));
-    private static final AutopilotSnapshot AUTOPILOT_OFF = new AutopilotSnapshot(false, 10_000, 30_000);
-    private static final AutopilotSnapshot AUTOPILOT_ON = new AutopilotSnapshot(true, 5_000, 20_000);
 
     @Test
     void mergesAConsumerGroup() {
         var group = new GroupLocalState(
             "g",
             TOPICS,
-            AUTOPILOT_ON,
             List.of(
                 consumer(0, Protocol.CONSUMER, "uniform", true, Set.of(), "t-0"),
                 consumer(1, Protocol.CONSUMER, "uniform", true, Set.of(), "t-1|t-2"),
@@ -78,7 +74,6 @@ class SnapshotAssemblerTest {
         assertThat(snapshot.epoch()).isEqualTo(12);
         assertThat(snapshot.targetAssignmentEpoch()).isEqualTo(11);
         assertThat(snapshot.subscribedTopics()).containsExactly("t", "a");
-        assertThat(snapshot.autopilot()).isEqualTo(AUTOPILOT_ON);
         assertThat(snapshot.consumers()).extracting(ConsumerSnapshot::id)
             .containsExactly("consumer-0", "consumer-1", "consumer-2", "consumer-3");
 
@@ -138,7 +133,6 @@ class SnapshotAssemblerTest {
         var group = new GroupLocalState(
             "g",
             TOPICS,
-            AUTOPILOT_OFF,
             List.of(consumer(0, Protocol.CONSUMER, "uniform", true, Set.of(), "t-0"))
         );
         var view = new AdminView(
@@ -178,7 +172,6 @@ class SnapshotAssemblerTest {
         var group = new GroupLocalState(
             "g",
             TOPICS,
-            AUTOPILOT_OFF,
             List.of(
                 consumer(0, Protocol.CLASSIC, "range", true, Set.of(), ""),
                 consumer(1, Protocol.CLASSIC, "cooperative-sticky", true, Set.of(), "t-1")
@@ -217,7 +210,6 @@ class SnapshotAssemblerTest {
         var group = new GroupLocalState(
             "g",
             TOPICS,
-            AUTOPILOT_OFF,
             List.of(
                 consumer(0, Protocol.CONSUMER, "", true, Set.of(), ""),
                 consumer(1, Protocol.CONSUMER, "", false, Set.of(), "")
@@ -239,7 +231,7 @@ class SnapshotAssemblerTest {
     @Test
     void aGroupWithoutConsumers() {
         var snapshot = SnapshotAssembler.assemble(
-            new GroupLocalState("g", List.of(), AUTOPILOT_OFF, List.of()),
+            new GroupLocalState("g", List.of(), List.of()),
             AdminView.unknown()
         );
 
@@ -269,14 +261,14 @@ class SnapshotAssemblerTest {
             )
         );
 
-        var snapshot = SnapshotAssembler.assemble(new GroupLocalState("g", TOPICS, AUTOPILOT_OFF, List.of()), view);
+        var snapshot = SnapshotAssembler.assemble(new GroupLocalState("g", TOPICS, List.of()), view);
 
         assertThat(snapshot.lag()).containsExactly(
             Map.entry("t", List.of(0L, -1L, 9L)),
             Map.entry("a", List.of(-1L, 2L))
         );
         var unknown = SnapshotAssembler.assemble(
-            new GroupLocalState("g", TOPICS, AUTOPILOT_OFF, List.of()), AdminView.unknown()
+            new GroupLocalState("g", TOPICS, List.of()), AdminView.unknown()
         );
         assertThat(unknown.lag())
             .containsExactly(Map.entry("t", List.of(-1L, -1L, -1L)), Map.entry("a", List.of(-1L, -1L)));
@@ -304,7 +296,7 @@ class SnapshotAssemblerTest {
             failure,
             Set.of()
         );
-        var group = new GroupLocalState("g", TOPICS, AUTOPILOT_OFF, List.of(consumer));
+        var group = new GroupLocalState("g", TOPICS, List.of(consumer));
 
         var snapshot = SnapshotAssembler.assemble(group, AdminView.unknown()).consumers().get(0);
 
@@ -317,7 +309,6 @@ class SnapshotAssemblerTest {
         var group = new GroupLocalState(
             "g",
             TOPICS,
-            AUTOPILOT_OFF,
             List.of(consumer(
                 0,
                 Protocol.CONSUMER,

@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.ConsumerSpec;
 import io.github.dajac.kaos.server.dto.ActionRequest;
-import io.github.dajac.kaos.server.dto.AutopilotRequest;
 import io.github.dajac.kaos.server.dto.GroupRequest;
 import io.github.dajac.kaos.server.dto.MetaResponse;
 import io.github.dajac.kaos.server.dto.ProducerRequest;
@@ -114,10 +113,6 @@ final class ApiRoutes {
         routes.delete(GROUP, ctx -> {
             service.removeGroup(ctx.pathParam("groupId"));
             accepted(ctx);
-        });
-        routes.put(GROUP + "/autopilot", ctx -> {
-            service.setAutopilot(ctx.pathParam("groupId"), body(ctx, AutopilotRequest.class));
-            ctx.status(204);
         });
 
         routes.post(GROUP + "/consumers", ctx -> {

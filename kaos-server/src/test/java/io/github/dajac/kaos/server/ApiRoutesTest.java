@@ -101,6 +101,20 @@ class ApiRoutesTest {
     }
 
     @Test
+    void aClassicOnlyOverrideOnAConsumerOfTheConsumerProtocolIs400() {
+        var response = api.post("/api/v1/simulator", """
+            {"topics": [{"name": "orders", "partitions": 1}],
+             "groups": [{"id": "app", "subscribedTopics": ["orders"],
+                         "consumers": [{"overrides": {"protocol": "consumer", "sessionTimeoutMs": 10000}}]}]}
+            """);
+
+        var problem = assertProblem(response, 400);
+        assertThat(problem.get("violations")).singleElement().satisfies(
+            v -> assertThat(v.get("field").asText()).isEqualTo("groups[0].consumers[0].overrides.sessionTimeoutMs")
+        );
+    }
+
+    @Test
     void anUnknownPropertyIs400WithItsPath() {
         var response = api.post("/api/v1/simulator", """
             {"groups": [{"id": "app", "subscribedTopics": ["orders"], "consumers": [{"overrides": {"bogus": 1}}]}]}
@@ -181,7 +195,6 @@ class ApiRoutesTest {
             Arguments.of("PUT", "/api/v1/simulator/producers/producer-0/state", "{\"paused\": true}"),
             Arguments.of("POST", "/api/v1/simulator/groups", "{\"id\": \"other\", \"subscribedTopics\": [\"orders\"]}"),
             Arguments.of("DELETE", "/api/v1/simulator/groups/app", null),
-            Arguments.of("PUT", "/api/v1/simulator/groups/app/autopilot", "{\"enabled\": true}"),
             Arguments.of("POST", "/api/v1/simulator/groups/app/consumers", "{}"),
             Arguments.of("DELETE", consumer, null),
             Arguments.of("PUT", consumer + "/faults/freeze", null),

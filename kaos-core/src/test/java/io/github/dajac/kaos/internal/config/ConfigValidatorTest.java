@@ -17,16 +17,19 @@ package io.github.dajac.kaos.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.IntFunction;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.ConfigMetadata.Field;
+import io.github.dajac.kaos.ConsumerOptions;
 import io.github.dajac.kaos.ConsumerOverrides;
 import io.github.dajac.kaos.ConsumerSettings;
 import io.github.dajac.kaos.ConsumerSpec;
@@ -60,7 +63,7 @@ class ConfigValidatorTest {
     private static ConsumerSpec overriding(Optional<Protocol> protocol, Optional<String> assignor) {
         return ConsumerSpec.of(new ConsumerOverrides(
             protocol, assignor, Optional.empty(), Optional.empty(),
-            OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty()
+            OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty()
         ));
     }
 
@@ -143,6 +146,12 @@ class ConfigValidatorTest {
                 value -> withGroup(group(
                     "g", DEFAULTS, intOverrides(OptionalInt.empty(), OptionalInt.empty(), OptionalInt.of(value))
                 ))
+            ),
+            rangedField(ConfigMetadata.SESSION_TIMEOUT_MS, "groups[0].consumers[0].overrides.sessionTimeoutMs",
+                value -> withClassicConsumer(c -> c.sessionTimeout(Duration.ofMillis(value)))
+            ),
+            rangedField(ConfigMetadata.HEARTBEAT_INTERVAL_MS, "groups[0].consumers[0].overrides.heartbeatIntervalMs",
+                value -> withClassicConsumer(c -> c.heartbeatInterval(Duration.ofMillis(value)))
             )
         );
     }
@@ -158,7 +167,15 @@ class ConfigValidatorTest {
     ) {
         return ConsumerSpec.of(new ConsumerOverrides(
             Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-            pollTimeoutMs, pollDelayMs, maxPollIntervalMs
+            pollTimeoutMs, pollDelayMs, maxPollIntervalMs, OptionalInt.empty(), OptionalInt.empty()
+        ));
+    }
+
+    private static SimulatorSpec withClassicConsumer(Consumer<ConsumerOptions> overrides) {
+        return withGroup(GroupSpec.of("g", g -> g
+            .subscribe("orders")
+            .consumerDefaults(c -> c.protocol(Protocol.CLASSIC))
+            .consumer(overrides)
         ));
     }
 
@@ -330,6 +347,48 @@ class ConfigValidatorTest {
 
         assertThat(ConfigValidator.validate(spec)).singleElement()
             .extracting(Violation::field).isEqualTo("groups[0].consumers");
+    }
+
+    @Test
+    void acceptsTheClassicOnlyOverridesOnAClassicConsumer() {
+        var inherited = withClassicConsumer(
+            c -> c.sessionTimeout(Duration.ofSeconds(10)).heartbeatInterval(Duration.ofSeconds(2))
+        );
+        var own = withGroup(GroupSpec.of("g", g -> g
+            .subscribe("orders")
+            .consumer(c -> c.protocol(Protocol.CLASSIC).sessionTimeout(Duration.ofSeconds(10)))
+        ));
+
+        assertThat(ConfigValidator.validate(inherited)).isEmpty();
+        assertThat(ConfigValidator.validate(own)).isEmpty();
+    }
+
+    @Test
+    void rejectsTheClassicOnlyOverridesOnAConsumerThatInheritsTheConsumerProtocol() {
+        var spec = withGroup(GroupSpec.of("g", g -> g
+            .subscribe("orders")
+            .consumerDefaults(c -> c.protocol(Protocol.CONSUMER))
+            .consumer(c -> c.sessionTimeout(Duration.ofSeconds(10)).heartbeatInterval(Duration.ofSeconds(2)))
+        ));
+
+        assertThat(ConfigValidator.validate(spec)).containsExactly(
+            new Violation(
+                "groups[0].consumers[0].overrides.sessionTimeoutMs",
+                "applies only to the classic protocol; the consumer protocol takes the session timeout of the group"
+            ),
+            new Violation(
+                "groups[0].consumers[0].overrides.heartbeatIntervalMs",
+                "applies only to the classic protocol; the consumer protocol takes the heartbeat interval of the group"
+            )
+        );
+    }
+
+    @Test
+    void rejectsTheClassicOnlyOverridesOnAConsumerThatOverridesTheConsumerProtocol() {
+        var spec = withClassicConsumer(c -> c.protocol(Protocol.CONSUMER).sessionTimeout(Duration.ofSeconds(10)));
+
+        assertThat(ConfigValidator.validate(spec)).extracting(Violation::field)
+            .containsExactly("groups[0].consumers[0].overrides.sessionTimeoutMs");
     }
 
     @Test

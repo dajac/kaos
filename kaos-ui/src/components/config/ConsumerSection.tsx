@@ -30,7 +30,7 @@ import {
   removeOverride,
   setOverride,
   type ConsumerForm,
-  type ConsumerSettingsForm,
+  type ConsumerValues,
   type GroupForm,
   type OverrideKey,
 } from '../../model/configModel';
@@ -146,9 +146,9 @@ interface OverrideRowProps {
   readonly meta: Meta;
   readonly overrideKey: OverrideKey;
   readonly consumer: ConsumerForm;
-  readonly effective: ConsumerSettingsForm;
+  readonly effective: ConsumerValues;
   readonly error: string | undefined;
-  readonly onChange: (value: ConsumerSettingsForm[OverrideKey]) => void;
+  readonly onChange: (value: ConsumerValues[OverrideKey]) => void;
   readonly onPickAssignor: (option: string) => void;
   readonly onRemove: () => void;
 }

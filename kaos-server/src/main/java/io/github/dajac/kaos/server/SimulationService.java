@@ -39,8 +39,6 @@ import io.github.dajac.kaos.SimulatorSnapshot;
 import io.github.dajac.kaos.SimulatorSpec;
 import io.github.dajac.kaos.Topic;
 import io.github.dajac.kaos.TopicSpec;
-import io.github.dajac.kaos.Violation;
-import io.github.dajac.kaos.server.dto.AutopilotRequest;
 import io.github.dajac.kaos.server.dto.SimulatorResponse;
 import io.github.dajac.kaos.server.dto.StatusResponse;
 import org.slf4j.Logger;
@@ -53,8 +51,7 @@ import org.slf4j.LoggerFactory;
  * time on a single {@code kaos-lifecycle} thread: the request validates what it can, submits the
  * operation and returns at once. A failed operation surfaces as the {@code lastError} of the
  * {@link StatusResponse}, which an operation clears when it begins. The other operations (faults,
- * join and leave, pause and resume, the autopilot) only flip flags, so they run on the request
- * thread.
+ * join and leave, pause and resume) only flip flags, so they run on the request thread.
  *
  * <p>The requests are checked before they are accepted: a spec with a violation is a 400, an unknown
  * component a 404, and the wrong phase or a topic in use a 409. The dynamic operations need a
@@ -257,32 +254,6 @@ final class SimulationService implements AutoCloseable {
         requireRunning();
         var group = group(groupId);
         submit("Remove group " + groupId, group::remove);
-    }
-
-    void setAutopilot(String groupId, AutopilotRequest request) {
-        requireRunning();
-        var group = group(groupId);
-        if (request.enabled() == null) {
-            throw ApiException.badRequest("enabled", "is required");
-        }
-        if (!request.enabled()) {
-            group.autopilot().stop();
-            return;
-        }
-        var current = group.snapshot().autopilot();
-        var min = request.minIntervalMs() == null ? current.minIntervalMs() : request.minIntervalMs();
-        var max = request.maxIntervalMs() == null ? current.maxIntervalMs() : request.maxIntervalMs();
-        var violations = new ArrayList<Violation>();
-        if (min < 1) {
-            violations.add(new Violation("minIntervalMs", "must be at least 1"));
-        }
-        if (max < min) {
-            violations.add(new Violation("maxIntervalMs", "must be at least minIntervalMs (" + min + ")"));
-        }
-        if (!violations.isEmpty()) {
-            throw ApiException.badRequest("Invalid autopilot intervals", violations);
-        }
-        group.autopilot().start(Duration.ofMillis(min), Duration.ofMillis(max));
     }
 
     // Consumers

@@ -291,33 +291,6 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
-  /api/v1/simulator/groups/{groupId}/autopilot:
-    parameters:
-      - $ref: "#/components/parameters/GroupId"
-    put:
-      operationId: setAutopilot
-      summary: Turn the autopilot of a group on or off
-      description: |
-        A missing interval keeps the current one. A `minIntervalMs` below 1
-        or a `maxIntervalMs` below `minIntervalMs` is a 400.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AutopilotRequest"
-      responses:
-        "204":
-          description: The autopilot is on or off.
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "500":
-          $ref: "#/components/responses/ServerError"
-
   /api/v1/simulator/groups/{groupId}/consumers:
     parameters:
       - $ref: "#/components/parameters/GroupId"
@@ -710,7 +683,9 @@ components:
       description: |
         The settings a consumer sets itself; the others are inherited from
         the `consumerDefaults` of its group. A setting that is not
-        overridden is left out.
+        overridden is left out. `sessionTimeoutMs` and `heartbeatIntervalMs`
+        inherit from the group instead, and only a classic consumer can set
+        them.
       type: object
       additionalProperties: false
       properties:
@@ -737,6 +712,18 @@ components:
           format: int32
           minimum: 1000
           maximum: 600000
+        sessionTimeoutMs:
+          type: integer
+          format: int32
+          minimum: 1000
+          maximum: 300000
+          description: Classic protocol only; overrides the group's session timeout.
+        heartbeatIntervalMs:
+          type: integer
+          format: int32
+          minimum: 500
+          maximum: 60000
+          description: Classic protocol only; overrides the group's heartbeat interval.
 
     # Request bodies
 
@@ -890,24 +877,6 @@ components:
       properties:
         paused:
           type: boolean
-    AutopilotRequest:
-      description: It has the shape of the `autopilot` of a group snapshot.
-      type: object
-      additionalProperties: false
-      required: [enabled]
-      properties:
-        enabled:
-          type: boolean
-        minIntervalMs:
-          type: integer
-          format: int32
-          minimum: 1
-          description: The shortest pause between two flips; the current one when left out.
-        maxIntervalMs:
-          type: integer
-          format: int32
-          minimum: 1
-          description: The longest pause between two flips, at least `minIntervalMs`; the current one when left out.
     ActionRequest:
       description: What a consumer does, chosen by `type`.
       oneOf:
@@ -1002,7 +971,7 @@ components:
     GroupSnapshot:
       type: object
       additionalProperties: false
-      required: [id, type, state, epoch, targetAssignmentEpoch, subscribedTopics, autopilot, lag, consumers]
+      required: [id, type, state, epoch, targetAssignmentEpoch, subscribedTopics, lag, consumers]
       properties:
         id:
           type: string
@@ -1023,8 +992,6 @@ components:
           type: array
           items:
             type: string
-        autopilot:
-          $ref: "#/components/schemas/AutopilotSnapshot"
         lag:
           description: |
             The lag of each subscribed topic, in the order of
@@ -1043,20 +1010,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ConsumerSnapshot"
-    AutopilotSnapshot:
-      description: The intervals are the last ones given, kept while the autopilot is off.
-      type: object
-      additionalProperties: false
-      required: [enabled, minIntervalMs, maxIntervalMs]
-      properties:
-        enabled:
-          type: boolean
-        minIntervalMs:
-          type: integer
-          format: int32
-        maxIntervalMs:
-          type: integer
-          format: int32
     ConsumerSnapshot:
       type: object
       additionalProperties: false

@@ -80,6 +80,25 @@ detached_worktree() {
     git -C "$FACTORY_HOME" worktree add -q --detach "$dir" "$rev"
 }
 
+# A job refused before it starts still ends with a result line, so that
+# the loop and the tick can say why.
+refuse_job() {
+    jq -cn --arg kind "$kind" --arg issue "$arg" --arg reason "$1" \
+        '{kind: $kind, issue: $issue, status: "refused", reason: $reason, exit: 0, log: null, seconds: 0, cost: null, result: null}'
+    exit 0
+}
+
+# The factory does not build its own changes: David does. An issue
+# labelled area:factory is refused before its worktree is made, since
+# its branch is still empty and the check of the branch below cannot
+# see it yet.
+if [[ $kind == build || $kind == address ]]; then
+    rc=0
+    factory_issue "$arg" || rc=$?
+    ((rc != 2)) || die "cannot read the labels of #$arg"
+    ((rc != 0)) || refuse_job "the issue changes the factory itself (area:factory): David builds it by hand"
+fi
+
 # The base of new worktrees: main, unless FACTORY_REF names another
 # branch (to try the factory itself before it is merged).
 base=origin/${FACTORY_REF:-main}
@@ -145,14 +164,6 @@ review)
     prompt="/factory-review $arg $pr"
     ;;
 esac
-
-# A job refused before it starts still ends with a result line, so that
-# the loop and the tick can say why.
-refuse_job() {
-    jq -cn --arg kind "$kind" --arg issue "$arg" --arg reason "$1" \
-        '{kind: $kind, issue: $issue, status: "refused", reason: $reason, exit: 0, log: null, seconds: 0, cost: null, result: null}'
-    exit 0
-}
 
 # A local settings file in the job's worktree would load with the job
 # and could loosen its permissions.

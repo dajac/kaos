@@ -46,7 +46,9 @@ class EffectiveConfigResolverTest {
             Optional.of("rack-1"),
             OptionalInt.of(11),
             OptionalInt.of(21),
-            OptionalInt.of(31_000)
+            OptionalInt.of(31_000),
+            OptionalInt.empty(),
+            OptionalInt.empty()
         );
 
         assertThat(EffectiveConfigResolver.resolve(DEFAULTS, overrides))
@@ -62,6 +64,8 @@ class EffectiveConfigResolverTest {
             Optional.empty(),
             OptionalInt.empty(),
             OptionalInt.of(0),
+            OptionalInt.empty(),
+            OptionalInt.empty(),
             OptionalInt.empty()
         );
 
@@ -74,7 +78,7 @@ class EffectiveConfigResolverTest {
         var staticDefaults = new ConsumerSettings(Protocol.CONSUMER, "uniform", true, "rack-0", 10, 20, 30_000);
         var overrides = new ConsumerOverrides(
             Optional.empty(), Optional.of(""), Optional.of(false), Optional.of(""),
-            OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty()
+            OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty()
         );
 
         var effective = EffectiveConfigResolver.resolve(staticDefaults, overrides);

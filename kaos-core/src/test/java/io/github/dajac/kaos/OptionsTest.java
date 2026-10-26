@@ -107,6 +107,8 @@ class OptionsTest {
             .pollTimeout(Duration.ofMillis(100))
             .pollDelay(Duration.ofSeconds(2))
             .maxPollInterval(Duration.ofMinutes(1))
+            .sessionTimeout(Duration.ofSeconds(10))
+            .heartbeatInterval(Duration.ofSeconds(2))
         );
 
         assertThat(spec.overrides()).isEqualTo(new ConsumerOverrides(
@@ -116,10 +118,25 @@ class OptionsTest {
             Optional.of("b"),
             OptionalInt.of(100),
             OptionalInt.of(2_000),
-            OptionalInt.of(60_000)
+            OptionalInt.of(60_000),
+            OptionalInt.of(10_000),
+            OptionalInt.of(2_000)
         ));
         assertThat(spec.effective())
             .isEqualTo(new ConsumerSettings(Protocol.CLASSIC, "range", true, "b", 100, 2_000, 60_000));
+    }
+
+    @Test
+    void consumerDefaultsRefuseTheSessionTimeoutAndTheHeartbeatInterval() {
+        assertThatThrownBy(
+            () -> GroupSpec.of("g", g -> g.consumerDefaults(c -> c.sessionTimeout(Duration.ofSeconds(10)))))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("GroupOptions.sessionTimeout");
+        assertThatThrownBy(
+            () -> GroupSpec.of("g", g -> g.consumerDefaults(c -> c.heartbeatInterval(Duration.ofSeconds(2))))
+        )
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("GroupOptions.heartbeatInterval");
     }
 
     @Test
@@ -161,7 +178,7 @@ class OptionsTest {
         assertThat(new GroupSpec(null, null, 1, 2, 3, null, null))
             .isEqualTo(new GroupSpec("", List.of(), 1, 2, 3, ConsumerSettings.defaults(), List.of()));
         assertThat(new ConsumerSpec(null, null, null)).isEqualTo(ConsumerSpec.inheriting());
-        assertThat(new ConsumerOverrides(null, null, null, null, null, null, null))
+        assertThat(new ConsumerOverrides(null, null, null, null, null, null, null, null, null))
             .isEqualTo(ConsumerOverrides.none());
         assertThat(new ConsumerSettings(null, null, false, null, 0, 1_000, 300_000))
             .isEqualTo(ConsumerSettings.defaults());

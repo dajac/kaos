@@ -30,7 +30,6 @@ import java.util.Objects;
  * @param epoch the group epoch of a consumer group
  * @param targetAssignmentEpoch the epoch of the target assignment of a consumer group
  * @param subscribedTopics the names of the topics the group subscribes to
- * @param autopilot the autopilot of the group
  * @param lag the lag of each subscribed topic, in the order of {@code subscribedTopics}; the list
  *     of a topic has one entry per partition, indexed by partition number. A partition without a committed
  *     offset has its end offset as lag; one whose end offset is not known yet has {@code -1}
@@ -43,7 +42,6 @@ public record GroupSnapshot(
     int epoch,
     int targetAssignmentEpoch,
     List<String> subscribedTopics,
-    AutopilotSnapshot autopilot,
     Map<String, List<Long>> lag,
     List<ConsumerSnapshot> consumers
 ) {
@@ -51,7 +49,6 @@ public record GroupSnapshot(
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(state, "state");
-        Objects.requireNonNull(autopilot, "autopilot");
         subscribedTopics = List.copyOf(subscribedTopics);
         lag = copyInOrder(lag);
         consumers = List.copyOf(consumers);

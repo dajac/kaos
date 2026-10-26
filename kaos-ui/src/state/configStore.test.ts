@@ -70,7 +70,6 @@ function fakeClient(simulator: Simulator = IDLE) {
     getSimulator: vi.fn<ApiClient['getSimulator']>().mockResolvedValue(simulator),
     startSimulator: vi.fn<ApiClient['startSimulator']>().mockResolvedValue(status('STARTING')),
     stopSimulator: vi.fn<ApiClient['stopSimulator']>().mockResolvedValue(status('STOPPING')),
-    setAutopilot: vi.fn<ApiClient['setAutopilot']>(),
     injectFault: vi.fn<ApiClient['injectFault']>(),
     clearFault: vi.fn<ApiClient['clearFault']>(),
     runAction: vi.fn<ApiClient['runAction']>(),

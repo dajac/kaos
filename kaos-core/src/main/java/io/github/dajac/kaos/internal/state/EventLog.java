@@ -92,14 +92,6 @@ public final class EventLog implements SnapshotListener {
                 "target assignment epoch: " + before.targetAssignmentEpoch() + " -> " + after.targetAssignmentEpoch()
             );
         }
-        if (!before.autopilot().equals(after.autopilot())) {
-            var autopilot = after.autopilot();
-            lines.add(
-                autopilot.enabled()
-                    ? "autopilot on, every " + autopilot.minIntervalMs() + ".." + autopilot.maxIntervalMs() + " ms"
-                    : "autopilot off"
-            );
-        }
         for (var consumer : after.consumers()) {
             var previous = find(before.consumers(), ConsumerSnapshot::id, consumer.id());
             if (previous == null) {

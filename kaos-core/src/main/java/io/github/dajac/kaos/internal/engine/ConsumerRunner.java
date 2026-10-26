@@ -117,18 +117,23 @@ public final class ConsumerRunner implements ConsumerHandle {
 
     /**
      * The session timeout and heartbeat interval of a member that speaks the classic protocol. Such
-     * a member takes them from its client, not from the group configs, so the runner sets those of
-     * its group on the client, their defaults included: a classic client gets the same values as a
-     * member of the consumer protocol, 45 s and 5 s unless the group sets others. The client
-     * validates them, as the broker validates the group configs.
+     * a member takes them from its client, not from the group configs, so the runner sets on the
+     * client the consumer's own overrides, or else those of its group, their defaults included: a
+     * classic client without overrides gets the same values as a member of the consumer protocol,
+     * 45 s and 5 s unless the group sets others. The client validates them, as the broker validates
+     * the group configs.
      *
-     * @param sessionTimeoutMs the session timeout of the group
-     * @param heartbeatIntervalMs the heartbeat interval of the group
+     * @param sessionTimeoutMs the session timeout of the consumer
+     * @param heartbeatIntervalMs the heartbeat interval of the consumer
      */
     public record ClassicTimeouts(int sessionTimeoutMs, int heartbeatIntervalMs) {
-        /** The settings of a group. */
-        public static ClassicTimeouts of(GroupSpec group) {
-            return new ClassicTimeouts(group.sessionTimeoutMs(), group.heartbeatIntervalMs());
+        /** The overrides of the consumer, each falling back to the setting of its group. */
+        public static ClassicTimeouts of(GroupSpec group, ConsumerSpec consumer) {
+            var overrides = consumer.overrides();
+            return new ClassicTimeouts(
+                overrides.sessionTimeoutMs().orElse(group.sessionTimeoutMs()),
+                overrides.heartbeatIntervalMs().orElse(group.heartbeatIntervalMs())
+            );
         }
     }
 

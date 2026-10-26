@@ -393,9 +393,11 @@ class ConsumerRunnerTest {
             g -> g.subscribe("orders").sessionTimeout(Duration.ofSeconds(10)).heartbeatInterval(Duration.ofSeconds(3))
         );
 
-        assertThat(ConsumerRunner.ClassicTimeouts.of(defaults))
+        var inheriting = ConsumerSpec.inheriting();
+        assertThat(ConsumerRunner.ClassicTimeouts.of(defaults, inheriting))
             .isEqualTo(new ConsumerRunner.ClassicTimeouts(45_000, 5_000));
-        assertThat(ConsumerRunner.ClassicTimeouts.of(set)).isEqualTo(new ConsumerRunner.ClassicTimeouts(10_000, 3_000));
+        assertThat(ConsumerRunner.ClassicTimeouts.of(set, inheriting))
+            .isEqualTo(new ConsumerRunner.ClassicTimeouts(10_000, 3_000));
         // A classic client gets the 5 s heartbeat of the group, not its own default of 3 s.
         var classic = new ConsumerSettings(Protocol.CLASSIC, "", false, "", 0, 20, 300_000);
         assertThat(
@@ -403,12 +405,31 @@ class ConsumerRunnerTest {
                 "g",
                 "c",
                 classic,
-                ConsumerRunner.ClassicTimeouts.of(defaults),
+                ConsumerRunner.ClassicTimeouts.of(defaults, inheriting),
                 Protocol.CLASSIC
             )
         )
             .containsEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 45_000)
             .containsEntry(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 5_000);
+    }
+
+    @Test
+    void eachOverrideOfAConsumerWinsOverItsGroupOnItsOwn() {
+        var group = GroupSpec.of(
+            "g",
+            g -> g.subscribe("orders").sessionTimeout(Duration.ofSeconds(30)).heartbeatInterval(Duration.ofSeconds(3))
+        );
+        var both =
+            ConsumerSpec.of(c -> c.sessionTimeout(Duration.ofSeconds(10)).heartbeatInterval(Duration.ofSeconds(2)));
+        var session = ConsumerSpec.of(c -> c.sessionTimeout(Duration.ofSeconds(10)));
+        var heartbeat = ConsumerSpec.of(c -> c.heartbeatInterval(Duration.ofSeconds(2)));
+
+        assertThat(ConsumerRunner.ClassicTimeouts.of(group, both))
+            .isEqualTo(new ConsumerRunner.ClassicTimeouts(10_000, 2_000));
+        assertThat(ConsumerRunner.ClassicTimeouts.of(group, session))
+            .isEqualTo(new ConsumerRunner.ClassicTimeouts(10_000, 3_000));
+        assertThat(ConsumerRunner.ClassicTimeouts.of(group, heartbeat))
+            .isEqualTo(new ConsumerRunner.ClassicTimeouts(30_000, 2_000));
     }
 
     @Test

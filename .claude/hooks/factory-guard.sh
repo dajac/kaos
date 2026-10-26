@@ -78,17 +78,17 @@ line_has "$at(bash|sh|zsh|dash|ksh) +-[a-z]*c( |\$)|${at}eval( |\$)" &&
 
 # David's gates, wherever they appear: merging, approving, closing an
 # issue, resolving a thread, the accepted label.
-line_has 'pulls/[0-9]+/merge' && refuse "merging a PR is David's"
-line_has "$at([^ ]*/)?merge\.sh( |\$)" && refuse "merging a PR is David's"
+line_has 'pulls/[0-9]+/merge' && refuse "merging a PR is David's or the loop's, never a session's"
+line_has "$at([^ ]*/)?merge\.sh( |\$)" && refuse "merging a PR is David's or the loop's, never a session's"
 line_has 'resolveReviewThread' && refuse "resolving a review thread is David's"
-line_has 'mergePullRequest|enablePullRequestAutoMerge' && refuse "merging a PR is David's"
+line_has 'mergePullRequest|enablePullRequestAutoMerge' && refuse "merging a PR is David's or the loop's, never a session's"
 line_has 'addPullRequestReview' && line_has 'APPROVE' && refuse "approving a PR is David's"
 line_has 'event[^a-z]*APPROVE' && refuse "approving a PR is David's"
 line_has '/issues/[0-9]+[^ ]* .*state[^a-z]*closed' && refuse "closing an issue is David's"
-line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*pr +merge' && refuse "merging a PR is David's"
+line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*pr +merge' && refuse "merging a PR is David's or the loop's, never a session's"
 line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*issue +close' && refuse "closing an issue is David's"
 line_has '(^|[^a-z-])gh +((-R|--repo)[= ]?[^ ]+ +)*pr +review[^;&|]*(--approve| -[a-z]*a[a-z]*( |$))' && refuse "approving a PR is David's"
-line_has '(^|[^a-z-])factory +merge' && refuse "merging a PR is David's"
+line_has '(^|[^a-z-])factory +merge' && refuse "merging a PR is David's or the loop's, never a session's"
 line_has '(^|[^a-z-])gh +alias' && refuse "gh aliases hide commands from the guard"
 line_has 'settings(\.local)?\.json' && line_has '(>|tee|cp|mv|ln|install|rsync|sed +-i|perl +-[a-z]*i)' &&
     refuse "a settings file would loosen the session's permissions or hooks"
@@ -132,7 +132,7 @@ fi
 for s in ${segments[@]+"${segments[@]}"}; do
     case $s in
     gh\ * | */gh\ *)
-        [[ $s =~ (^|/)gh\ +pr\ +merge ]] && refuse "merging a PR is David's"
+        [[ $s =~ (^|/)gh\ +pr\ +merge ]] && refuse "merging a PR is David's or the loop's, never a session's"
         [[ $s =~ (^|/)gh\ +issue\ +close ]] && refuse "closing an issue is David's"
         [[ $s =~ (^|/)gh\ +pr\ +review.*(--approve|\ -[a-z]*a[a-z]*(\ |$)) ]] && refuse "approving a PR is David's"
         [[ $s =~ (^|/)gh\ +alias ]] && refuse "gh aliases hide commands from the guard"
@@ -144,7 +144,7 @@ for s in ${segments[@]+"${segments[@]}"}; do
         ;;
     esac
     case $s in
-    factory\ merge* | */factory\ merge*) refuse "merging a PR is David's" ;;
+    factory\ merge* | */factory\ merge*) refuse "merging a PR is David's or the loop's, never a session's" ;;
     esac
     if [[ $s =~ ^git(\ +-[^\ ]+(\ +[^-\ ][^\ ]*)?)*\ +push(\ |$) ]]; then
         [[ $s =~ (\ |:|/|\+)main(\ |$)|refs/heads/main ]] && refuse "pushing to main is David's"
