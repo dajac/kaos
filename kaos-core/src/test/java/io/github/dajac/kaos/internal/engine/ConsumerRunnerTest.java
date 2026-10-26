@@ -125,7 +125,6 @@ class ConsumerRunnerTest {
         assertThat(runner.subscribed()).isTrue();
         assertThat(runner.faults()).isEmpty();
         assertThat(runner.localState().failed()).isFalse();
-        assertThat(runner.localState().generation()).isEqualTo(-1);
         assertThat(clients).isEmpty();
     }
 
@@ -149,14 +148,12 @@ class ConsumerRunnerTest {
 
         await().atMost(TIMEOUT).until(() -> runner.localState().localAssignment().contains(ORDERS_0_REF));
         assertThat(client.subscription()).containsExactly("orders");
-        assertThat(runner.localState().generation()).isEqualTo(client.groupMetadata().generationId());
 
         runner.leave();
 
         await().atMost(TIMEOUT).until(() -> client.subscription().isEmpty());
         assertThat(runner.subscribed()).isFalse();
         assertThat(runner.localState().localAssignment()).isEmpty();
-        assertThat(runner.localState().generation()).isEqualTo(-1);
 
         runner.join();
 

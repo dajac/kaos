@@ -200,7 +200,6 @@ class StatusDeriverTest {
             subscribed,
             faults,
             failure,
-            -1,
             localAssignment
         );
     }

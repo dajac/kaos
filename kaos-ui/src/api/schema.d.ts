@@ -639,11 +639,6 @@ export interface components {
             epoch: number;
             /** Format: int32 */
             targetAssignmentEpoch: number;
-            /**
-             * Format: int32
-             * @description The highest generation reported by the consumers; the classic counterpart of the epoch.
-             */
-            generation: number;
             subscribedTopics: string[];
             /**
              * @description The lag of each subscribed topic, in the order of
@@ -672,8 +667,6 @@ export interface components {
             instanceId: string;
             /** Format: int32 */
             memberEpoch: number;
-            /** Format: int32 */
-            generation: number;
             /** @description The membership as the coordinator sees it. */
             coordinatorState: components["schemas"]["ConsumerStatus"];
             /** @description The single state to show, which also accounts for the faults and the local assignment. */

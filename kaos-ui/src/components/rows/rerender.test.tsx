@@ -61,7 +61,6 @@ function baseSnapshot(): Snapshot {
     state: 'STABLE',
     epoch: 3,
     targetAssignmentEpoch: 3,
-    generation: -1,
     subscribedTopics: TOPICS,
     lag: Object.fromEntries(
       TOPICS.map((topic, topicIndex) => [

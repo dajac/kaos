@@ -29,7 +29,6 @@ export function consumer(id: string, overrides: Partial<ConsumerSnapshot> = {}):
     memberId: `member-${id}`,
     instanceId: '',
     memberEpoch: 5,
-    generation: -1,
     coordinatorState: 'STABLE',
     status: 'STABLE',
     failure: '',
@@ -46,7 +45,6 @@ export function group(overrides: Partial<GroupSnapshot> = {}): GroupSnapshot {
     state: 'STABLE',
     epoch: 7,
     targetAssignmentEpoch: 7,
-    generation: -1,
     subscribedTopics: ['orders-1', 'orders-2'],
     lag: { 'orders-1': [0, 12, -1, 3], 'orders-2': [0, 0, 0, 0] },
     consumers: [
@@ -57,7 +55,7 @@ export function group(overrides: Partial<GroupSnapshot> = {}): GroupSnapshot {
           { topic: 'orders-2', partition: 3, state: 'REVOKING' },
         ],
       }),
-      consumer('consumer-1', { protocol: 'classic', memberEpoch: -1, generation: 4 }),
+      consumer('consumer-1', { protocol: 'classic', memberEpoch: -1 }),
     ],
     ...overrides,
   };

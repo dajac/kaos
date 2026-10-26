@@ -108,7 +108,6 @@ class SnapshotRecordsTest {
             null,
             null,
             -1,
-            -1,
             ConsumerStatus.JOINING,
             ConsumerStatus.FROZEN,
             null,
@@ -141,7 +140,6 @@ class SnapshotRecordsTest {
             GroupState.STABLE,
             3,
             3,
-            -1,
             List.of("t", "a"),
             lag,
             consumers
@@ -158,7 +156,6 @@ class SnapshotRecordsTest {
             "member-0",
             "",
             3,
-            -1,
             ConsumerStatus.STABLE,
             ConsumerStatus.STABLE,
             "",

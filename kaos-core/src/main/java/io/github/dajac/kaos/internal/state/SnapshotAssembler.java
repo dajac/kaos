@@ -43,10 +43,8 @@ public final class SnapshotAssembler {
      */
     public static GroupSnapshot assemble(GroupLocalState group, AdminView view) {
         var consumers = new ArrayList<ConsumerSnapshot>();
-        var generation = -1;
         for (var consumer : group.consumers()) {
             consumers.add(assemble(consumer, view));
-            generation = Math.max(generation, consumer.generation());
         }
 
         return new GroupSnapshot(
@@ -55,7 +53,6 @@ public final class SnapshotAssembler {
             view.state(),
             view.epoch(),
             view.targetAssignmentEpoch(),
-            generation,
             group.subscribedTopics().stream().map(TopicSpec::name).toList(),
             denseLag(group.subscribedTopics(), view.lag()),
             consumers
@@ -77,7 +74,6 @@ public final class SnapshotAssembler {
             member.map(AdminView.Member::memberId).orElse(""),
             member.map(AdminView.Member::instanceId).orElse(""),
             member.map(AdminView.Member::memberEpoch).orElse(-1),
-            consumer.generation(),
             coordinatorState,
             StatusDeriver.status(consumer, coordinatorState, assignment, targetAssignment),
             consumer.failure(),

@@ -58,7 +58,7 @@ class EventLogTest {
     void reportsTheGroupLevelChanges() {
         var before = group(GroupState.STABLE, 3, 3);
         var after = new GroupSnapshot(
-            "g", GroupType.CLASSIC, GroupState.PREPARING_REBALANCE, 4, 4, 7, List.of("t"),
+            "g", GroupType.CLASSIC, GroupState.PREPARING_REBALANCE, 4, 4, List.of("t"),
             Map.of("t", List.of(0L)), List.of()
         );
 
@@ -66,8 +66,7 @@ class EventLogTest {
             "[g] group type: CONSUMER -> CLASSIC",
             "[g] group state: STABLE -> PREPARING_REBALANCE",
             "[g] group epoch: 3 -> 4",
-            "[g] target assignment epoch: 3 -> 4",
-            "[g] generation: -1 -> 7"
+            "[g] target assignment epoch: 3 -> 4"
         );
     }
 
@@ -105,7 +104,7 @@ class EventLogTest {
             consumer("consumer-1", true, List.of(), "m1", 3, ConsumerStatus.STABLE, "", "")
         );
         var failed = new ConsumerSnapshot(
-            "consumer-0", "g-consumer-0", Protocol.CLASSIC, true, List.of(), "m0b", "", 3, 5,
+            "consumer-0", "g-consumer-0", Protocol.CLASSIC, true, List.of(), "m0b", "", 3,
             ConsumerStatus.STABLE, ConsumerStatus.FAILED, "FencedInstanceIdException: fenced", List.of(),
             new ConsumerSnapshot.Raw(List.of(), List.of(), List.of())
         );
@@ -116,7 +115,6 @@ class EventLogTest {
             "[g] consumer-0 switched protocol: CONSUMER -> CLASSIC",
             "[g] consumer-0 fault network-isolation cleared",
             "[g] consumer-0 rejoined the group (member m0 -> m0b)",
-            "[g] consumer-0 generation: -1 -> 5",
             "[g] consumer-0 status: ISOLATED -> FAILED",
             "[g] consumer-0 failed: FencedInstanceIdException: fenced",
             "[g] consumer-2 added",
@@ -141,7 +139,7 @@ class EventLogTest {
         ConsumerSnapshot... consumers
     ) {
         return new GroupSnapshot(
-            "g", GroupType.CONSUMER, state, epoch, targetEpoch, -1, List.of("t"), Map.of("t", List.of(0L)),
+            "g", GroupType.CONSUMER, state, epoch, targetEpoch, List.of("t"), Map.of("t", List.of(0L)),
             List.of(consumers)
         );
     }
@@ -160,7 +158,7 @@ class EventLogTest {
             ? List.<PartitionRef>of()
             : Arrays.stream(assignment.split("\\|")).map(EventLogTest::ref).toList();
         return new ConsumerSnapshot(
-            id, "g-" + id, Protocol.CONSUMER, subscribed, faults, memberId, "", memberEpoch, -1, status, status,
+            id, "g-" + id, Protocol.CONSUMER, subscribed, faults, memberId, "", memberEpoch, status, status,
             failure, List.of(), new ConsumerSnapshot.Raw(assigned, assigned, assigned)
         );
     }

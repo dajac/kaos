@@ -139,7 +139,7 @@ describe('GroupHeader', () => {
 
     simulationStore
       .getState()
-      .ingestSnapshot(snapshot({ groups: [group({ type: 'CLASSIC', state: 'PREPARING_REBALANCE', generation: 3 })] }));
+      .ingestSnapshot(snapshot({ groups: [group({ type: 'CLASSIC', state: 'PREPARING_REBALANCE' })] }));
     const classicGroup = renderToStaticMarkup(<GroupHeader groupId="orders" />);
     expect(classicGroup).toContain('class="status-badge s-reconciling">PREPARING REBALANCE</span>');
     expect(classicGroup).not.toContain('generation');

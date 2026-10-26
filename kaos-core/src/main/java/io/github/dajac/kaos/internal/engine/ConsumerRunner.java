@@ -26,7 +26,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
@@ -168,7 +167,6 @@ public final class ConsumerRunner implements ConsumerHandle {
     private final AtomicBoolean subscribed = new AtomicBoolean(true);
     private final Set<Fault> faults = ConcurrentHashMap.newKeySet();
     private final AtomicLong signals = new AtomicLong();
-    private final AtomicInteger generation = new AtomicInteger(-1);
     private final Set<PartitionRef> localAssignment = ConcurrentHashMap.newKeySet();
 
     private volatile Protocol protocol;
@@ -503,7 +501,6 @@ public final class ConsumerRunner implements ConsumerHandle {
             subscribed.get(),
             Set.copyOf(faults),
             failure,
-            generation.get(),
             Set.copyOf(localAssignment)
         );
     }
@@ -573,7 +570,6 @@ public final class ConsumerRunner implements ConsumerHandle {
             Thread.interrupted();
             closeQuietly(loop.consumer);
             localAssignment.clear();
-            generation.set(-1);
             owner.changed();
         }
     }
@@ -626,7 +622,6 @@ public final class ConsumerRunner implements ConsumerHandle {
                 EVENTS.warn("[{}] {} poll failed: {}", groupId, spec.id(), describe(e));
                 pause = pollDelay.compareTo(ERROR_BACKOFF) < 0 ? ERROR_BACKOFF : pollDelay;
             }
-            reportGeneration(consumer);
             await(loop, seen, pause.toNanos());
         }
     }
@@ -644,16 +639,8 @@ public final class ConsumerRunner implements ConsumerHandle {
             return false;
         }
         localAssignment.clear();
-        generation.set(-1);
         owner.changed();
         return true;
-    }
-
-    private void reportGeneration(Consumer<String, String> consumer) {
-        var reported = consumer.groupMetadata().generationId();
-        if (generation.getAndSet(reported) != reported) {
-            owner.changed();
-        }
     }
 
     /** Waits until the loop is signalled after {@code seen}, is stopped, or the time is over. */
