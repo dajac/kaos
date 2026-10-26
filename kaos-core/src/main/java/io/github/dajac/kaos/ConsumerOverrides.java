@@ -21,8 +21,15 @@ import java.util.OptionalInt;
 
 /**
  * The settings a consumer sets itself. An empty value inherits from the {@code consumerDefaults} of
- * the group. The components mirror {@link ConsumerSettings}. A {@code null} component is read as
- * empty, so that a request body can leave it out.
+ * the group. The first components mirror {@link ConsumerSettings}. A {@code null} component is read
+ * as empty, so that a request body can leave it out.
+ *
+ * @param sessionTimeoutMs the {@code session.timeout.ms} of a classic consumer; empty inherits
+ *     {@link GroupSpec#sessionTimeoutMs()}. The validation refuses it on a consumer of the consumer
+ *     protocol, which takes the session timeout of its group.
+ * @param heartbeatIntervalMs the {@code heartbeat.interval.ms} of a classic consumer; empty inherits
+ *     {@link GroupSpec#heartbeatIntervalMs()}. The validation refuses it on a consumer of the
+ *     consumer protocol.
  */
 public record ConsumerOverrides(
     Optional<Protocol> protocol,
@@ -31,13 +38,17 @@ public record ConsumerOverrides(
     Optional<String> rackId,
     OptionalInt pollTimeoutMs,
     OptionalInt pollDelayMs,
-    OptionalInt maxPollIntervalMs
+    OptionalInt maxPollIntervalMs,
+    OptionalInt sessionTimeoutMs,
+    OptionalInt heartbeatIntervalMs
 ) {
     private static final ConsumerOverrides NONE = new ConsumerOverrides(
         Optional.empty(),
         Optional.empty(),
         Optional.empty(),
         Optional.empty(),
+        OptionalInt.empty(),
+        OptionalInt.empty(),
         OptionalInt.empty(),
         OptionalInt.empty(),
         OptionalInt.empty()
@@ -51,6 +62,8 @@ public record ConsumerOverrides(
         pollTimeoutMs = Objects.requireNonNullElse(pollTimeoutMs, OptionalInt.empty());
         pollDelayMs = Objects.requireNonNullElse(pollDelayMs, OptionalInt.empty());
         maxPollIntervalMs = Objects.requireNonNullElse(maxPollIntervalMs, OptionalInt.empty());
+        sessionTimeoutMs = Objects.requireNonNullElse(sessionTimeoutMs, OptionalInt.empty());
+        heartbeatIntervalMs = Objects.requireNonNullElse(heartbeatIntervalMs, OptionalInt.empty());
     }
 
     /** No override: the consumer inherits every setting. */

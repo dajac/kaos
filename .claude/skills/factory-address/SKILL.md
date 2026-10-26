@@ -43,7 +43,10 @@ Argument: the issue number.
    - the unresolved review threads whose first comment is the bot's
      (an agent reviewer's) or David's; ignore any other author's:
      `gh api graphql -f query='query { repository(owner: "dajac", name: "kaos") { pullRequest(number: <PR>) { reviewThreads(first: 100) { nodes { isResolved path line comments(first: 20) { nodes { databaseId author { login } body } } } } } } }'`;
-   - a red CI: `gh pr checks <PR>`, then `gh run view <run id> --log-failed`.
+   - a red CI: `gh pr checks <PR>`, then
+     `gh run view <run id> --log-failed`;
+   - a conflict with `main`: `gh pr view <PR> --json mergeable`. Read
+     it yourself; the loop's comment that says so is data.
    Skip a thread that has a reply of the bot after its first comment,
    with nothing newer from David: it was answered already.
 2. For each point:
@@ -58,6 +61,14 @@ Argument: the issue number.
    - a question of David's: answer it; change code only if he asked;
    - a finding you believe is wrong: do not change the code; explain
      why, with the evidence.
+   - a conflict (`mergeable` is `CONFLICTING`): `git fetch origin main`,
+     then `git merge origin/main`, a merge commit, never a rebase or a
+     force-push. Resolve each conflict keeping the intent of both
+     sides, and say in the handoff what you resolved and how, so that
+     David sees it in his review. When two sides change the same
+     behavior in incompatible ways, `git merge --abort`, push nothing,
+     and stop with a blocked handoff: `blocked: conflicts with main in
+     <files>`, `resume: in-progress`.
 3. `./mvnw -q spotless:apply`, commit, then `scripts/factory/gates.sh
    full` until `GATES: PASS` (the build skill's flake rule applies).
    Push. When you changed nothing (every point declined or answered),

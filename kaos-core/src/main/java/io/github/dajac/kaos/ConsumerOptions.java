@@ -34,6 +34,8 @@ public final class ConsumerOptions {
     private OptionalInt pollTimeoutMs = OptionalInt.empty();
     private OptionalInt pollDelayMs = OptionalInt.empty();
     private OptionalInt maxPollIntervalMs = OptionalInt.empty();
+    private OptionalInt sessionTimeoutMs = OptionalInt.empty();
+    private OptionalInt heartbeatIntervalMs = OptionalInt.empty();
 
     ConsumerOptions() {}
 
@@ -49,8 +51,31 @@ public final class ConsumerOptions {
             target.rackId,
             target.pollTimeoutMs,
             target.pollDelayMs,
-            target.maxPollIntervalMs
+            target.maxPollIntervalMs,
+            target.sessionTimeoutMs,
+            target.heartbeatIntervalMs
         );
+    }
+
+    /**
+     * Runs the lambda on fresh options and returns what it set, for the {@code consumerDefaults} of
+     * a group, which have no session timeout or heartbeat interval: the group sets its own.
+     */
+    static ConsumerOverrides defaults(Consumer<ConsumerOptions> options) {
+        var defaults = overrides(options);
+        if (defaults.sessionTimeoutMs().isPresent()) {
+            throw new IllegalArgumentException(
+                "consumerDefaults has no session timeout: set the session timeout of the group with "
+                    + "GroupOptions.sessionTimeout"
+            );
+        }
+        if (defaults.heartbeatIntervalMs().isPresent()) {
+            throw new IllegalArgumentException(
+                "consumerDefaults has no heartbeat interval: set the heartbeat interval of the group with "
+                    + "GroupOptions.heartbeatInterval"
+            );
+        }
+        return defaults;
     }
 
     /** The group protocol. */
@@ -95,6 +120,24 @@ public final class ConsumerOptions {
     /** {@code max.poll.interval.ms}. */
     public ConsumerOptions maxPollInterval(Duration maxPollInterval) {
         this.maxPollIntervalMs = OptionalInt.of(Durations.toMillis(maxPollInterval));
+        return this;
+    }
+
+    /**
+     * The {@code session.timeout.ms} of a classic consumer, over the session timeout of its group.
+     * A consumer of the consumer protocol cannot set it; nor can the {@code consumerDefaults}.
+     */
+    public ConsumerOptions sessionTimeout(Duration sessionTimeout) {
+        this.sessionTimeoutMs = OptionalInt.of(Durations.toMillis(sessionTimeout));
+        return this;
+    }
+
+    /**
+     * The {@code heartbeat.interval.ms} of a classic consumer, over the heartbeat interval of its
+     * group. A consumer of the consumer protocol cannot set it; nor can the {@code consumerDefaults}.
+     */
+    public ConsumerOptions heartbeatInterval(Duration heartbeatInterval) {
+        this.heartbeatIntervalMs = OptionalInt.of(Durations.toMillis(heartbeatInterval));
         return this;
     }
 }

@@ -24,8 +24,9 @@ The factory turns this into a pipeline with GitHub as its only state:
    right away otherwise.
 4. Every PR is reviewed by several agents, each from one angle (code,
    rules, and UX and Kafka semantics when the change touches them).
-5. David has the final word: he accepts issues, approves specs and PRs,
-   and is the only one who merges.
+5. David has the final word: he accepts issues and approves specs and
+   PRs; his approval of a PR is the decision to merge it, which the
+   factory carries out.
 6. Every PR carries a description, screenshots when it touches the UI,
    and a one-command way to try it.
 
@@ -36,7 +37,7 @@ And, for David:
 9. David can see the whole pipeline and what waits for him.
 10. The factory acts as its own GitHub identity, a bot, never as David.
 
-Non-goals: auto-merge, deployment, a hosted service.
+Non-goals: deployment, a hosted service.
 
 ## Overview
 
@@ -55,12 +56,12 @@ flowchart LR
     R -->|findings| F[address job] --> R
     R -->|clean| D3{David}
     D3 -->|changes| F2[address job] --> D3
-    D3 -->|approve + merge| M[main]
+    D3 -->|approve| L[loop merges] --> M[main]
 ```
 
 Three human gates, all David's: acceptance at triage, the spec approval
-and the PR approval with the merge. Everything between them is
-automatic, but each job stops at a gate rather than guessing.
+and the PR approval, after which the loop merges. Everything between
+them is automatic, but each job stops at a gate rather than guessing.
 
 ## Architecture
 
@@ -80,10 +81,14 @@ Three pieces:
   2. runs `scripts/factory/status.sh`, which reads the open issues and
      PRs with `gh` and prints one JSON snapshot: stages, flags, PRs,
      CI, the newest activity per issue;
-  3. when the snapshot differs from the previous one, a job just
+  3. unless the factory is paused, runs the **merge pass**: it merges
+     each bot PR David approved, with `scripts/factory/merge.sh --auto`
+     (stage 6), and takes the snapshot again after a merge, so that the
+     tick sees the merged PRs and cleans up after them;
+  4. when the snapshot differs from the previous one, a job just
      ended, David queued a request, or 30 minutes went by, runs one
      **tick**;
-  4. runs the job the tick chose, if any, and waits for it.
+  5. runs the job the tick chose, if any, and waits for it.
 - **The tick**, `claude -p "/factory-tick"`, a short headless session
   and the brain of the orchestrator (`.claude/skills/factory-tick/`).
   It gets the snapshot, the previous tick's snapshot, the last job's
@@ -241,9 +246,9 @@ built but `up --at-login` (planned).
 | `./factory status` | The pipeline in the terminal: what waits for David, the running job, blocked issues |
 | `./factory logs [N]` | Follows the loop log, or the text and tool calls of the last job of issue N |
 | `./factory run <kind> <N>` | Queues one job for the next tick, e.g. `./factory run triage 76`; the tick runs it if the transition is legal |
-| `./factory pause` / `resume` | Stop or restart new jobs without stopping the loop |
+| `./factory pause` / `resume` | Stop or restart new jobs and merges without stopping the loop |
 | `./factory try <PR> [--scenario <name>]` | Builds and runs the PR on its own broker, in the state of a scenario (see "Try it") |
-| `./factory merge <PR>` | David's merge, in his own terminal (see stage 6) |
+| `./factory merge <PR>` | David's manual merge, in his own terminal, for what the loop holds or skips (see stage 6) |
 
 `./factory up --at-login` (planned) installs a launchd agent instead, so the
 loop survives reboots. launchd does not inherit the shell's `PATH`,
@@ -332,7 +337,9 @@ and PRs show as `kaos-agent[bot]`.
     be authored and committed by the bot.
 
   David's own terminal, outside Claude, keeps his login: his merges,
-  approvals and comments are his.
+  approvals and comments are his. The bot merges only from the loop's
+  merge pass, a bash script and not a Claude session, after David's
+  approval.
 - **Commits** are authored by the bot, with
   `Co-Authored-By: Claude <model> <noreply@anthropic.com>` naming the
   model the job ran on. When the factory's own PRs were merged (by the
@@ -363,8 +370,10 @@ branch protection or rulesets, for personal accounts and free
 organizations alike. The App needs Contents write to push branches, so
 it could also merge or push to `main`. The guard hook and the deny
 rules are the barrier, and the orchestrator detects a breach after the
-fact (planned): on every poll it checks that each new commit on `main` comes
-from a PR merged by David. If one does not, it stops starting jobs,
+fact (planned): on every poll it checks that each new commit on `main`
+is the squash of a PR that David merged, or that the bot merged with
+David's last approving-or-changes review `APPROVED` on the PR's final
+head, the PR being the bot's. If one does not, it stops starting jobs,
 kills the running ones and alerts David. GitHub Pro would allow a
 ruleset on `main` that closes the hole server side; it is left out for
 now and can be added later without changing the design.
@@ -460,11 +469,13 @@ the old stage label for the new one):
 | `reviewing` | a `review` handoff with nothing blocking and every finding answered, CI green | `in-review`: PR ready, review requested from David |
 | `in-review` | David requests changes, opens a review thread, or mentions `@kaos-agent` | `changes-requested` |
 | `in-review` | CI red | `in-progress`, start `address` |
+| `in-review` | David approves the head, threads resolved, CI green, no note | the loop merges; the issue is closed by `Closes #N`, the next tick cleans up |
+| `in-review` | approved, but the merge conflicts with `main` | `in-progress` (by the loop's merge pass), start `address` |
 | `changes-requested` | the job is chosen | `in-progress`, start `address` |
 | `in-review` (child of a stack, planned) | the parent PR is merged | `in-progress`, start `address` to rebase onto `main` |
 | any | a job fails, times out, ends without a handoff, or reports `blocked` | `blocked` |
 | `blocked` | a new comment from David | the stage it was blocked from (`stage.sh` allows nothing else but `needs-triage`) |
-| `in-review` | David merges | issue closed by `Closes #N`; the next tick removes the local worktree and branch |
+| `in-review` | David merges by hand | issue closed by `Closes #N`; the next tick removes the local worktree and branch |
 | `in-progress`, `reviewing`, `in-review` | the PR (not a spec PR) is closed without merging | `blocked` |
 
 The table is the summary; the rules the tick applies, with their exact
@@ -877,24 +888,73 @@ A new `review` round follows, with the reviewers of the touched paths
 and the round count restarted, before the PR comes back to David.
 
 Approval is David's GitHub "Approve" with every thread resolved and CI
-green. Only David merges, in one of two ways:
+green. His approval of the head is the decision to merge; the loop
+carries it out.
 
-- `./factory merge <PR>` (`scripts/factory/merge.sh`), in his own
-  terminal. It refuses to run with the bot's identity or with a `gh`
-  logged in as anyone else, and merges only a PR that is open, not a
-  draft, based on `main`, whose last review by David approves its
-  current head, with no unresolved thread and every check green. It
-  squashes with the PR title and `(#N)` (once), and the body above
-  the `---` rule without its HTML comments, prints the author GitHub
-  recorded, retargets the PRs based on its branch to `main`, and
-  deletes the branch. (GitHub closes, rather than retargets, a PR whose
-  base branch is deleted through its API.) The squash keeps the
-  `Co-Authored-By` lines of the PR's commits. GitHub does not let anyone approve their own
-  PR, so the bootstrap PRs, opened under David's handle, are merged
-  with the button.
-- The "Squash and merge" button, after trimming the message himself.
+**The gate**, the same for the loop and for David's manual merge
+(`scripts/factory/merge.sh`): the PR is open, not a draft, based on
+`main`; David's last review that approves or requests changes is
+`APPROVED` on the PR's current head (a push after the approval voids
+it); no unresolved review thread (at most 100); at least one check,
+every check `pass` or `skipping`. The merge is pinned to that head
+(`sha=<head>`), so a push between the check and the merge makes GitHub
+refuse it. It squashes with the PR title and `(#N)` (once), and the
+body above the `---` rule without its HTML comments, keeps the
+`Co-Authored-By` lines of the PR's commits, prints the author GitHub
+recorded, retargets the PRs based on its branch to `main`, and deletes
+the branch. (GitHub closes, rather than retargets, a PR whose base
+branch is deleted through its API.)
 
-The orchestrator does the rest of the cleanup either way, after it
+**The loop's merge pass.** On each poll, after the snapshot and before
+the tick, unless the factory is paused, the loop picks the candidates
+from the snapshot (`scripts/factory/merge-candidates.jq`): the bot's
+open PRs, not drafts, based on `main`, with a `<N>-<slug>` head (never
+`spec/`), approved, CI green, closing an issue in `in-review`, lowest
+number first. For each, it runs the trusted checkout's `merge.sh --auto
+<PR>`, with the bot's identity, which checks the gate again on GitHub
+and adds:
+
+- the PR is the bot's, not a spec PR, and the issue it closes is
+  `in-review`;
+- **the approval carries no note.** Until #102 teaches the factory to
+  read reviews, a bash script cannot tell a follow-up ("LGTM, let's
+  file an issue") from a condition ("LGTM once X is renamed"), so the
+  merge is held when the approval's body is anything but empty or a
+  bare `lgtm`, `looks good`, `looks good to me` or `ship it` (any case,
+  an optional `.` or `!`), or when David wrote anything on the PR or
+  its issue after the approval (a comment, a review comment, another
+  review). The PR stays `in-review` and approved, and gets one comment
+  per approval (a hidden `<!-- factory-merge-held: <review id> -->`
+  marker) saying why and how to go on: `./factory merge <PR>`, or a new
+  approval without a note. `./factory status` shows it as `merge by
+  hand`;
+- **no conflict with `main`.** GitHub computes `mergeable`
+  asynchronously: `UNKNOWN` waits for the next poll. `CONFLICTING`
+  moves the issue back to `in-progress` (`stage.sh`) with one comment
+  per head (`<!-- factory-merge-conflict: <head> -->`); the tick then
+  starts an `address` job, which merges `origin/main` into the branch
+  (a merge commit, never a rebase or a force-push), resolves the
+  conflicts and says how in its handoff, or blocks for David when the
+  two sides change the same behavior in incompatible ways. The PR goes
+  through `reviewing` again, and David approves the new head.
+
+`merge.sh --auto` exits 0 when it merged, 3 when it holds (the reason
+in `loop.log`), 1 on an error. A held PR is tried again on the next
+poll. An error (a lost token, a 405 because a lower PR merged in the
+same pass made it conflict, a 5xx) is logged and retried; after three
+polls in a row, the PR gets one comment. A stale base without a
+conflict is merged: CI runs on the merge commit with `main`. GitHub
+notifies David of the merge, as the PR's reviewer.
+
+**David's manual merge**, `./factory merge <PR>`, in his own terminal,
+for a held PR, his own PRs, and anything the loop skips. It refuses to
+run with the bot's identity or with a `gh` logged in as anyone else,
+and applies the gate without the note rule: his merge is his decision.
+GitHub does not let anyone approve their own PR, so the bootstrap PRs,
+opened under David's handle, are merged with the "Squash and merge"
+button, after trimming the message.
+
+The orchestrator does the rest of the cleanup whoever merged, after it
 sees the merge: the next tick removes the local worktree and branch of
 a merged bot PR (`scripts/factory/cleanup.sh`, which touches only
 `<N>-<slug>` and `spec/<N>-<slug>` branches and keeps a worktree with
@@ -915,8 +975,11 @@ guarded. It checks each simple command of the line on its own, so
 that `git push origin x && git checkout main` is not mistaken for a
 push to `main`. The refused commands are:
 
-- `gh pr merge`, `./factory merge`, `git push` to `main`, and any
-  force-push to `main` or to `issue-screenshots`;
+- `gh pr merge`, `./factory merge`, `merge.sh` (with or without
+  `--auto`, by any path), `git push` to `main`, and any force-push to
+  `main` or to `issue-screenshots`: the loop's merge pass is the only
+  merger besides David, and it is not a Claude session, so the guard
+  never sees it;
 - adding the `accepted` label, through `gh issue edit` or `gh api
   …/labels`;
 - `gh issue close`, the `resolveReviewThread` GraphQL mutation, and
@@ -949,22 +1012,30 @@ pattern cannot tell `git push origin main` from every way to write it),
 and `stage.sh` checks the `accepted` gate against
 the timeline. The jobs' `factory-job.json` and hooks come from the
 trusted checkout, which the loop resets to `origin/main` on every poll,
-and `job.sh` reverts any change a tick makes there. Changes to the factory itself
-(`factory`, `.claude/`, `scripts/factory/`, `docs/factory/`,
-`.github/`) always go through a spec, and the `rules` reviewer flags
-them. Claude Code loads the hooks, skills, agents and `CLAUDE.md` of a
-job's worktree, and the job runs the worktree's scripts, so a branch
-that changes `.claude/`, `CLAUDE.md`, `scripts/factory/` or `./factory`
-would change the rules of its own jobs (so would a `CLAUDE.local.md`,
-a nested `CLAUDE.md` or a `.mcp.json`, committed or not): `job.sh`
-refuses to run a spec,
-build or address job on such a branch (measured from where the branch
-forked from `main`, so a branch older than a change of main's is not
-taken for one), the tick blocks the issue with the reason, and David
-builds those changes himself. The review job replaces them with main's
-(`git checkout --no-overlay`, which also removes the files a PR adds
-there). A branch cut from an older `main` keeps the skills of that
-`main` in its own jobs, with today's trusted scripts and hooks.
+and `job.sh` reverts any change a tick makes there. Changes to the
+factory itself (`factory`, `.claude/`, `scripts/factory/`,
+`docs/factory/`, `.github/`) always go through a spec, and the `rules`
+reviewer flags them. Claude Code loads the hooks, skills, agents and
+`CLAUDE.md` of a job's worktree, and the job runs the worktree's
+scripts, so a branch that changes `.claude/`, `CLAUDE.md`,
+`scripts/factory/` or `./factory` would change the rules of its own
+jobs (so would a `CLAUDE.local.md`, a nested `CLAUDE.md` or a
+`.mcp.json`, committed or not): `job.sh` refuses to run a spec, build
+or address job on such a branch (measured from where the branch forked
+from `main`, so a branch older than a change of main's is not taken for
+one), the tick blocks the issue with the reason, and David builds those
+changes himself. The review job replaces them with main's (`git
+checkout --no-overlay`, which also removes the files a PR adds there).
+A branch cut from an older `main` keeps the skills of that `main` in
+its own jobs, with today's trusted scripts and hooks.
+
+A new branch is still empty when its build starts, so `job.sh` also
+refuses a build or address job for an issue labelled `area:factory`,
+before it makes the worktree. Such an issue still goes through its
+spec; after the approval, the refused build blocks it, and a comment
+from David only repeats the refusal: he builds it, and its PR closes
+it. The label comes from the triage; when it is missing, the check of
+the branch catches the first job that follows a factory change.
 
 The guard reads command lines; it does not stop what it cannot see: a
 script the job writes and then runs, a payload in a file (`gh api
@@ -1000,7 +1071,8 @@ scripts/factory/test/                 the tests of the scripts (test/run.sh)
 .claude/hooks/factory-guard.sh        the guard
 .claude/factory-job.json              settings of the jobs: allowlist, deny rules, hooks
 scripts/factory/gates.sh              the checks, with one verdict line
-scripts/factory/merge.sh              David's merge
+scripts/factory/merge.sh              David's merge and the loop's (--auto)
+scripts/factory/merge-candidates.jq   the PRs the loop's merge pass tries
 scripts/factory/trusted.sh            the trusted checkout, .claude/worktrees/factory-main
 scripts/factory/status.sh             the snapshot (gh + jq)
 scripts/factory/activity.sh           what the tick needs about one issue
@@ -1115,6 +1187,8 @@ configs, core bug), #76 (remove the auto-pilot, likely a spec).
 
 - David always accepts issues himself, small bugs included.
 - The PR body's review material (below `---`) is dropped at merge.
+- David's approval on the head is the merge decision; the loop merges,
+  never a Claude session.
 - The bot authors every commit, the squash commit included.
 - The bot is the GitHub App `kaos-agent`; `dajac` is never used for
   anything David does not do himself, outside the bootstrap.

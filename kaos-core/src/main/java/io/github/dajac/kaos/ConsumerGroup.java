@@ -21,8 +21,8 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
- * A consumer group of a simulator: a group id, group settings, subscribed topics, consumers and an
- * autopilot. Every method is thread-safe.
+ * A consumer group of a simulator: a group id, group settings, subscribed topics and consumers. Every
+ * method is thread-safe.
  *
  * <p>Once the group is removed, with {@link #remove()} or by the stop of the simulator, the methods
  * that act on it throw a {@link SimulationStateException}; the accessors keep answering.
@@ -70,14 +70,10 @@ public interface ConsumerGroup {
     /** Adds a consumer from its spec. See {@link #addConsumer(Consumer)}. */
     ConsumerHandle addConsumer(ConsumerSpec spec);
 
-    /** The autopilot of the group. */
-    Autopilot autopilot();
-
     /**
-     * Removes the group from the simulator. While the simulator runs, the call blocks: it turns the
-     * autopilot off, stops the consumers, which leave the group, removes the static members that
-     * could not, deletes the group and reverts its group configs. The handles of its consumers are
-     * removed with it.
+     * Removes the group from the simulator. While the simulator runs, the call blocks: it stops the
+     * consumers, which leave the group, removes the static members that could not, deletes the group
+     * and reverts its group configs. The handles of its consumers are removed with it.
      *
      * @throws SimulationStateException if the group is already removed
      * @throws SimulationException if something could not be undone, after everything else was

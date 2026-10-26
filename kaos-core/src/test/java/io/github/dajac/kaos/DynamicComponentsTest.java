@@ -158,10 +158,8 @@ class DynamicComponentsTest {
             simulator.start();
             var before = kept.awaitSnapshot(allAssigned(4, "consumer-0", "consumer-1"), TIMEOUT);
             removed.awaitSnapshot(allAssigned(4, "consumer-0", "consumer-1"), TIMEOUT);
-            removed.autopilot().start(Duration.ofSeconds(30), Duration.ofSeconds(60));
             await().atMost(TIMEOUT).untilAsserted(
                 () -> assertThat(dynamicGroupConfigs(removedId)).containsKey("consumer.session.timeout.ms"));
-            assertThat(simulatorThreads()).contains("kaos-" + removedId + "-autopilot");
             var removedConsumer = removed.consumer(0);
 
             removed.remove();
@@ -174,8 +172,6 @@ class DynamicComponentsTest {
             simulator.awaitSnapshot(s -> s.groups().size() == 1, TIMEOUT);
             assertThatThrownBy(removed::remove).isInstanceOf(SimulationStateException.class);
             assertThatThrownBy(removedConsumer::leave).isInstanceOf(SimulationStateException.class);
-            assertThatThrownBy(() -> removed.autopilot().start(QUIET, QUIET))
-                .isInstanceOf(SimulationStateException.class);
 
             // The other group keeps its members, its epoch and its assignment.
             await().during(QUIET).atMost(TIMEOUT).until(() -> {

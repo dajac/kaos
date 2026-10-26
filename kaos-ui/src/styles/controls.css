@@ -42,22 +42,6 @@
 .btn-start { background: var(--green); color: #0a0e14; }
 .btn-stop { background: var(--red); color: #0a0e14; }
 
-.btn-autopilot {
-  width: 100%;
-  background: var(--surface3);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-}
-.btn-autopilot:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-.btn-autopilot.active {
-  background: var(--yellow-dim);
-  border-color: rgba(251,191,36,0.3);
-  color: var(--yellow);
-}
-
 /* -- Unified dropdown component (.dd) -- */
 .dd {
   position: relative;

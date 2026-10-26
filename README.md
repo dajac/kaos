@@ -5,12 +5,11 @@ new consumer rebalance protocol of
 [KIP-848](https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol).
 It runs real Kafka consumers and producers against your cluster, lets you
 disturb them (stop a consumer, freeze it, cut it off the network, upgrade
-or downgrade its protocol, or let the Auto-Pilot do it at random), and
-shows live how the group rebalances, which partitions each consumer owns,
-receives or gives up, and how the lag evolves. Groups can mix consumers
-of the `consumer` and `classic` protocols, with any assignor. Kaos ships
-as one runnable jar with a web UI, a versioned HTTP API and an
-embeddable Java library.
+or downgrade its protocol), and shows live how the group rebalances,
+which partitions each consumer owns, receives or gives up, and how the
+lag evolves. Groups can mix consumers of the `consumer` and `classic`
+protocols, with any assignor. Kaos ships as one runnable jar with a web
+UI, a versioned HTTP API and an embeddable Java library.
 
 ![The Rows view: one row per consumer, one strip per topic, the lag of each partition as a gauge](docs/images/rows-view.png)
 
@@ -88,8 +87,8 @@ protocol.*
    starts a producer and the consumers, and shows one row per consumer
    with the partitions it owns. Then, from the **Actions** menu of a
    consumer, try **Partition network**, **Freeze consumer** or
-   **Downgrade to classic**, and watch the group react; or press
-   **Auto-Pilot**. **Stop** deletes the topics and the group.
+   **Downgrade to classic**, and watch the group react. **Stop** deletes
+   the topics and the group.
 
 ## Architecture
 
@@ -178,7 +177,7 @@ goes with a change of the other.
 The other faults are `Fault.freeze()` (the consumer stops polling) and
 `Fault.connectionReset()` (the proxy closes its connections). Consumers
 also `leave()` and `join()` the group; producers `pause()` and
-`resume()`; each group has an `autopilot()`; and listeners
+`resume()`; and listeners
 (`withListener`, `addListener`) receive every new snapshot. Kaos is not
 published to a Maven repository yet: `./mvnw -pl kaos-core -am install
 -DskipTests -DskipITs` installs `io.github.dajac:kaos-core:0.1.0-SNAPSHOT`

@@ -96,3 +96,14 @@ test_run_queues_a_request_for_the_loop() {
     "$FACTORY_TEST_SCRIPTS/../../factory" run deploy 76 2>/dev/null && fail "accepted an unknown job"
     true
 }
+
+test_an_approved_green_pr_waits_for_a_merge_by_hand() {
+    out=$(overview 120)
+    assert_contains "$out" "review the PR"
+    jq '(.prs[] | select(.number == 90)) += {review: "APPROVED"}' snapshot.json >x && mv x snapshot.json
+    out=$(COLUMNS=120 "$FACTORY_TEST_SCRIPTS/overview.sh" snapshot.json)
+    assert_contains "$(grep '#81' <<<"$out")" "merge by hand"
+    jq '(.prs[] | select(.number == 90)) += {checks: "pending"}' snapshot.json >x && mv x snapshot.json
+    out=$(COLUMNS=120 "$FACTORY_TEST_SCRIPTS/overview.sh" snapshot.json)
+    assert_contains "$(grep '#81' <<<"$out")" "review the PR"
+}

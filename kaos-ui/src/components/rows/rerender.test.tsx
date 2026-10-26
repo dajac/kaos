@@ -63,7 +63,6 @@ function baseSnapshot(): Snapshot {
     targetAssignmentEpoch: 3,
     generation: -1,
     subscribedTopics: TOPICS,
-    autopilot: { enabled: false, minIntervalMs: 10000, maxIntervalMs: 30000 },
     lag: Object.fromEntries(
       TOPICS.map((topic, topicIndex) => [
         topic,

@@ -48,7 +48,6 @@ import com.networknt.schema.Error;
 import com.networknt.schema.SchemaLocation;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.dialect.Dialects;
-import io.github.dajac.kaos.AutopilotSnapshot;
 import io.github.dajac.kaos.ConfigMetadata;
 import io.github.dajac.kaos.ConsumerOverrides;
 import io.github.dajac.kaos.ConsumerSettings;
@@ -75,7 +74,6 @@ import io.github.dajac.kaos.SimulatorSpec;
 import io.github.dajac.kaos.TopicSpec;
 import io.github.dajac.kaos.Violation;
 import io.github.dajac.kaos.server.dto.ActionRequest;
-import io.github.dajac.kaos.server.dto.AutopilotRequest;
 import io.github.dajac.kaos.server.dto.GroupRequest;
 import io.github.dajac.kaos.server.dto.MetaResponse;
 import io.github.dajac.kaos.server.dto.Problem;
@@ -191,12 +189,6 @@ class OpenApiContractTest {
             Arguments.of("ConsumerRequest", ConsumerSpec.class, "{}"),
             Arguments.of("ProducerStateRequest", ProducerStateRequest.class, """
                 {"paused": true}
-                """),
-            Arguments.of("AutopilotRequest", AutopilotRequest.class, """
-                {"enabled": true, "minIntervalMs": 1000, "maxIntervalMs": 5000}
-                """),
-            Arguments.of("AutopilotRequest", AutopilotRequest.class, """
-                {"enabled": false}
                 """),
             Arguments.of("ActionRequest", ActionRequest.class, """
                 {"type": "join"}
@@ -460,7 +452,7 @@ class OpenApiContractTest {
         );
         var consumerGroup = new GroupSnapshot(
             "app", GroupType.CONSUMER, GroupState.RECONCILING, 12, 12, -1, List.of("orders"),
-            new AutopilotSnapshot(true, 1_000, 5_000), Map.of("orders", List.of(0L, 17L, -1L)),
+            Map.of("orders", List.of(0L, 17L, -1L)),
             List.of(reconciling, frozen)
         );
 
@@ -478,7 +470,7 @@ class OpenApiContractTest {
         );
         var classicGroup = new GroupSnapshot(
             "legacy", GroupType.CLASSIC, GroupState.STABLE, -1, -1, 4, List.of("audit"),
-            new AutopilotSnapshot(false, 2_000, 10_000), Map.of("audit", List.of(3L)), List.of(stable, failed)
+            Map.of("audit", List.of(3L)), List.of(stable, failed)
         );
 
         return new SimulatorSnapshot(
@@ -495,8 +487,8 @@ class OpenApiContractTest {
     /** A spec with consumer defaults, a consumer that overrides every setting and consumers that inherit. */
     static SimulatorSpec spec() {
         var overrides = new ConsumerOverrides(
-            Optional.of(Protocol.CONSUMER), Optional.of("uniform"), Optional.of(true), Optional.of("a"),
-            OptionalInt.of(10), OptionalInt.of(20), OptionalInt.of(30_000)
+            Optional.of(Protocol.CLASSIC), Optional.of("sticky"), Optional.of(true), Optional.of("a"),
+            OptionalInt.of(10), OptionalInt.of(20), OptionalInt.of(30_000), OptionalInt.of(6_000), OptionalInt.of(2_000)
         );
         var group = new GroupSpec(
             "app", List.of("orders"), 10_000, 1_000, 0,

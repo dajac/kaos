@@ -46,6 +46,9 @@ test_davids_gates_are_refused() {
         'gh api -X PUT repos/dajac/kaos/pulls/81/merge' \
         './factory merge 81' \
         'scripts/factory/merge.sh 81' \
+        'merge.sh --auto 90' \
+        'scripts/factory/merge.sh --auto 90' \
+        '/Users/dajac/dev/kaos/.claude/worktrees/factory-main/scripts/factory/merge.sh --auto 90' \
         'gh issue close 75' \
         'gh api -X PATCH repos/dajac/kaos/issues/75 -f state=closed' \
         'gh issue edit 75 --add-label accepted' \

@@ -27,7 +27,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-import io.github.dajac.kaos.Autopilot;
 import io.github.dajac.kaos.ConsumerGroup;
 import io.github.dajac.kaos.ConsumerHandle;
 import io.github.dajac.kaos.ConsumerOptions;
@@ -45,12 +44,11 @@ import io.github.dajac.kaos.internal.state.GroupLocalState;
 import io.github.dajac.kaos.internal.state.SnapshotAssembler;
 
 /**
- * A consumer group of a simulator: its consumers, its autopilot and what its start leaves on the
- * cluster.
+ * A consumer group of a simulator: its consumers and what its start leaves on the cluster.
  *
  * <p>The consumers are an immutable list behind a volatile reference, replaced as a whole by
- * whoever holds the structure lock of the simulator. The publisher, the poller and the autopilot
- * read it without a lock. Adding and removing consumers, and removing the group, go through the
+ * whoever holds the structure lock of the simulator. The publisher and the poller read it without
+ * a lock. Adding and removing consumers, and removing the group, go through the
  * {@link Harness}, which takes that lock and calls back the methods documented as such.
  */
 public final class GroupRuntime implements ConsumerGroup {
@@ -118,7 +116,6 @@ public final class GroupRuntime implements ConsumerGroup {
     private final List<TopicSpec> topics;
     private final Harness harness;
     private final ConsumerRunner.Owner owner = new ConsumerOwner();
-    private final AutopilotImpl autopilot;
 
     private volatile List<ConsumerRunner> consumers;
     private volatile boolean removed;
@@ -142,7 +139,6 @@ public final class GroupRuntime implements ConsumerGroup {
         this.spec = Objects.requireNonNull(spec, "spec");
         this.topics = List.copyOf(topics);
         this.harness = Objects.requireNonNull(harness, "harness");
-        this.autopilot = new AutopilotImpl(spec.id(), this::runners, harness::changed);
 
         // The ids that were supplied are taken first, so that no assigned id collides with one.
         spec.consumers().stream().map(ConsumerSpec::id).filter(id -> !id.isEmpty()).forEach(usedIds::add);
@@ -241,11 +237,6 @@ public final class GroupRuntime implements ConsumerGroup {
     }
 
     @Override
-    public Autopilot autopilot() {
-        return autopilot;
-    }
-
-    @Override
     public GroupSnapshot snapshot() {
         // A group that is not published, because it was just declared or is already removed, is
         // shown as the simulator knows it.
@@ -274,7 +265,6 @@ public final class GroupRuntime implements ConsumerGroup {
         return new GroupLocalState(
             spec.id(),
             topics,
-            autopilot.snapshot(),
             consumers.stream().map(ConsumerRunner::localState).toList()
         );
     }
@@ -314,7 +304,7 @@ public final class GroupRuntime implements ConsumerGroup {
             spec.id(),
             identified,
             spec.subscribedTopics(),
-            ConsumerRunner.ClassicTimeouts.of(spec),
+            ConsumerRunner.ClassicTimeouts.of(spec, identified),
             owner
         );
     }
@@ -370,11 +360,11 @@ public final class GroupRuntime implements ConsumerGroup {
     }
 
     /**
-     * Sets the group configs and starts the consumers. Closing {@code resources} turns the
-     * autopilot off, asks every consumer to stop, stops each consumer and removes its static
-     * member if it is left, deletes the group and reverts the group configs, in that order. The
-     * consumers added later have their sub-stack in the same stack of consumers, so they are
-     * undone in that order too. The caller holds the structure lock.
+     * Sets the group configs and starts the consumers. Closing {@code resources} asks every
+     * consumer to stop, stops each consumer and removes its static member if it is left, deletes
+     * the group and reverts the group configs, in that order. The consumers added later have their
+     * sub-stack in the same stack of consumers, so they are undone in that order too. The caller
+     * holds the structure lock.
      */
     public void start(Services services, Resources resources) {
         var groupId = spec.id();
@@ -397,8 +387,6 @@ public final class GroupRuntime implements ConsumerGroup {
         // Undone first: the loops end together, and each consumer then only waits for its own.
         resources.register("stop requests of group " + groupId, () -> consumers.forEach(ConsumerRunner::requestStop));
 
-        autopilot.open(services.consumers().threads());
-        resources.register("autopilot of group " + groupId, autopilot::close);
         harness.changed();
     }
 
