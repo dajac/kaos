@@ -16,6 +16,7 @@
 package io.github.dajac.kaos;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
@@ -215,7 +216,6 @@ class ConsumerGroupLifecycleTest {
                 .consumers(2)
             );
             simulator.start();
-            assertThat(group.warnings()).isEmpty();
             group.awaitSnapshot(allAssigned(4, "consumer-0", "consumer-1"), TIMEOUT);
 
             group.consumer(0).inject(Fault.networkIsolation());
@@ -314,7 +314,6 @@ class ConsumerGroupLifecycleTest {
                 TIMEOUT
             );
             assertThat(consumer(failed, "consumer-0").failure()).contains("InvalidSessionTimeoutException");
-            assertThat(group.warnings()).isEmpty();
         }
     }
 
@@ -333,7 +332,6 @@ class ConsumerGroupLifecycleTest {
             );
             simulator.start();
 
-            assertThat(group.warnings()).isEmpty();
             await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId)).containsOnly(
                 Map.entry("consumer.session.timeout.ms", "10000"),
                 Map.entry("consumer.assignment.interval.ms", "500")
@@ -345,26 +343,55 @@ class ConsumerGroupLifecycleTest {
     }
 
     @Test
-    void aGroupConfigTheBrokerRefusesIsAWarning() throws Exception {
+    void aGroupConfigTheBrokerRefusesFailsTheStart() throws Exception {
         var topic = cluster.uniqueName("refused");
         var groupId = cluster.uniqueName("refused");
 
         try (var simulator = newSimulator()) {
             simulator.addTopic(topic, 2);
-            // The session timeout is over the group.consumer.max.session.timeout.ms of the broker.
-            var group = simulator.addGroup(groupId, g -> g
+            // The session timeout is valid; the heartbeat interval is over the
+            // group.consumer.max.heartbeat.interval.ms of the broker, so neither is set.
+            simulator.addGroup(groupId, g -> g
                 .subscribe(topic)
-                .sessionTimeout(Duration.ofSeconds(120))
-                .heartbeatInterval(Duration.ofSeconds(2))
+                .sessionTimeout(Duration.ofSeconds(30))
+                .heartbeatInterval(Duration.ofSeconds(20))
                 .consumers(1)
             );
-            assertThat(group.warnings()).isEmpty();
 
+            assertThatThrownBy(simulator::start)
+                .isInstanceOf(SimulationException.class)
+                .hasMessageContaining(
+                    "The broker refused the group configs consumer.session.timeout.ms=30000, "
+                        + "consumer.heartbeat.interval.ms=20000 of group " + groupId + ": ")
+                .hasMessageContaining("group.consumer.max.heartbeat.interval.ms");
+
+            assertThat(simulator.snapshot().phase()).isEqualTo(Phase.IDLE);
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId)).isEmpty());
+            assertThat(groupIds()).doesNotContain(groupId);
+        }
+    }
+
+    @Test
+    void aSessionTimeoutUnderTheDefaultHeartbeatIntervalIsSetWithItsHeartbeatInterval() throws Exception {
+        var topic = cluster.uniqueName("short");
+        var groupId = cluster.uniqueName("short");
+
+        try (var simulator = newSimulator()) {
+            simulator.addTopic(topic, 2);
+            // Both are within the bounds of the broker, but the session timeout alone is under the
+            // default heartbeat interval of 5 s: the broker accepts the pair only in one alter.
+            var group = simulator.addGroup(groupId, g -> g
+                .subscribe(topic)
+                .sessionTimeout(Duration.ofSeconds(3))
+                .heartbeatInterval(Duration.ofSeconds(1))
+                .consumers(1)
+            );
             simulator.start();
 
-            assertThat(group.warnings()).singleElement().asString().contains("consumer.session.timeout.ms=120000");
-            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId))
-                .containsOnly(Map.entry("consumer.heartbeat.interval.ms", "2000")));
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId)).containsOnly(
+                Map.entry("consumer.session.timeout.ms", "3000"),
+                Map.entry("consumer.heartbeat.interval.ms", "1000")
+            ));
             group.awaitSnapshot(allAssigned(2, "consumer-0"), TIMEOUT);
         }
 

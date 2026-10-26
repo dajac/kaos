@@ -696,7 +696,7 @@ function specOf(config: ConfigForm): SimulatorSpec {
   };
 }
 
-const running = (spec: SimulatorSpec): Simulator => ({ phase: 'RUNNING', spec, lastError: '', warnings: [] });
+const running = (spec: SimulatorSpec): Simulator => ({ phase: 'RUNNING', spec, lastError: '' });
 
 describe('rehydration', () => {
   it('rebuilds the config that was started, overrides included', () => {

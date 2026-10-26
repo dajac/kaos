@@ -50,7 +50,7 @@ class FakeEventSource implements EventSourceLike {
   }
 }
 
-const STATUS: Status = { phase: 'RUNNING', lastError: '', warnings: [] };
+const STATUS: Status = { phase: 'RUNNING', lastError: '' };
 const SNAPSHOT: Snapshot = {
   revision: 3,
   phase: 'RUNNING',

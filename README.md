@@ -280,8 +280,9 @@ change of the design.
   timeout, heartbeat interval and assignment interval of a group are
   group configs of the `consumer` protocol, and the broker bounds them:
   with its defaults, it refuses a session timeout below 45 s or a
-  heartbeat interval below 5 s. Kaos then goes on without the setting
-  and reports it as a warning.
+  heartbeat interval below 5 s. A setting the broker refuses fails the
+  start of the group, or its add, and the error names the settings,
+  their values and the broker's message.
 - **Kaos owns its topics and its groups.** A start fails when one of its
   topics already exists, with an error that ends "delete it or use
   another topic name" (the UI names the topics after the group id, so

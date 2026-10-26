@@ -400,15 +400,12 @@ export interface components {
             phase: components["schemas"]["Phase"];
             /** @description The message of the last failed operation of the lifecycle thread, empty otherwise. */
             lastError: string;
-            /** @description What the groups could not apply at their start and went on without. */
-            warnings: string[];
         };
         /** @description The status, with the spec of the simulation. */
         Simulator: {
             phase: components["schemas"]["Phase"];
             spec: components["schemas"]["SimulatorSpec"];
             lastError: string;
-            warnings: string[];
         };
         SimulatorSpec: {
             topics: components["schemas"]["TopicSpec"][];

@@ -116,13 +116,13 @@ class OpenApiContractTest {
 
     @Test
     void theStatusMatchesItsSchema() {
-        assertValid("Status", new StatusResponse(Phase.STARTING, "", List.of()));
-        assertValid("Status", new StatusResponse(Phase.IDLE, "Cannot reach the cluster", List.of("a warning")));
+        assertValid("Status", new StatusResponse(Phase.STARTING, ""));
+        assertValid("Status", new StatusResponse(Phase.IDLE, "Cannot reach the cluster"));
     }
 
     @Test
     void theSimulatorWithItsSpecMatchesItsSchema() {
-        assertValid("Simulator", new SimulatorResponse(Phase.RUNNING, spec(), "", List.of("a warning")));
+        assertValid("Simulator", new SimulatorResponse(Phase.RUNNING, spec(), ""));
     }
 
     @Test
@@ -148,7 +148,7 @@ class OpenApiContractTest {
         ((ObjectNode) snapshot.at("/groups/0/consumers/0")).put("memberEpoch", -2);
         assertThat(errors("SimulatorSnapshot", snapshot)).isNotEmpty();
 
-        var status = tree(new StatusResponse(Phase.RUNNING, "", List.of()));
+        var status = tree(new StatusResponse(Phase.RUNNING, ""));
         ((ObjectNode) status).put("phase", "running");
         assertThat(errors("Status", status)).isNotEmpty();
 

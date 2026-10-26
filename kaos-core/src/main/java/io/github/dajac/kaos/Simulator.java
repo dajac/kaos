@@ -159,7 +159,8 @@ public final class Simulator implements AutoCloseable {
      *
      * @throws InvalidConfigException if the group is invalid, subscribes to a topic that is not
      *     declared, or has an id that is taken
-     * @throws SimulationException if the simulator runs and the group cannot be started
+     * @throws SimulationException if the simulator runs and the group cannot be started, as when
+     *     the broker refuses one of its group configs; the group is then not added
      */
     public ConsumerGroup addGroup(String id, Consumer<GroupOptions> options) {
         return addGroup(GroupSpec.of(id, options));
@@ -195,7 +196,7 @@ public final class Simulator implements AutoCloseable {
      *
      * @throws InvalidConfigException if the declared components are invalid
      * @throws SimulationStateException if the simulator is already started
-     * @throws SimulationException if a step failed
+     * @throws SimulationException if a step failed, as when the broker refuses a group config
      */
     public void start() {
         engine.start();

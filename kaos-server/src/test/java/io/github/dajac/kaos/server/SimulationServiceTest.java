@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
+import io.github.dajac.kaos.GroupSpec;
 import io.github.dajac.kaos.Phase;
 import io.github.dajac.kaos.Simulator;
 import io.github.dajac.kaos.SimulatorSpec;
@@ -34,7 +35,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** The ordering of the dynamic operations against a stop, on the lifecycle thread. */
+/** The operations of the lifecycle thread: their ordering against a stop, and their failures. */
 @IntegrationTest
 class SimulationServiceTest {
 
@@ -94,6 +95,49 @@ class SimulationServiceTest {
         release.countDown();
         await().atMost(TIMEOUT).untilAsserted(() -> assertThat(service.status().phase()).isEqualTo(Phase.IDLE));
         assertThat(simulator.describe().topics()).isEmpty();
+    }
+
+    @Test
+    void aStartWithAGroupConfigTheBrokerRefusesEndsIdleWithTheError() {
+        var topic = cluster.uniqueName("orders");
+        var groupId = cluster.uniqueName("refused");
+
+        service.start(
+            new SimulatorSpec(List.of(new TopicSpec(topic, 1)), List.of(), List.of(refusedGroup(groupId, topic))));
+
+        await().atMost(TIMEOUT).untilAsserted(() -> {
+            assertThat(service.status().phase()).isEqualTo(Phase.IDLE);
+            assertThat(service.status().lastError()).contains(REFUSED + groupId);
+        });
+        assertThat(simulator.describe().groups()).isEmpty();
+    }
+
+    @Test
+    void anAddWithAGroupConfigTheBrokerRefusesStaysRunningWithTheError() {
+        startWithOneTopic();
+        var topic = simulator.describe().topics().get(0).name();
+        var groupId = cluster.uniqueName("refused");
+
+        service.addGroup(refusedGroup(groupId, topic));
+
+        await().atMost(TIMEOUT)
+            .untilAsserted(() -> assertThat(service.status().lastError()).contains(REFUSED + groupId));
+        assertThat(service.status().phase()).isEqualTo(Phase.RUNNING);
+        assertThat(simulator.describe().groups()).isEmpty();
+    }
+
+    /** The start of the message of the refusal of {@link #refusedGroup}, before the group id. */
+    private static final String REFUSED = "The broker refused the group configs consumer.session.timeout.ms=30000, "
+        + "consumer.heartbeat.interval.ms=20000 of group ";
+
+    /** A group whose heartbeat interval is over the group.consumer.max.heartbeat.interval.ms of the broker. */
+    private static GroupSpec refusedGroup(String groupId, String topic) {
+        return GroupSpec.of(groupId, g -> g
+            .subscribe(topic)
+            .sessionTimeout(Duration.ofSeconds(30))
+            .heartbeatInterval(Duration.ofSeconds(20))
+            .consumers(1)
+        );
     }
 
     private void startWithOneTopic() {

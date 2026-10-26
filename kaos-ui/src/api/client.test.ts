@@ -38,7 +38,7 @@ function fakeFetch(response: () => Response): { fetch: Fetch; calls: Call[] } {
 const json = (status: number, body: unknown, type = 'application/json') =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': type } });
 
-const STATUS = { phase: 'STARTING', lastError: '', warnings: [] };
+const STATUS = { phase: 'STARTING', lastError: '' };
 
 describe('createClient', () => {
   it('reads /meta under the base path', async () => {

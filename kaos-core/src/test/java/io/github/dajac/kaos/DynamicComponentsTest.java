@@ -186,6 +186,46 @@ class DynamicComponentsTest {
     }
 
     @Test
+    void addingAGroupWhoseConfigTheBrokerRefusesFailsAndLeavesTheOtherGroupRunning() throws Exception {
+        var topic = cluster.uniqueName("refused-add");
+        var keptId = cluster.uniqueName("kept");
+        var refusedId = cluster.uniqueName("refused");
+
+        try (var simulator = newSimulator()) {
+            simulator.addTopic(topic, 2);
+            var kept = simulator.addGroup(keptId, g -> g
+                .subscribe(topic)
+                .heartbeatInterval(Duration.ofSeconds(1))
+                .consumerDefaults(c -> c.pollDelay(Duration.ofMillis(100)))
+                .consumers(1)
+            );
+            simulator.start();
+            var before = kept.awaitSnapshot(allAssigned(2, "consumer-0"), TIMEOUT);
+
+            // The heartbeat interval is over the group.consumer.max.heartbeat.interval.ms of the broker.
+            assertThatThrownBy(() -> simulator.addGroup(refusedId, g -> g
+                .subscribe(topic)
+                .sessionTimeout(Duration.ofSeconds(30))
+                .heartbeatInterval(Duration.ofSeconds(20))
+                .consumers(1)
+            ))
+                .isInstanceOf(SimulationException.class)
+                .hasMessageContaining(
+                    "The broker refused the group configs consumer.session.timeout.ms=30000, "
+                        + "consumer.heartbeat.interval.ms=20000 of group " + refusedId);
+
+            assertThat(simulator.groups()).containsExactly(kept);
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(refusedId)).isEmpty());
+            assertThat(groupIds()).doesNotContain(refusedId);
+            assertThat(simulator.snapshot().phase()).isEqualTo(Phase.RUNNING);
+            await().during(QUIET).atMost(TIMEOUT).until(() -> {
+                var now = kept.snapshot();
+                return allAssigned(2, "consumer-0").test(now) && now.epoch() == before.epoch();
+            });
+        }
+    }
+
+    @Test
     void addingOrRemovingAConsumerTriggersARebalance() throws Exception {
         var topic = cluster.uniqueName("rebalance");
         var groupId = cluster.uniqueName("rebalance");

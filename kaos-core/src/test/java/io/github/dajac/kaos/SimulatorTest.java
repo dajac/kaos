@@ -136,7 +136,6 @@ class SimulatorTest {
             assertThat(group.consumer(0).clientId()).isEqualTo("next-consumer-0");
             assertThat(group.consumer(0).protocol()).isEqualTo(Protocol.CLASSIC);
             assertThat(group.consumer(0).subscribed()).isTrue();
-            assertThat(group.warnings()).isEmpty();
             assertThatThrownBy(() -> group.consumer(3)).isInstanceOf(IllegalArgumentException.class);
             assertThat(fromSpec.consumers()).isEmpty();
             assertThat(simulator.groups()).containsExactly(group, fromSpec);
