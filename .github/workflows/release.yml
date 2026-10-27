@@ -89,3 +89,39 @@ jobs:
               --generate-notes \
               "$jar"
           fi
+
+  # Moves main to the next minor SNAPSHOT once X.Y.Z is out, unless main
+  # has moved already (a later release, or a patch release of an older
+  # line).
+  bump:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # the push to main
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Move main to the next SNAPSHOT
+        run: |
+          released="${GITHUB_REF_NAME#v}"
+          current="$(./mvnw -B -q -ntp org.apache.maven.plugins:maven-help-plugin:3.5.2:evaluate \
+            -Dexpression=project.version -DforceStdout)"
+          if [ "$current" != "$released-SNAPSHOT" ]; then
+            echo "main is at $current, not $released-SNAPSHOT: nothing to bump"
+            exit 0
+          fi
+          IFS=. read -r major minor _ <<< "$released"
+          next="$major.$((minor + 1)).0-SNAPSHOT"
+          ./mvnw -B -ntp org.codehaus.mojo:versions-maven-plugin:2.23.0:set \
+            -DnewVersion="$next" -DprocessAllModules -DgenerateBackupPoms=false
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "build(build): Move main to $next"
+          git push origin HEAD:main

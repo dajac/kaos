@@ -14,7 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
-| Docker image and release workflow (`Dockerfile`, `release.yml`, image on `ghcr.io`) | built |
+| Docker image, release and nightly workflows (`Dockerfile`, `release.yml`, `nightly.yml`, image on `ghcr.io`) | built |
 | `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
 | `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`, and so is `StaticUi`, which serves the UI at `/` |
 | `kaos-ui` | built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, the layout shell, the generated `api/schema.d.ts` with its check, and Vitest; the pure UI model (`model/`: the config form, the assignors, the lag gauge, the axis, the tooltip placement, the rows and the structural sharing); the config panel (`api/client.ts`, `state/configStore.ts`, `components/config/`, `styles/config.css` and `styles/controls.css`); and the Rows view (`api/events.ts`, `state/simulationStore.ts`, `state/uiSettingsStore.ts`, `components/rows/`, `styles/rows.css`) |
@@ -206,6 +206,7 @@ kaos/
   Dockerfile  .dockerignore    the image: the shaded jar on a Java 21 runtime
   .github/workflows/ci.yml     CI: ./mvnw verify on every PR and on push to main
   .github/workflows/release.yml  release: the image and the GitHub release of a tag vX.Y.Z
+  .github/workflows/nightly.yml  nightly: the image of main, tagged nightly
   kaos-core/                   library: kafka-clients, kroxylicious-runtime, slf4j-api
     src/main/java/io/github/dajac/kaos/            PUBLIC API
       Simulator, Topic, ProducerHandle, ConsumerGroup, ConsumerHandle, Fault
@@ -1804,11 +1805,30 @@ that the README example compiles.
   only. A failed build publishes nothing; a failure after the push of
   the image is retried by re-running the workflow, which pushes the same
   tags again and uploads the jar to the release if it already exists.
+- A second job, `bump`, then moves `main` to the next minor SNAPSHOT
+  (`0.1.0` puts it on `0.2.0-SNAPSHOT`) with a commit
+  `build(build): Move main to X.Y+1.0-SNAPSHOT`, pushed by
+  `github-actions[bot]` with the token of the workflow. It does nothing
+  when `main` is not at `X.Y.Z-SNAPSHOT`, so a patch release of an
+  older line, or a re-run, leaves `main` alone. The push needs `main`
+  to accept pushes from GitHub Actions; a branch protection that
+  requires PRs would need an exception for it.
 - To release: `git tag vX.Y.Z <commit on main>` and
   `git push origin vX.Y.Z`. The image and the release are public only
   when the repository is: a package pushed from a private repository is
   private, and its visibility is then changed once in its settings on
   GitHub.
+
+**Nightly**
+- `.github/workflows/nightly.yml` runs every night at 03:00 UTC on
+  `main`, and on demand (`workflow_dispatch`). It runs
+  `./mvnw -B -ntp verify` and pushes the image for both platforms to
+  `ghcr.io/dajac/kaos` with the tags `nightly` and `nightly-YYYYMMDD`,
+  never `latest`. The version is the SNAPSHOT of `main`, and the
+  `org.opencontainers.image.revision` label holds the commit.
+- A scheduled run skips the build when the last successful nightly ran
+  on the same commit, so an idle `main` costs no build. A manual run
+  always builds.
 
 **Integration-test harness**
 - The broker sets `group.consumer.min.session.timeout.ms` to 1 s and
