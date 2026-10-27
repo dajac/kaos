@@ -103,7 +103,7 @@ releases `0.1.0`).
 
 [`.github/workflows/release.yml`](.github/workflows/release.yml) builds
 and tests that version, pushes the image `ghcr.io/dajac/kaos:X.Y.Z`
-(also tagged `X.Y` and `latest`) for `linux/amd64` and `linux/arm64`,
+(also tagged `latest`) for `linux/amd64` and `linux/arm64`,
 creates the tag `vX.Y.Z` and the GitHub release with the jar, and
 moves `main` to the next minor SNAPSHOT (`0.1.0` puts it on
 `0.2.0-SNAPSHOT`). Every night,
