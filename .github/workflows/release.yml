@@ -1,16 +1,21 @@
 name: Release
 
-# Pushing a tag vX.Y.Z releases version X.Y.Z:
-#   git tag v0.1.0 && git push origin v0.1.0
+# Run from the Actions tab (Release, Run workflow) or with
+# "gh workflow run release.yml [-f version=X.Y.Z]". It releases the head
+# of the chosen branch, main by default, and creates the tag vX.Y.Z.
 on:
-  push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version X.Y.Z; empty takes the version of the POMs without -SNAPSHOT'
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
@@ -20,8 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write   # the GitHub release
+      contents: write   # the tag and the GitHub release
       packages: write   # the image on ghcr.io
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -29,14 +36,43 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
-      # The POMs on main hold the next SNAPSHOT version; the tag sets the
-      # released one, which also names the jar and `kaos --version`.
+      - name: Choose the version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          current="$(./mvnw -B -q -ntp org.apache.maven.plugins:maven-help-plugin:3.5.2:evaluate \
+            -Dexpression=project.version -DforceStdout)"
+          version="${INPUT_VERSION:-${current%-SNAPSHOT}}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$version' is not a version X.Y.Z"
+            exit 1
+          fi
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::v$version is already released"
+            exit 1
+          fi
+          # latest moves only forward: a patch of an older line keeps it.
+          newest="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
+            --limit 100 --json tagName --jq '.[].tagName' | sed 's/^v//' | sort -V | tail -n 1)"
+          if [ -z "$newest" ] || [ "$(printf '%s\n%s\n' "$newest" "$version" | sort -V | tail -n 1)" = "$version" ]; then
+            latest=true
+          else
+            latest=false
+          fi
+          echo "Releasing $version from $GITHUB_REF_NAME at $GITHUB_SHA (latest: $latest)"
+          {
+            echo "version=$version"
+            echo "minor=${version%.*}"
+            echo "latest=$latest"
+          } >> "$GITHUB_OUTPUT"
+      # The POMs hold a SNAPSHOT version; the release sets X.Y.Z in this
+      # checkout only, which also names the jar and `kaos --version`.
       - name: Set the version
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          echo "VERSION=$version" >> "$GITHUB_ENV"
           ./mvnw -B -ntp org.codehaus.mojo:versions-maven-plugin:2.23.0:set \
-            -DnewVersion="$version" -DprocessAllModules -DgenerateBackupPoms=false
+            -DnewVersion="${{ steps.version.outputs.version }}" -DprocessAllModules -DgenerateBackupPoms=false
       # The same build as CI, integration tests included.
       - run: ./mvnw -B -ntp verify
       - if: failure()
@@ -54,14 +90,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Tags X.Y.Z, X.Y and latest.
+      # Tags X.Y.Z, X.Y and, for the newest release, latest.
       - id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
+          flavor: latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=${{ steps.version.outputs.minor }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.latest }}
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -69,30 +107,29 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      # Creates the tag vX.Y.Z on the released commit, then the release.
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          LATEST: ${{ steps.version.outputs.latest }}
         run: |
           cat > notes.md <<NOTES
           \`\`\`sh
           docker pull ${IMAGE}:${VERSION}
           \`\`\`
           NOTES
-          jar="kaos-server/target/kaos-server-$VERSION.jar"
-          # A re-run after a partial failure updates the existing release.
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$jar" --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" \
-              --title "Kaos $VERSION" \
-              --notes-file notes.md \
-              --generate-notes \
-              "$jar"
-          fi
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Kaos $VERSION" \
+            --notes-file notes.md \
+            --generate-notes \
+            --latest="$LATEST" \
+            "kaos-server/target/kaos-server-$VERSION.jar"
 
   # Moves main to the next minor SNAPSHOT once X.Y.Z is out, unless main
-  # has moved already (a later release, or a patch release of an older
-  # line).
+  # is already past X.Y.Z (a patch release of an older line).
   bump:
     needs: release
     runs-on: ubuntu-latest
@@ -109,19 +146,21 @@ jobs:
           java-version: 21
           cache: maven
       - name: Move main to the next SNAPSHOT
+        env:
+          RELEASED: ${{ needs.release.outputs.version }}
         run: |
-          released="${GITHUB_REF_NAME#v}"
           current="$(./mvnw -B -q -ntp org.apache.maven.plugins:maven-help-plugin:3.5.2:evaluate \
             -Dexpression=project.version -DforceStdout)"
-          if [ "$current" != "$released-SNAPSHOT" ]; then
-            echo "main is at $current, not $released-SNAPSHOT: nothing to bump"
+          IFS=. read -r major minor _ <<< "$RELEASED"
+          next="$major.$((minor + 1)).0"
+          base="${current%-SNAPSHOT}"
+          if [ "$(printf '%s\n%s\n' "$base" "$next" | sort -V | tail -n 1)" = "$base" ]; then
+            echo "main is at $current, already at or past $next-SNAPSHOT: nothing to bump"
             exit 0
           fi
-          IFS=. read -r major minor _ <<< "$released"
-          next="$major.$((minor + 1)).0-SNAPSHOT"
           ./mvnw -B -ntp org.codehaus.mojo:versions-maven-plugin:2.23.0:set \
-            -DnewVersion="$next" -DprocessAllModules -DgenerateBackupPoms=false
+            -DnewVersion="$next-SNAPSHOT" -DprocessAllModules -DgenerateBackupPoms=false
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -am "build(build): Move main to $next"
+          git commit -am "build(build): Move main to $next-SNAPSHOT"
           git push origin HEAD:main

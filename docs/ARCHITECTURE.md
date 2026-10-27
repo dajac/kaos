@@ -205,7 +205,7 @@ kaos/
   config/                      eclipse-formatter.xml, the Spotless profile
   Dockerfile  .dockerignore    the image: the shaded jar on a Java 21 runtime
   .github/workflows/ci.yml     CI: ./mvnw verify on every PR and on push to main
-  .github/workflows/release.yml  release: the image and the GitHub release of a tag vX.Y.Z
+  .github/workflows/release.yml  release, on demand: the image, the tag and the GitHub release of X.Y.Z
   .github/workflows/nightly.yml  nightly: the image of main, tagged nightly
   kaos-core/                   library: kafka-clients, kroxylicious-runtime, slf4j-api
     src/main/java/io/github/dajac/kaos/            PUBLIC API
@@ -1788,36 +1788,44 @@ that the README example compiles.
   simulation, as on Ctrl-C.
 
 **Release**
-- `.github/workflows/release.yml` runs on the push of a tag `vX.Y.Z`.
-  The POMs on `main` hold a `-SNAPSHOT` version; the workflow sets the
-  version of the tag with `versions:set` (not committed), so the jar,
+- `.github/workflows/release.yml` runs on demand only
+  (`workflow_dispatch`): from the Actions tab (Release, Run workflow)
+  or with `gh workflow run release.yml [-f version=X.Y.Z]`. Nobody
+  pushes a tag: the workflow creates `vX.Y.Z` itself, since a tag
+  pushed by a workflow would not start another one.
+- It releases the head of the branch it runs on, `main` by default. The
+  version is the `version` input or, when empty, the version of the
+  POMs without `-SNAPSHOT` (`0.1.0-SNAPSHOT` gives `0.1.0`). It refuses
+  a version that is not `X.Y.Z` or that is already released. The
+  workflow sets it with `versions:set` (not committed), so the jar,
   `kaos --version` and `/api/v1/meta` report `X.Y.Z`.
 - It runs `./mvnw -B -ntp verify`, the build of CI, then builds the
   image for `linux/amd64` and `linux/arm64` with Buildx and pushes it to
-  `ghcr.io/dajac/kaos` with the tags `X.Y.Z`, `X.Y` and `latest`, and
-  the OCI labels of `docker/metadata-action`, whose
+  `ghcr.io/dajac/kaos` with the tags `X.Y.Z` and `X.Y`, and the OCI
+  labels of `docker/metadata-action`, whose
   `org.opencontainers.image.source` links the package to the
-  repository.
-- Last, it creates the GitHub release of the tag, with notes generated
-  from the merged PRs and the shaded jar attached, for the users who
-  run Kaos without Docker.
+  repository. `latest` moves only forward: the image gets it, and the
+  GitHub release is marked latest, only when `X.Y.Z` is the highest
+  release, so a patch of an older line keeps it where it is.
+- Last, it creates the GitHub release `vX.Y.Z`, and with it the tag on
+  the released commit, with notes generated from the merged PRs and the
+  shaded jar attached, for the users who run Kaos without Docker.
 - The token gets `contents: write` and `packages: write` in this job
-  only. A failed build publishes nothing; a failure after the push of
-  the image is retried by re-running the workflow, which pushes the same
-  tags again and uploads the jar to the release if it already exists.
+  only. A failed build publishes nothing, and a failed run before the
+  release is created is run again as is: it pushes the same image tags
+  again.
 - A second job, `bump`, then moves `main` to the next minor SNAPSHOT
-  (`0.1.0` puts it on `0.2.0-SNAPSHOT`) with a commit
+  of the release (`0.1.0` puts it on `0.2.0-SNAPSHOT`) with a commit
   `build(build): Move main to X.Y+1.0-SNAPSHOT`, pushed by
   `github-actions[bot]` with the token of the workflow. It does nothing
-  when `main` is not at `X.Y.Z-SNAPSHOT`, so a patch release of an
-  older line, or a re-run, leaves `main` alone. The push needs `main`
-  to accept pushes from GitHub Actions; a branch protection that
-  requires PRs would need an exception for it.
-- To release: `git tag vX.Y.Z <commit on main>` and
-  `git push origin vX.Y.Z`. The image and the release are public only
-  when the repository is: a package pushed from a private repository is
-  private, and its visibility is then changed once in its settings on
-  GitHub.
+  when `main` is already at or past that version, so a patch release
+  of an older line leaves `main` alone. When only this job fails,
+  "Re-run failed jobs" retries it. The push needs `main` to accept
+  pushes from GitHub Actions; a branch protection that requires PRs
+  would need an exception for it.
+- The image and the release are public only when the repository is: a
+  package pushed from a private repository is private, and its
+  visibility is then changed once in its settings on GitHub.
 
 **Nightly**
 - `.github/workflows/nightly.yml` runs every night at 03:00 UTC on

@@ -5,7 +5,7 @@
 #   docker build -t kaos .
 #
 # The release workflow (.github/workflows/release.yml) builds and pushes
-# this image for each release tag.
+# this image for each release.
 FROM eclipse-temurin:21-jre
 
 RUN useradd --system --no-create-home --shell /usr/sbin/nologin kaos
