@@ -108,7 +108,7 @@ and creates the GitHub release with the jar. The image is the
 [`Dockerfile`](Dockerfile) of the root, built from the jar:
 
 ```sh
-./mvnw package -DskipTests -DskipITs
+./mvnw clean package -DskipTests -DskipITs
 docker build -t kaos .
 docker run --rm -p 8081:8081 kaos --bootstrap-server host:9092
 ```

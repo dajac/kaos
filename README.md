@@ -29,7 +29,8 @@ Compose.
    docker compose up
    ```
 
-2. Open <http://localhost:8081>.
+2. Open <http://localhost:8081>. The broker takes a few seconds to
+   come up, so wait a moment before the first start.
 
 3. Press **Start**. Kaos creates a topic, starts a producer and a group
    of three consumers, and shows one row per consumer with the
@@ -40,7 +41,8 @@ Compose.
    classic**, and watch the group react.
 
 5. Press **Stop** when you are done: Kaos deletes the topics and the
-   group it created. `docker compose down` removes the broker and Kaos.
+   group it created. Ctrl-C stops the containers, and
+   `docker compose down` removes them.
 
 The panel on the left sets up the group before a start: its protocol
 and assignor, its topics and partitions, the number of consumers, and
@@ -62,19 +64,21 @@ per-consumer settings.
 ## Use your own Kafka cluster
 
 Kaos works with any Kafka cluster from version 4.0, where the KIP-848
-protocol is on by default.
+protocol is on by default (the assignment interval setting of a group
+needs 4.3).
 
 ```sh
-docker run --rm -p 8081:8081 ghcr.io/dajac/kaos --bootstrap-server broker-1:9092
+docker run --rm -p 8081:8081 ghcr.io/dajac/kaos --bootstrap-server <host>:<port>
 ```
 
 Kaos connects to the bootstrap address, then to each broker at the
 address the broker *advertises*. The container must reach those
 addresses too:
 
-- **A broker in Docker**: run Kaos on the network of the broker
-  (`--network <name>`), and have the broker advertise an address that
-  resolves on that network, as `compose.yaml` does.
+- **A broker in Docker**: run Kaos on the network of the broker, and
+  have the broker advertise an address that resolves on that network,
+  as `compose.yaml` does:
+  `docker run --rm --network <network> -p 8081:8081 ghcr.io/dajac/kaos --bootstrap-server <broker>:9092`.
 - **A broker on your machine** that advertises `localhost:9092`: inside
   a container, `localhost` is the container itself. On Linux, add
   `--network host` (then `-p` is not needed). Elsewhere, run the jar
@@ -98,14 +102,18 @@ java -jar kaos-server-<version>.jar --bootstrap-server localhost:9092
 | `--port` | `8081` | The port of the UI and the HTTP API |
 | `--proxy-port` | `19092` | The first port of the internal proxy that applies the network faults |
 
-With Docker, the options follow the image name. `--help` lists them and
-`--version` prints the version.
+With Docker, the options follow the image name, and the UI moves to
+another port with the `-p` mapping (`-p 9000:8081`) rather than
+`--port`. `--help` lists the options and `--version` prints the
+version.
 
 ## Good to know
 
-- **Kaos owns its topics and its groups.** A start fails when one of its
-  topics already exists. Stop deletes the topics and the groups it
-  created, and so does stopping Kaos itself.
+- **Kaos owns its topics and its groups.** Stop deletes the topics and
+  the groups it created, and so does stopping Kaos itself. A start
+  fails when one of its topics already exists, for example after Kaos
+  was killed: delete the topic, or change the group id, since the UI
+  names the topics after it.
 - **Faults follow the Kafka timeouts.** A consumer cut off the network
   loses its partitions after the session timeout (45 s by default), a
   frozen one after `max.poll.interval.ms` (5 min by default). Once the

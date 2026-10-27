@@ -9,10 +9,11 @@ fault.
 
 ## HTTP API
 
-The server exposes the model of the Java API as a versioned, resource-oriented HTTP
-API under `/api/v1`: REST to change the simulation, Server-Sent Events
-to follow it, and [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)
-problem details for errors. A running server describes it as an
+The server exposes the model of the Java API as a versioned,
+resource-oriented HTTP API under `/api/v1`: REST to change the
+simulation, Server-Sent Events to follow it, and
+[RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details for
+errors. A running server describes it as an
 OpenAPI 3.1 document at
 [`/api/v1/openapi.yaml`](http://localhost:8081/api/v1/openapi.yaml); the
 source is
@@ -102,5 +103,5 @@ also `leave()` and `join()` the group; producers `pause()` and
 `resume()`; and listeners
 (`withListener`, `addListener`) receive every new snapshot. Kaos is not
 published to a Maven repository yet: `./mvnw -pl kaos-core -am install
--DskipTests -DskipITs` installs `io.github.dajac:kaos-core:0.1.0-SNAPSHOT`
-in the local Maven repository.
+-DskipTests -DskipITs` installs `io.github.dajac:kaos-core`, at the
+version of `pom.xml`, in the local Maven repository.
