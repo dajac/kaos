@@ -1793,7 +1793,9 @@ that the README example compiles.
   or with `gh workflow run release.yml [-f version=X.Y.Z]`. Nobody
   pushes a tag: the workflow creates `vX.Y.Z` itself, since a tag
   pushed by a workflow would not start another one.
-- It releases the head of the branch it runs on, `main` by default. The
+- It releases the head of the branch it runs on: `main` by default,
+  or a `release/*` branch for a patch of an older line; on any other
+  branch the run does nothing. The
   version is the `version` input or, when empty, the version of the
   POMs without `-SNAPSHOT` (`0.1.0-SNAPSHOT` gives `0.1.0`). It refuses
   a version that is not `X.Y.Z` or that is already released. The
@@ -1819,7 +1821,9 @@ that the README example compiles.
   `build(build): Move main to X.Y+1.0-SNAPSHOT`, pushed by
   `github-actions[bot]` with the token of the workflow. It does nothing
   when `main` is already at or past that version, so a patch release
-  of an older line leaves `main` alone. When only this job fails,
+  of an older line leaves `main` alone. A PR merged into `main`
+  between its checkout and its push is absorbed by a rebase and up to
+  three attempts. When only this job fails,
   "Re-run failed jobs" retries it. The push needs `main` to accept
   pushes from GitHub Actions; a branch protection that requires PRs
   would need an exception for it.
