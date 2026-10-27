@@ -29,6 +29,11 @@ jobs:
         run: scripts/factory/test/run.sh
       # The integration tests use the runner's Docker through Testcontainers.
       - run: ./mvnw -B -ntp verify
+      # The release workflow builds the same image from the same jar.
+      - name: Docker image
+        run: |
+          docker build -t kaos:ci .
+          docker run --rm kaos:ci --version
       - if: failure()
         uses: actions/upload-artifact@v7
         with:

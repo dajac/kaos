@@ -1,0 +1,4 @@
+# The image only needs the runnable jar; everything else stays out of
+# the build context.
+*
+!kaos-server/target/kaos-server-*.jar
