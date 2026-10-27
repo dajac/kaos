@@ -732,7 +732,7 @@ flake rule as the local gates.
    PR's head, fetched into a ref of its own (`.` runs the current
    worktree as it is), and builds the shaded jar (`-DskipTests`;
    `--no-build` reuses an earlier build of the same head);
-2. starts its own `apache/kafka:4.3.1` container on a free port, with
+2. starts its own `apache/kafka:4.4.0` container on a free port, with
    the KRaft settings of a single node and the port it advertises, so
    that parallel runs never share topics or groups (for example David
    trying one PR while a job takes screenshots of another);

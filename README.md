@@ -48,7 +48,7 @@ protocol.*
 1. Start a broker:
 
    ```sh
-   docker run -p 9092:9092 apache/kafka:4.3.1
+   docker run -p 9092:9092 apache/kafka:4.4.0
    ```
 
 2. Build and start Kaos. The first build takes a few minutes, since it

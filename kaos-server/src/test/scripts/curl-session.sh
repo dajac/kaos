@@ -6,7 +6,7 @@
 # Usage: kaos-server/src/test/scripts/curl-session.sh [base-url]
 #
 # It needs a running server (./run.sh, default http://localhost:8081) connected to a broker
-# (docker run -p 9092:9092 apache/kafka:4.3.1). Only curl, grep and sed are used.
+# (docker run -p 9092:9092 apache/kafka:4.4.0). Only curl, grep and sed are used.
 
 set -euo pipefail
 
