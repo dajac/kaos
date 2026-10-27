@@ -84,7 +84,8 @@ java -jar kaos-server/target/kaos-*.jar [--bootstrap-server localhost:9092] [--p
 The runnable jar is the shaded `kaos-server/target/kaos-server-<version>.jar`.
 
 The Docker image wraps that jar: `docker build -t kaos .` after a
-`./mvnw package`. Pushing a tag `vX.Y.Z` runs
+`./mvnw clean package` (one jar in `kaos-server/target`). Pushing a
+tag `vX.Y.Z` runs
 `.github/workflows/release.yml`, which builds, tests, pushes the image
 `ghcr.io/dajac/kaos:X.Y.Z` (and `X.Y`, `latest`) and creates the GitHub
 release with the jar.

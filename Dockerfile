@@ -1,7 +1,7 @@
 # The Kaos image: the shaded jar of kaos-server on a Java 21 runtime.
 #
 # The jar is built first, outside of Docker:
-#   ./mvnw package -DskipTests -DskipITs
+#   ./mvnw clean package -DskipTests -DskipITs
 #   docker build -t kaos .
 #
 # The release workflow (.github/workflows/release.yml) builds and pushes

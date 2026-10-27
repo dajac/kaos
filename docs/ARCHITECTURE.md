@@ -1778,7 +1778,10 @@ that the README example compiles.
   published.
 - The jar is built before the image, by Maven, so the image build has
   no Maven, Node or test step and is the same for every platform. The
-  `.dockerignore` limits the build context to that jar.
+  `.dockerignore` limits the build context to that jar. The `COPY`
+  takes `kaos-server/target/kaos-server-*.jar` and fails when a stale
+  jar of another version is there too, so a local build starts with
+  `./mvnw clean package`.
 - The JVM is PID 1 and receives the `SIGTERM` of `docker stop`, so the
   shutdown hook of `Main` deletes the topics and the groups of the
   simulation, as on Ctrl-C.
@@ -1800,9 +1803,12 @@ that the README example compiles.
 - The token gets `contents: write` and `packages: write` in this job
   only. A failed build publishes nothing; a failure after the push of
   the image is retried by re-running the workflow, which pushes the same
-  tags again.
+  tags again and uploads the jar to the release if it already exists.
 - To release: `git tag vX.Y.Z <commit on main>` and
-  `git push origin vX.Y.Z`.
+  `git push origin vX.Y.Z`. The image and the release are public only
+  when the repository is: a package pushed from a private repository is
+  private, and its visibility is then changed once in its settings on
+  GitHub.
 
 **Integration-test harness**
 - The broker sets `group.consumer.min.session.timeout.ms` to 1 s and

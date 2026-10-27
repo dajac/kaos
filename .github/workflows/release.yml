@@ -78,8 +78,14 @@ jobs:
           docker pull ${IMAGE}:${VERSION}
           \`\`\`
           NOTES
-          gh release create "$GITHUB_REF_NAME" \
-            --title "Kaos $VERSION" \
-            --notes-file notes.md \
-            --generate-notes \
-            "kaos-server/target/kaos-server-$VERSION.jar"
+          jar="kaos-server/target/kaos-server-$VERSION.jar"
+          # A re-run after a partial failure updates the existing release.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$jar" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "Kaos $VERSION" \
+              --notes-file notes.md \
+              --generate-notes \
+              "$jar"
+          fi
