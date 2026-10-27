@@ -27,20 +27,20 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 /**
- * Holds the Java API example of the README, so that the build compiles it, and checks that the
- * README shows the same code: a change of one goes with a change of the other. The example needs a
+ * Holds the Java API example of {@code docs/API.md}, so that the build compiles it, and checks that
+ * the document shows the same code: a change of one goes with a change of the other. The example needs a
  * broker on {@code localhost:9092}, so it is compiled and not run.
  */
-class ReadmeExampleTest {
+class JavaApiExampleTest {
 
-    private static final Path README = Path.of("..", "README.md");
+    private static final Path DOC = Path.of("..", "docs", "API.md");
     private static final Path SOURCE = Path.of("src", "test", "java", "io", "github", "dajac", "kaos",
-        "ReadmeExampleTest.java");
+        "JavaApiExampleTest.java");
 
-    // The lines between the markers are the Java block of the README, without this indentation.
+    // The lines between the markers are the Java block of the document, without this indentation.
     @SuppressWarnings("unused")
     private static void example() {
-        // README:begin
+        // EXAMPLE:begin
         try (var simulator = new Simulator("localhost:9092")) {
             Topic orders = simulator.addTopic("orders", 12);
             simulator.addProducer(p -> p.topics(orders).ratePerPartition(2));
@@ -71,20 +71,20 @@ class ReadmeExampleTest {
             System.out.println(snapshot.state() + " at epoch " + snapshot.epoch() + ", lag " + snapshot.lag());
         } // close() stops everything and deletes the topics and the group
 
-        // README:end
+        // EXAMPLE:end
     }
 
-    // The README has exactly one Java block, this example: a second Java block in the README
+    // The document has exactly one Java block, this example: a second Java block in the document
     // fails this check, and then needs a place in this test.
     @Test
-    void theReadmeShowsTheExample() throws IOException {
-        assertThat(javaBlocks(Files.readString(README))).containsExactly(normalize(exampleSource()));
+    void theDocumentShowsTheExample() throws IOException {
+        assertThat(javaBlocks(Files.readString(DOC))).containsExactly(normalize(exampleSource()));
     }
 
     private static String exampleSource() throws IOException {
         var source = Files.readString(SOURCE);
-        var begin = source.indexOf("// README:begin\n") + "// README:begin\n".length();
-        var end = source.indexOf("// README:end", begin);
+        var begin = source.indexOf("// EXAMPLE:begin\n") + "// EXAMPLE:begin\n".length();
+        var end = source.indexOf("// EXAMPLE:end", begin);
         return source.substring(begin, source.lastIndexOf('\n', end) + 1);
     }
 

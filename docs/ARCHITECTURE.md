@@ -64,10 +64,9 @@ view is not carried over.
 
 - Quality gates in CI (coverage, static analysis, required checks). The
   basic CI build is in place, see [Verification](#verification).
-- docker-compose.
 - Publishing `kaos-core` to a Maven repository.
-- CONTRIBUTING, community files and templates. Open source polish is
-  limited to a good README.
+- Community files beyond `CONTRIBUTING.md` (code of conduct, security
+  policy, issue templates for outside users).
 - A Playwright end-to-end suite.
 - A TUI frontend.
 - A multi-group UI, producer controls and the connection-reset fault in
@@ -199,8 +198,12 @@ in the tree below is planned. `StaticUi` exists, and so does the
 ```
 kaos/
   pom.xml                      parent: BOMs, pluginManagement, -DskipUi, -DskipITs
-  README.md  LICENSE  .gitignore  run.sh  CLAUDE.md
+  README.md                    for users: what Kaos is, the Docker quickstart, the options
+  CONTRIBUTING.md              for contributors: build from source, development, release
+  compose.yaml                 the quickstart: a one-broker Kafka cluster and the Kaos image
+  LICENSE  .gitignore  run.sh  CLAUDE.md
   docs/ARCHITECTURE.md         living design doc, kept up to date in every PR
+  docs/API.md                  the HTTP API and the Java API, with the Java example
   docs/images/                 the screenshot of the README
   config/                      eclipse-formatter.xml, the Spotless profile
   Dockerfile  .dockerignore    the image: the shaded jar on a Java 21 runtime
@@ -1745,7 +1748,7 @@ format check and the UI build with Vitest, and produces the shaded jar
 with the UI, that `-DskipITs` and `-DskipUi` work, that
 `./run.sh` builds and starts the server, that the CI workflow runs
 the build, the server tests and the scripted curl session below, and
-that the README example compiles.
+that the Java example of `docs/API.md` compiles.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
@@ -1786,6 +1789,11 @@ that the README example compiles.
 - The JVM is PID 1 and receives the `SIGTERM` of `docker stop`, so the
   shutdown hook of `Main` deletes the topics and the groups of the
   simulation, as on Ctrl-C.
+- `compose.yaml` at the root is the quickstart of the README: a
+  one-broker KRaft cluster that advertises `kafka:9092` on the network
+  of the file, and the image `ghcr.io/dajac/kaos:latest` (or
+  `$KAOS_VERSION`) started with `--bootstrap-server kafka:9092` and the
+  port 8081 published.
 
 **Release**
 - `.github/workflows/release.yml` runs on demand only
@@ -2030,7 +2038,7 @@ that the README example compiles.
 **Java API**
 - The ITs drive `new Simulator(..)`, `add…` and `start()` without HTTP,
   including a two-group scenario.
-- The README example compiles as a test: `ReadmeExampleTest` holds the
-  same code, compiled and not run since it needs a broker on
-  `localhost:9092`, and checks that the Java block of `README.md` is that
-  code, up to the indentation.
+- The Java example of `docs/API.md` compiles as a test:
+  `JavaApiExampleTest` holds the same code, compiled and not run since
+  it needs a broker on `localhost:9092`, and checks that the Java block
+  of `docs/API.md` is that code, up to the indentation.
