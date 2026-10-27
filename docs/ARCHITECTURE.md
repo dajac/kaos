@@ -1797,6 +1797,11 @@ that the Java example of `docs/API.md` compiles.
   `docker compose -f - up`, so a user saves no file; its project name,
   `kaos`, lets `docker compose -p kaos down` remove it without the
   file.
+- The README also gives the same setup without Compose: a network
+  `kaos`, the broker started with the eight `KAFKA_*` settings that a
+  one-node KRaft cluster needs (any `KAFKA_*` variable replaces the
+  whole default config of the image), and Kaos with
+  `--bootstrap-server kafka:9092`.
 
 **Release**
 - `.github/workflows/release.yml` runs on demand only

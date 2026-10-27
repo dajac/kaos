@@ -19,8 +19,9 @@ protocol.*
 
 ## Quickstart
 
-You need [Docker](https://docs.docker.com/get-docker/) with Docker
-Compose.
+You need [Docker](https://docs.docker.com/get-docker/). Step 1 uses
+Docker Compose, which comes with Docker Desktop; without it, see
+[Without Compose](#without-compose).
 
 1. Start a Kafka broker and Kaos:
 
@@ -49,6 +50,31 @@ Compose.
 The panel on the left sets up the group before a start: its protocol
 and assignor, its topics and partitions, the number of consumers, and
 per-consumer settings.
+
+### Without Compose
+
+The same setup in three commands: a network, a broker that advertises
+its name on that network, and Kaos.
+
+```sh
+docker network create kaos
+
+docker run -d --name kafka --network kaos \
+  -e KAFKA_NODE_ID=1 \
+  -e KAFKA_PROCESS_ROLES=broker,controller \
+  -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+  -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+  -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+  -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+  -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+  apache/kafka:4.3.1
+
+docker run --rm --network kaos -p 8081:8081 ghcr.io/dajac/kaos --bootstrap-server kafka:9092
+```
+
+Then follow steps 2 to 5 above. Ctrl-C stops Kaos, and
+`docker rm -f kafka && docker network rm kaos` removes the rest.
 
 ## What you can do
 
