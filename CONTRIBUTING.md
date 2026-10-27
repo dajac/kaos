@@ -104,8 +104,13 @@ git tag v0.1.0 && git push origin v0.1.0
 [`.github/workflows/release.yml`](.github/workflows/release.yml) builds
 and tests that version, pushes the image `ghcr.io/dajac/kaos:X.Y.Z`
 (also tagged `X.Y` and `latest`) for `linux/amd64` and `linux/arm64`,
-and creates the GitHub release with the jar. The image is the
-[`Dockerfile`](Dockerfile) of the root, built from the jar:
+creates the GitHub release with the jar, and moves `main` to the next
+minor SNAPSHOT (`0.1.0` puts it on `0.2.0-SNAPSHOT`). Every night,
+[`.github/workflows/nightly.yml`](.github/workflows/nightly.yml)
+pushes the image of `main` as `nightly` and `nightly-YYYYMMDD`.
+
+The image is the [`Dockerfile`](Dockerfile) of the root, built from
+the jar:
 
 ```sh
 ./mvnw clean package -DskipTests -DskipITs

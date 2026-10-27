@@ -94,6 +94,9 @@ Java 21:
 java -jar kaos-server-<version>.jar --bootstrap-server localhost:9092
 ```
 
+**Nightly builds.** `ghcr.io/dajac/kaos:nightly` is built from `main`
+every night, for trying what is not released yet.
+
 ### Options
 
 | Option | Default | Meaning |
