@@ -1793,7 +1793,10 @@ that the Java example of `docs/API.md` compiles.
   one-broker KRaft cluster that advertises `kafka:9092` on the network
   of the file, and the image `ghcr.io/dajac/kaos:latest` (or
   `$KAOS_VERSION`) started with `--bootstrap-server kafka:9092` and the
-  port 8081 published.
+  port 8081 published. The README pipes it from `main` into
+  `docker compose -f - up`, so a user saves no file; its project name,
+  `kaos`, lets `docker compose -p kaos down` remove it without the
+  file.
 
 **Release**
 - `.github/workflows/release.yml` runs on demand only

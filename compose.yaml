@@ -1,6 +1,7 @@
 # A one-broker Kafka cluster and Kaos, to try Kaos in one command:
-#   docker compose up
-# then open http://localhost:8081. "docker compose down" removes both.
+#   curl -fsSL https://raw.githubusercontent.com/dajac/kaos/main/compose.yaml | docker compose -f - up
+# or "docker compose up" next to this file, then open
+# http://localhost:8081. "docker compose -p kaos down" removes both.
 name: kaos
 
 services:

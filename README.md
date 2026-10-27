@@ -25,9 +25,11 @@ Compose.
 1. Start a Kafka broker and Kaos:
 
    ```sh
-   curl -fsSLO https://raw.githubusercontent.com/dajac/kaos/main/compose.yaml
-   docker compose up
+   curl -fsSL https://raw.githubusercontent.com/dajac/kaos/main/compose.yaml | docker compose -f - up
    ```
+
+   This runs [`compose.yaml`](compose.yaml): a one-broker cluster and
+   Kaos, on one Docker network.
 
 2. Open <http://localhost:8081>. The broker takes a few seconds to
    come up, so wait a moment before the first start.
@@ -42,7 +44,7 @@ Compose.
 
 5. Press **Stop** when you are done: Kaos deletes the topics and the
    group it created. Ctrl-C stops the containers, and
-   `docker compose down` removes them.
+   `docker compose -p kaos down` removes them.
 
 The panel on the left sets up the group before a start: its protocol
 and assignor, its topics and partitions, the number of consumers, and
