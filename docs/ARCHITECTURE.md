@@ -1803,7 +1803,7 @@ that the README example compiles.
   `kaos --version` and `/api/v1/meta` report `X.Y.Z`.
 - It runs `./mvnw -B -ntp verify`, the build of CI, then builds the
   image for `linux/amd64` and `linux/arm64` with Buildx and pushes it to
-  `ghcr.io/dajac/kaos` with the tags `X.Y.Z` and `X.Y`, and the OCI
+  `ghcr.io/dajac/kaos` with the tag `X.Y.Z`, and the OCI
   labels of `docker/metadata-action`, whose
   `org.opencontainers.image.source` links the package to the
   repository. `latest` moves only forward: the image gets it, and the

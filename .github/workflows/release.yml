@@ -66,7 +66,6 @@ jobs:
           echo "Releasing $version from $GITHUB_REF_NAME at $GITHUB_SHA (latest: $latest)"
           {
             echo "version=$version"
-            echo "minor=${version%.*}"
             echo "latest=$latest"
           } >> "$GITHUB_OUTPUT"
       # The POMs hold a SNAPSHOT version; the release sets X.Y.Z in this
@@ -92,7 +91,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Tags X.Y.Z, X.Y and, for the newest release, latest.
+      # Tags X.Y.Z and, for the newest release, latest.
       - id: meta
         uses: docker/metadata-action@v6
         with:
@@ -100,7 +99,6 @@ jobs:
           flavor: latest=false
           tags: |
             type=raw,value=${{ steps.version.outputs.version }}
-            type=raw,value=${{ steps.version.outputs.minor }}
             type=raw,value=latest,enable=${{ steps.version.outputs.latest }}
       - uses: docker/build-push-action@v7
         with:
