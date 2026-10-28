@@ -1,7 +1,10 @@
 # Kaos
 
-Kaos is an interactive simulator of Kafka consumer groups, built for the
-new consumer rebalance protocol of
+*A playground for Apache Kafka consumer groups: run them, break them,
+and watch them rebalance.*
+
+Kaos is an interactive simulator of Apache Kafka consumer groups, built
+for the new consumer rebalance protocol of
 [KIP-848](https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol).
 
 It runs real Kafka consumers and producers against a cluster, lets you
@@ -68,7 +71,7 @@ docker run -d --name kafka --network kaos \
   -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
   -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
   -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
-  apache/kafka:4.3.1
+  apache/kafka:4.4.0
 
 docker run --rm --network kaos -p 8081:8081 ghcr.io/dajac/kaos --bootstrap-server kafka:9092
 ```
@@ -114,9 +117,13 @@ addresses too:
 
 Kaos connects in plaintext, without authentication.
 
+**A given version.** `ghcr.io/dajac/kaos` is the latest release; add
+the version to pin one, as in `ghcr.io/dajac/kaos:0.1.0`. With Compose,
+set `KAOS_VERSION=0.1.0` before `docker compose`.
+
 **Without Docker.** Download `kaos-server-<version>.jar` from the
-[releases](https://github.com/dajac/kaos/releases) and run it with
-Java 21:
+[latest release](https://github.com/dajac/kaos/releases/latest) and run
+it with Java 21:
 
 ```sh
 java -jar kaos-server-<version>.jar --bootstrap-server localhost:9092
@@ -174,3 +181,9 @@ source and run the tests.
 ## License
 
 Kaos is licensed under the [Apache License, Version 2.0](LICENSE).
+
+## Trademarks
+
+Apache Kafka, Kafka, and Apache are trademarks of The Apache Software
+Foundation. Kaos is not affiliated with or endorsed by The Apache
+Software Foundation.

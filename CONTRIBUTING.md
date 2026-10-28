@@ -10,7 +10,7 @@
 ## Build and run from source
 
 ```sh
-docker run -p 9092:9092 apache/kafka:4.3.1   # a local broker
+docker run -p 9092:9092 apache/kafka:4.4.0   # a local broker
 ./run.sh                                     # build the jar and run it
 ```
 
@@ -98,15 +98,15 @@ and the frontend.
 A release is one manual run of the Release workflow, with no git step:
 **Actions → Release → Run workflow** on `main`, or
 `gh workflow run release.yml`. The version field is optional: empty, it
-releases the version of the POMs without `-SNAPSHOT` (`0.1.0-SNAPSHOT`
-releases `0.1.0`).
+releases the version of the POMs without `-SNAPSHOT` (`0.2.0-SNAPSHOT`
+releases `0.2.0`).
 
 [`.github/workflows/release.yml`](.github/workflows/release.yml) builds
 and tests that version, pushes the image `ghcr.io/dajac/kaos:X.Y.Z`
 (also tagged `latest`) for `linux/amd64` and `linux/arm64`,
 creates the tag `vX.Y.Z` and the GitHub release with the jar, and
-moves `main` to the next minor SNAPSHOT (`0.1.0` puts it on
-`0.2.0-SNAPSHOT`). Every night,
+moves `main` to the next minor SNAPSHOT (`0.2.0` puts it on
+`0.3.0-SNAPSHOT`). Every night,
 [`.github/workflows/nightly.yml`](.github/workflows/nightly.yml)
 pushes the image of `main` as `nightly` and `nightly-YYYYMMDD`.
 
