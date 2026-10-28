@@ -3,22 +3,21 @@
 *A playground for Apache Kafka consumer groups: run them, break them,
 and watch them rebalance.*
 
-Kaos is an interactive simulator of Apache Kafka consumer groups, built
-for the new consumer rebalance protocol of
-[KIP-848](https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol).
-
-It runs real Kafka consumers and producers against a cluster, lets you
+Kaos is an interactive simulator of Apache Kafka consumer groups. It
+runs real Kafka consumers and producers against a cluster, lets you
 disturb them, and shows live how the group rebalances: which partitions
 each consumer owns, receives or gives up, and how the lag evolves. Use
-it to see the new protocol at work, compare it with the classic one, or
-watch what a migration from one to the other does to a running group.
+it to learn how a group reacts to failures, to compare the `consumer`
+protocol of
+[KIP-848](https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol)
+with the `classic` one, or to watch what a migration from one to the
+other does to a running group.
 
 ![The Rows view: one row per consumer, one strip per topic, the lag of each partition as a gauge](docs/images/rows-view.png)
 
 *A group of five consumers on two topics: `consumer-1` is cut off the
-network, `consumer-3` is frozen and does not take the partitions (in
-blue) that the coordinator moved to it, `consumer-4` speaks the classic
-protocol.*
+network and has lost its partitions, `consumer-3` is frozen and its lag
+grows, `consumer-4` speaks the classic protocol.*
 
 ## Quickstart
 
@@ -117,10 +116,6 @@ addresses too:
 
 Kaos connects in plaintext, without authentication.
 
-**A given version.** `ghcr.io/dajac/kaos` is the latest release; add
-the version to pin one, as in `ghcr.io/dajac/kaos:0.1.0`. With Compose,
-set `KAOS_VERSION=0.1.0` before `docker compose`.
-
 **Without Docker.** Download `kaos-server-<version>.jar` from the
 [latest release](https://github.com/dajac/kaos/releases/latest) and run
 it with Java 21:
@@ -128,9 +123,6 @@ it with Java 21:
 ```sh
 java -jar kaos-server-<version>.jar --bootstrap-server localhost:9092
 ```
-
-**Nightly builds.** `ghcr.io/dajac/kaos:nightly` is built from `main`
-every night, for trying what is not released yet.
 
 ### Options
 
@@ -145,33 +137,119 @@ another port with the `-p` mapping (`-p 9000:8081`) rather than
 `--port`. `--help` lists the options and `--version` prints the
 version.
 
-## Good to know
+## Versions
 
-- **Kaos owns its topics and its groups.** Stop deletes the topics and
-  the groups it created, and so does stopping Kaos itself. A start
-  fails when one of its topics already exists, for example after Kaos
-  was killed: delete the topic, or change the group id, since the UI
-  names the topics after it.
-- **Faults follow the Kafka timeouts.** A consumer cut off the network
-  loses its partitions after the session timeout (45 s by default), a
-  frozen one after `max.poll.interval.ms` (5 min by default). Once the
-  network is back, a consumer recovers within about 10 s.
-- **The lag counts from offset 0 until the first commit**, so a gauge
-  can fill right after a start and drop at the first commit.
-- **Eager classic assignors** (all but `cooperative-sticky`) give up
-  all their partitions during a rebalance, so the row of such a
-  consumer is empty until the rebalance completes.
-- **The broker bounds the group settings.** With its defaults, it
-  refuses a session timeout below 45 s or a heartbeat interval below
-  5 s, and the start fails with the broker's message.
-- **A start against an unreachable cluster** fails after about 30 s,
-  with the reason in the UI.
+`ghcr.io/dajac/kaos` is the latest release, and `ghcr.io/dajac/kaos:0.1.0`
+a given one. `ghcr.io/dajac/kaos:nightly` is built from `main` every
+night, for trying what is not released yet. The quickstart runs the
+version that `compose.yaml` names; `KAOS_VERSION` picks another:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dajac/kaos/main/compose.yaml | KAOS_VERSION=nightly docker compose -f - up
+```
 
 ## Automate it
 
-Everything the UI does goes through a versioned HTTP API, so scripts
-can drive Kaos too, and the simulator is also a Java library. See
-[docs/API.md](docs/API.md).
+Kaos has two APIs besides its UI: the HTTP API of the server, which the
+UI itself uses, and the Java API of the `kaos-core` library, which the
+server embeds. Both handle more than the UI shows: several groups,
+independent producers (pause, rate), topics, producers, groups and
+consumers added and removed while running, and the `connection-reset`
+fault.
+
+### HTTP API
+
+The server exposes the model of the Java API as a versioned,
+resource-oriented HTTP API under `/api/v1`: REST to change the
+simulation, Server-Sent Events to follow it, and
+[RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details for
+errors. A running server describes it as an
+OpenAPI 3.1 document at
+[`/api/v1/openapi.yaml`](http://localhost:8081/api/v1/openapi.yaml); the
+source is
+[`kaos-server/src/main/resources/openapi/kaos-v1.yaml`](kaos-server/src/main/resources/openapi/kaos-v1.yaml).
+
+Start a simulation with one topic, one producer and a group of three
+consumers, one of which speaks the classic protocol:
+
+```sh
+curl -X POST localhost:8081/api/v1/simulator \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "topics": [{"name": "orders", "partitions": 12}],
+        "producers": [{"topics": ["orders"]}],
+        "groups": [{"id": "orders-app", "subscribedTopics": ["orders"],
+                    "consumers": [{}, {}, {"overrides": {"protocol": "classic"}}]}]
+      }'
+```
+
+Follow it: the stream sends the current `status` and `snapshot` on
+connect, then each change.
+
+```sh
+curl -N localhost:8081/api/v1/simulator/events
+```
+
+Freeze a consumer, clear the fault, and stop the simulation:
+
+```sh
+curl -X PUT    localhost:8081/api/v1/simulator/groups/orders-app/consumers/consumer-0/faults/freeze
+curl -X DELETE localhost:8081/api/v1/simulator/groups/orders-app/consumers/consumer-0/faults/freeze
+curl -X DELETE localhost:8081/api/v1/simulator
+```
+
+`GET /api/v1/meta` returns the defaults, ranges, assignors and faults,
+and `GET /api/v1/simulator/snapshot` the current snapshot.
+[`kaos-server/src/test/scripts/curl-session.sh`](kaos-server/src/test/scripts/curl-session.sh)
+drives a whole session against a running server.
+
+### Java API
+
+`kaos-core` has a fluent API in the package `io.github.dajac.kaos`: build
+a `Simulator`, add topics, producers and groups, `start()` it, and drive
+the consumers through their handles. `close()` removes everything it
+created on the cluster.
+
+```java
+try (var simulator = new Simulator("localhost:9092")) {
+    Topic orders = simulator.addTopic("orders", 12);
+    simulator.addProducer(p -> p.topics(orders).ratePerPartition(2));
+
+    ConsumerGroup group = simulator.addGroup("orders-app", g -> g
+        .subscribe(orders)
+        .consumerDefaults(c -> c.protocol(Protocol.CONSUMER).assignor("uniform"))
+        .consumers(3) // consumer-0..2 inherit the defaults
+        .consumer(c -> c.protocol(Protocol.CLASSIC).assignor("range"))); // consumer-3 overrides them
+
+    simulator.start(); // creates the topics, starts the proxy, the producer and the consumers
+
+    // Wait until every consumer is a stable member of the group.
+    group.awaitSnapshot(
+        s -> s.consumers().stream().allMatch(c -> c.status() == ConsumerStatus.STABLE),
+        Duration.ofMinutes(1));
+
+    // Cut consumer-0 off the network: the proxy drops its requests until the fault is cleared.
+    ConsumerHandle c0 = group.consumer(0);
+    c0.inject(Fault.networkIsolation());
+    group.awaitSnapshot(s -> s.consumers().get(0).partitions().isEmpty(), Duration.ofMinutes(2));
+    c0.clear(Fault.networkIsolation());
+
+    // Upgrade consumer-3 to the consumer protocol while the group runs.
+    group.consumer(3).switchProtocol(Protocol.CONSUMER);
+
+    GroupSnapshot snapshot = group.snapshot();
+    System.out.println(snapshot.state() + " at epoch " + snapshot.epoch() + ", lag " + snapshot.lag());
+} // close() stops everything and deletes the topics and the group
+```
+
+The other faults are `Fault.freeze()` (the consumer stops polling) and
+`Fault.connectionReset()` (the proxy closes its connections). Consumers
+also `leave()` and `join()` the group; producers `pause()` and
+`resume()`; and listeners
+(`withListener`, `addListener`) receive every new snapshot. Kaos is not
+published to a Maven repository yet: `./mvnw -pl kaos-core -am install
+-DskipTests -DskipITs` installs `io.github.dajac:kaos-core`, at the
+version of `pom.xml`, in the local Maven repository.
 
 ## Contributing
 
@@ -184,6 +262,7 @@ Kaos is licensed under the [Apache License, Version 2.0](LICENSE).
 
 ## Trademarks
 
-Apache Kafka, Kafka, and Apache are trademarks of The Apache Software
-Foundation. Kaos is not affiliated with or endorsed by The Apache
-Software Foundation.
+Apache, Apache Kafka, and Kafka are either registered trademarks or
+trademarks of The Apache Software Foundation in the United States and/or
+other countries. Kaos is not affiliated with, endorsed by, or sponsored
+by The Apache Software Foundation.

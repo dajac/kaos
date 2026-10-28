@@ -24,7 +24,8 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
   kaos:
-    image: ghcr.io/dajac/kaos:${KAOS_VERSION:-latest}
+    # The latest release; KAOS_VERSION picks another, nightly included.
+    image: ghcr.io/dajac/kaos:${KAOS_VERSION:-0.1.0}
     command: --bootstrap-server kafka:9092
     ports:
       - "8081:8081"

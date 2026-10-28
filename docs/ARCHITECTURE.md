@@ -198,12 +198,11 @@ in the tree below is planned. `StaticUi` exists, and so does the
 ```
 kaos/
   pom.xml                      parent: BOMs, pluginManagement, -DskipUi, -DskipITs
-  README.md                    for users: what Kaos is, the Docker quickstart, the options
+  README.md                    for users: what Kaos is, the Docker quickstart, the options, the APIs
   CONTRIBUTING.md              for contributors: build from source, development, release
   compose.yaml                 the quickstart: a one-broker Kafka cluster and the Kaos image
   LICENSE  .gitignore  run.sh  CLAUDE.md
   docs/ARCHITECTURE.md         living design doc, kept up to date in every PR
-  docs/API.md                  the HTTP API and the Java API, with the Java example
   docs/images/                 the screenshot of the README
   config/                      eclipse-formatter.xml, the Spotless profile
   Dockerfile  .dockerignore    the image: the shaded jar on a Java 21 runtime
@@ -1747,8 +1746,7 @@ runs the unit tests, the integration-test harness below, the code
 format check and the UI build with Vitest, and produces the shaded jar
 with the UI, that `-DskipITs` and `-DskipUi` work, that
 `./run.sh` builds and starts the server, that the CI workflow runs
-the build, the server tests and the scripted curl session below, and
-that the Java example of `docs/API.md` compiles.
+the build, the server tests and the scripted curl session below.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
@@ -1791,12 +1789,14 @@ that the Java example of `docs/API.md` compiles.
   simulation, as on Ctrl-C.
 - `compose.yaml` at the root is the quickstart of the README: a
   one-broker KRaft cluster that advertises `kafka:9092` on the network
-  of the file, and the image `ghcr.io/dajac/kaos:latest` (or
-  `$KAOS_VERSION`) started with `--bootstrap-server kafka:9092` and the
-  port 8081 published. The README pipes it from `main` into
-  `docker compose -f - up`, so a user saves no file; its project name,
-  `kaos`, lets `docker compose -p kaos down` remove it without the
-  file.
+  of the file, and the image of the latest release,
+  `ghcr.io/dajac/kaos:0.1.0` (or `$KAOS_VERSION`), started with
+  `--bootstrap-server kafka:9092` and the port 8081 published. The
+  README pipes it from `main` into `docker compose -f - up`, so a user
+  saves no file; its project name, `kaos`, lets
+  `docker compose -p kaos down` remove it without the file. The release
+  workflow does not move the pinned version: a PR does, after each
+  release.
 - The README also gives the same setup without Compose: a network
   `kaos`, the broker started with the eight `KAFKA_*` settings that a
   one-node KRaft cluster needs (any `KAFKA_*` variable replaces the
@@ -2046,7 +2046,3 @@ that the Java example of `docs/API.md` compiles.
 **Java API**
 - The ITs drive `new Simulator(..)`, `add…` and `start()` without HTTP,
   including a two-group scenario.
-- The Java example of `docs/API.md` compiles as a test:
-  `JavaApiExampleTest` holds the same code, compiled and not run since
-  it needs a broker on `localhost:9092`, and checks that the Java block
-  of `docs/API.md` is that code, up to the indentation.

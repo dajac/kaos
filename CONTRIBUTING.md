@@ -110,6 +110,10 @@ moves `main` to the next minor SNAPSHOT (`0.2.0` puts it on
 [`.github/workflows/nightly.yml`](.github/workflows/nightly.yml)
 pushes the image of `main` as `nightly` and `nightly-YYYYMMDD`.
 
+After a release, a PR moves the Kaos version of
+[`compose.yaml`](compose.yaml) to it, so that the quickstart of the
+README runs the new release.
+
 The image is the [`Dockerfile`](Dockerfile) of the root, built from
 the jar:
 
