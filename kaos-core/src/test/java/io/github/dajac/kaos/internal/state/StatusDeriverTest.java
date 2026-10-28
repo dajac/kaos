@@ -100,8 +100,8 @@ class StatusDeriverTest {
 
     /**
      * The priority of the status. {@code failure} is the failure message of the runner, empty when
-     * it has not failed, and {@code faults} lists fault ids separated by "|". The assignments are in
-     * sync, so the coordinator state is the last resort.
+     * it has not failed, and {@code faults} lists fault ids separated by "|". The coordinator state
+     * is the last resort.
      */
     @ParameterizedTest(name = "failure={0} subscribed={1} faults={2} coordinator={3} -> {4}")
     @CsvSource({
@@ -129,50 +129,30 @@ class StatusDeriverTest {
     ) {
         var consumer = consumer(Protocol.CONSUMER, subscribed, faults(faults), failure, Set.of(T0));
 
-        assertThat(StatusDeriver.status(consumer, coordinatorState, Set.of(T0), Set.of(T0))).isEqualTo(expected);
+        assertThat(StatusDeriver.status(consumer, coordinatorState)).isEqualTo(expected);
     }
 
     /**
-     * The override of a {@code STABLE} coordinator state while partitions are in flight. It only
-     * applies to a consumer of the consumer protocol whose coordinator state is {@code STABLE}.
+     * A member {@code STABLE} for the coordinator stays {@code STABLE} while its local assignment
+     * trails or exceeds its target, whatever its protocol.
      */
-    @ParameterizedTest(name = "{0} coordinator={1} assignment={2} target={3} local={4} -> {5}")
+    @ParameterizedTest(name = "{0} local={1}")
     @CsvSource({
-        "CONSUMER, STABLE,      t-0,     t-0,     t-0,     STABLE",
-        "CONSUMER, STABLE,      t-0|t-1, t-0|t-1, t-0,     RECONCILING",
-        "CONSUMER, STABLE,      t-0,     t-0,     t-0|t-1, RECONCILING",
-        "CONSUMER, STABLE,      t-0|t-1, t-0,     t-0,     RECONCILING",
-        "CONSUMER, JOINING,     '',      '',      t-0,     JOINING",
-        "CONSUMER, RECONCILING, t-0,     t-0|t-1, t-0,     RECONCILING",
-        "CLASSIC,  STABLE,      t-0|t-1, t-0|t-1, t-0,     STABLE",
-        "CLASSIC,  STABLE,      t-0,     t-0,     t-0|t-1, STABLE",
+        "CONSUMER, ''",
+        "CONSUMER, t-0",
+        "CONSUMER, t-0|t-1",
+        "CLASSIC,  t-0",
     })
-    void stableIsOverriddenWhilePartitionsAreInFlight(
-        Protocol protocol,
-        ConsumerStatus coordinatorState,
-        String assignment,
-        String target,
-        String local,
-        ConsumerStatus expected
-    ) {
+    void stableIgnoresTheLocalAssignment(Protocol protocol, String local) {
+        // The coordinator assigned t-0 and t-1 and reports the member STABLE.
+        var member = member(TARGET_EPOCH, Set.of(T0, T1), Set.of(T0, T1));
+        var view = view(GroupType.CONSUMER, GroupState.STABLE, member);
         var consumer = consumer(protocol, true, Set.of(), "", refs(local));
 
-        assertThat(StatusDeriver.status(consumer, coordinatorState, refs(assignment), refs(target)))
-            .isEqualTo(expected);
-    }
+        var coordinatorState = StatusDeriver.coordinatorState(view, Optional.of(member), true);
 
-    @ParameterizedTest(name = "assignment={0} target={1} local={2} -> {3}")
-    @CsvSource({
-        "'',      '',      '',      false",
-        "t-0,     t-0,     t-0,     false",
-        "'',      t-0,     t-0,     false",
-        "t-0,     t-0|t-1, t-0,     true",
-        "t-0,     t-0,     t-0|t-1, true",
-        "t-0|t-1, t-0,     t-0,     true",
-        "t-0,     '',      '',      true",
-    })
-    void mismatch(String assignment, String target, String local, boolean expected) {
-        assertThat(StatusDeriver.hasMismatch(refs(assignment), refs(target), refs(local))).isEqualTo(expected);
+        assertThat(coordinatorState).isEqualTo(ConsumerStatus.STABLE);
+        assertThat(StatusDeriver.status(consumer, coordinatorState)).isEqualTo(ConsumerStatus.STABLE);
     }
 
     private static AdminView view(GroupType type, GroupState state, AdminView.Member member) {

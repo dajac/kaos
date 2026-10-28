@@ -16,13 +16,10 @@
 package io.github.dajac.kaos.internal.state;
 
 import java.util.Optional;
-import java.util.Set;
 
 import io.github.dajac.kaos.ConsumerStatus;
 import io.github.dajac.kaos.Fault;
 import io.github.dajac.kaos.GroupState;
-import io.github.dajac.kaos.PartitionRef;
-import io.github.dajac.kaos.Protocol;
 
 /** Derives the coordinator-side state and the displayed status of one consumer. Pure functions. */
 public final class StatusDeriver {
@@ -76,17 +73,10 @@ public final class StatusDeriver {
      *   <li>{@code FROZEN} when {@link Fault#freeze()} is active.</li>
      *   <li>{@code ISOLATED} when {@link Fault#networkIsolation()} or
      *       {@link Fault#connectionReset()} is active.</li>
-     *   <li>{@code RECONCILING} when a consumer of the consumer protocol is {@code STABLE} for the
-     *       coordinator and {@link #hasMismatch} locally.</li>
-     *   <li>The coordinator state otherwise.</li>
+     *   <li>The coordinator state otherwise, whatever the local assignment.</li>
      * </ol>
      */
-    public static ConsumerStatus status(
-        ConsumerLocalState consumer,
-        ConsumerStatus coordinatorState,
-        Set<PartitionRef> assignment,
-        Set<PartitionRef> targetAssignment
-    ) {
+    public static ConsumerStatus status(ConsumerLocalState consumer, ConsumerStatus coordinatorState) {
         if (consumer.failed()) {
             return ConsumerStatus.FAILED;
         }
@@ -102,27 +92,6 @@ public final class StatusDeriver {
         ) {
             return ConsumerStatus.ISOLATED;
         }
-        if (
-            consumer.protocol() == Protocol.CONSUMER
-                && coordinatorState == ConsumerStatus.STABLE
-                && hasMismatch(assignment, targetAssignment, consumer.localAssignment())
-        ) {
-            return ConsumerStatus.RECONCILING;
-        }
         return coordinatorState;
-    }
-
-    /**
-     * Whether a partition of the consumer is still in flight: a target partition the consumer does
-     * not hold yet, or a partition held locally or by the coordinator that is not a target.
-     */
-    public static boolean hasMismatch(
-        Set<PartitionRef> assignment,
-        Set<PartitionRef> targetAssignment,
-        Set<PartitionRef> localAssignment
-    ) {
-        return !localAssignment.containsAll(targetAssignment)
-            || !targetAssignment.containsAll(localAssignment)
-            || !targetAssignment.containsAll(assignment);
     }
 }

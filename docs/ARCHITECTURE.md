@@ -1029,12 +1029,10 @@ for free):
   to rejoin, while the coordinator still reports the last assignment. It
   uses the **per-consumer** effective assignor, so the consumers of one
   group can differ. (The prototype uses the group-level assignor.)
-- The Stable→Reconciling override. A consumer of the consumer protocol
-  that is `STABLE` for the coordinator has the status `RECONCILING`
-  while a partition is in flight: a target it does not hold locally, or
-  a partition held locally or by the coordinator that is not a target.
 - Status priority `FAILED > STOPPED > FROZEN > ISOLATED > …`, where `…`
-  is the coordinator state with the override above. `STOPPED` means not
+  is the coordinator state, whatever the local assignment of the
+  consumer: the partitions in flight show in the partition
+  classification, not in the status. `STOPPED` means not
   subscribed, so `STOPPING` only shows in `coordinatorState`.
   `connectionReset` counts as ISOLATED. `FAILED` applies when the
   consumer has a failure message. It comes first because a failed runner
@@ -1712,6 +1710,9 @@ Mixed-protocol groups are supported.
   consumers report it, not the coordinator. (The prototype shows the
   highest generation the consumers report.)
 - The eager mid-rebalance blanking uses the per-consumer assignor.
+- A consumer `STABLE` for the coordinator shows `STABLE` while its
+  client has not picked up its new partitions yet; the prototype showed
+  `RECONCILING` until the local assignment matched the target.
 - Errors show inline or as a banner instead of `alert()`.
 - A "disconnected" banner appears when SSE drops.
 - A failed request of the Rows view, or a failed protocol switch, shows
