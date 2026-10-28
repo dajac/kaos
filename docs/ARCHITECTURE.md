@@ -14,6 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
+| Docker image, release and nightly workflows (`Dockerfile`, `release.yml`, `nightly.yml`, image on `ghcr.io`) | built |
 | `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
 | `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`, and so is `StaticUi`, which serves the UI at `/` |
 | `kaos-ui` | built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, the layout shell, the generated `api/schema.d.ts` with its check, and Vitest; the pure UI model (`model/`: the config form, the assignors, the lag gauge, the axis, the tooltip placement, the rows and the structural sharing); the config panel (`api/client.ts`, `state/configStore.ts`, `components/config/`, `styles/config.css` and `styles/controls.css`); and the Rows view (`api/events.ts`, `state/simulationStore.ts`, `state/uiSettingsStore.ts`, `components/rows/`, `styles/rows.css`) |
@@ -63,8 +64,8 @@ view is not carried over.
 
 - Quality gates in CI (coverage, static analysis, required checks). The
   basic CI build is in place, see [Verification](#verification).
-- Docker and docker-compose.
-- Release automation.
+- docker-compose.
+- Publishing `kaos-core` to a Maven repository.
 - CONTRIBUTING, community files and templates. Open source polish is
   limited to a good README.
 - A Playwright end-to-end suite.
@@ -202,7 +203,10 @@ kaos/
   docs/ARCHITECTURE.md         living design doc, kept up to date in every PR
   docs/images/                 the screenshot of the README
   config/                      eclipse-formatter.xml, the Spotless profile
+  Dockerfile  .dockerignore    the image: the shaded jar on a Java 21 runtime
   .github/workflows/ci.yml     CI: ./mvnw verify on every PR and on push to main
+  .github/workflows/release.yml  release, on demand: the image, the tag and the GitHub release of X.Y.Z
+  .github/workflows/nightly.yml  nightly: the image of main, tagged nightly
   kaos-core/                   library: kafka-clients, kroxylicious-runtime, slf4j-api
     src/main/java/io/github/dajac/kaos/            PUBLIC API
       Simulator, Topic, ProducerHandle, ConsumerGroup, ConsumerHandle, Fault
@@ -1761,6 +1765,82 @@ that the README example compiles.
   as the `test-reports` artifact when the build fails.
 - The UI build runs in the same job through `frontend-maven-plugin`,
   which downloads its own Node, with no workflow change.
+- After the build, the job builds the Docker image from the jar and
+  runs `--version` in it, so a change that breaks the image fails the
+  PR rather than the release.
+
+**Docker image**
+- The `Dockerfile` at the root copies the shaded jar,
+  `kaos-server/target/kaos-server-<version>.jar`, onto
+  `eclipse-temurin:21-jre` and runs it as the unprivileged user `kaos`,
+  with `java -jar` as the entrypoint: the arguments of `docker run` are
+  the options of the application. The image exposes 8081. The proxy
+  listens on `localhost` inside the container, so its ports are not
+  published.
+- The jar is built before the image, by Maven, so the image build has
+  no Maven, Node or test step and is the same for every platform. The
+  `.dockerignore` limits the build context to that jar. The `COPY`
+  takes `kaos-server/target/kaos-server-*.jar` and fails when a stale
+  jar of another version is there too, so a local build starts with
+  `./mvnw clean package`.
+- The JVM is PID 1 and receives the `SIGTERM` of `docker stop`, so the
+  shutdown hook of `Main` deletes the topics and the groups of the
+  simulation, as on Ctrl-C.
+
+**Release**
+- `.github/workflows/release.yml` runs on demand only
+  (`workflow_dispatch`): from the Actions tab (Release, Run workflow)
+  or with `gh workflow run release.yml [-f version=X.Y.Z]`. Nobody
+  pushes a tag: the workflow creates `vX.Y.Z` itself, since a tag
+  pushed by a workflow would not start another one.
+- It releases the head of the branch it runs on: `main` by default,
+  or a `release/*` branch for a patch of an older line; on any other
+  branch the run does nothing. The
+  version is the `version` input or, when empty, the version of the
+  POMs without `-SNAPSHOT` (`0.1.0-SNAPSHOT` gives `0.1.0`). It refuses
+  a version that is not `X.Y.Z` or that is already released. The
+  workflow sets it with `versions:set` (not committed), so the jar,
+  `kaos --version` and `/api/v1/meta` report `X.Y.Z`.
+- It runs `./mvnw -B -ntp verify`, the build of CI, then builds the
+  image for `linux/amd64` and `linux/arm64` with Buildx and pushes it to
+  `ghcr.io/dajac/kaos` with the tag `X.Y.Z`, and the OCI
+  labels of `docker/metadata-action`, whose
+  `org.opencontainers.image.source` links the package to the
+  repository. `latest` moves only forward: the image gets it, and the
+  GitHub release is marked latest, only when `X.Y.Z` is the highest
+  release, so a patch of an older line keeps it where it is.
+- Last, it creates the GitHub release `vX.Y.Z`, and with it the tag on
+  the released commit, with notes generated from the merged PRs and the
+  shaded jar attached, for the users who run Kaos without Docker.
+- The token gets `contents: write` and `packages: write` in this job
+  only. A failed build publishes nothing, and a failed run before the
+  release is created is run again as is: it pushes the same image tags
+  again.
+- A second job, `bump`, then moves `main` to the next minor SNAPSHOT
+  of the release (`0.1.0` puts it on `0.2.0-SNAPSHOT`) with a commit
+  `build(build): Move main to X.Y+1.0-SNAPSHOT`, pushed by
+  `github-actions[bot]` with the token of the workflow. It does nothing
+  when `main` is already at or past that version, so a patch release
+  of an older line leaves `main` alone. A PR merged into `main`
+  between its checkout and its push is absorbed by a rebase and up to
+  three attempts. When only this job fails,
+  "Re-run failed jobs" retries it. The push needs `main` to accept
+  pushes from GitHub Actions; a branch protection that requires PRs
+  would need an exception for it.
+- The image and the release are public only when the repository is: a
+  package pushed from a private repository is private, and its
+  visibility is then changed once in its settings on GitHub.
+
+**Nightly**
+- `.github/workflows/nightly.yml` runs every night at 03:00 UTC on
+  `main`, and on demand (`workflow_dispatch`). It runs
+  `./mvnw -B -ntp verify` and pushes the image for both platforms to
+  `ghcr.io/dajac/kaos` with the tags `nightly` and `nightly-YYYYMMDD`,
+  never `latest`. The version is the SNAPSHOT of `main`, and the
+  `org.opencontainers.image.revision` label holds the commit.
+- A scheduled run skips the build when the last successful nightly ran
+  on the same commit, so an idle `main` costs no build. A manual run
+  always builds.
 
 **Integration-test harness**
 - The broker sets `group.consumer.min.session.timeout.ms` to 1 s and

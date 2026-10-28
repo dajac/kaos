@@ -83,6 +83,15 @@ java -jar kaos-server/target/kaos-*.jar [--bootstrap-server localhost:9092] [--p
 
 The runnable jar is the shaded `kaos-server/target/kaos-server-<version>.jar`.
 
+The Docker image wraps that jar: `docker build -t kaos .` after a
+`./mvnw clean package` (one jar in `kaos-server/target`). The Release
+workflow, run on demand (`gh workflow run release.yml`), builds and
+tests `main`, pushes the image `ghcr.io/dajac/kaos:X.Y.Z` (and
+`latest`), creates the tag and the GitHub release with the jar, and
+moves `main` to the next minor SNAPSHOT.
+`.github/workflows/nightly.yml` pushes `ghcr.io/dajac/kaos:nightly`
+from `main` every night.
+
 CI (`.github/workflows/ci.yml`) runs `./mvnw -B -ntp verify`, integration
 tests included, on every pull request, whatever its base branch, and on
 every push to `main`. The test reports are uploaded as an artifact when
