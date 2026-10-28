@@ -37,8 +37,11 @@ public enum ConsumerStatus {
     STOPPING,
     /** The consumer wants to be in the group and the coordinator does not list it as a member yet. */
     JOINING,
-    /** The consumer is a member and has not reached its target assignment yet. */
+    /** The coordinator reports the member as not yet at its target assignment or epoch. */
     RECONCILING,
-    /** The consumer is a member and owns exactly its target assignment. */
+    /**
+     * The coordinator reports the member at its target assignment and epoch; the client may still be
+     * picking up its partitions.
+     */
     STABLE
 }

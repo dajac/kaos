@@ -128,8 +128,9 @@ class SnapshotAssemblerTest {
             .isEqualTo(new ConsumerSnapshot.Raw(sortedRefs("a-0"), sortedRefs("a-0"), sortedRefs("a-0")));
     }
 
+    /** The status follows the coordinator, not the local assignment that trails the target. */
     @Test
-    void aStableMemberWithPartitionsInFlightLocallyIsReconciling() {
+    void aStableMemberWithPartitionsInFlightLocallyIsStable() {
         var group = new GroupLocalState(
             "g",
             TOPICS,
@@ -147,7 +148,7 @@ class SnapshotAssemblerTest {
         var consumer = SnapshotAssembler.assemble(group, view).consumers().get(0);
 
         assertThat(consumer.coordinatorState()).isEqualTo(ConsumerStatus.STABLE);
-        assertThat(consumer.status()).isEqualTo(ConsumerStatus.RECONCILING);
+        assertThat(consumer.status()).isEqualTo(ConsumerStatus.STABLE);
         assertThat(consumer.partitions()).containsExactly(
             new PartitionView("t", 0, PartitionState.ASSIGNED),
             new PartitionView("t", 1, PartitionState.PENDING)

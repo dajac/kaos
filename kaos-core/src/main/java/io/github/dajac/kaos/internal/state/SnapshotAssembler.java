@@ -75,7 +75,7 @@ public final class SnapshotAssembler {
             member.map(AdminView.Member::instanceId).orElse(""),
             member.map(AdminView.Member::memberEpoch).orElse(-1),
             coordinatorState,
-            StatusDeriver.status(consumer, coordinatorState, assignment, targetAssignment),
+            StatusDeriver.status(consumer, coordinatorState),
             consumer.failure(),
             PartitionClassifier.classify(consumer, view.state(), assignment, targetAssignment),
             new ConsumerSnapshot.Raw(

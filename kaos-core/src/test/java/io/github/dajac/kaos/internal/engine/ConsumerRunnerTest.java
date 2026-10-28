@@ -229,8 +229,7 @@ class ConsumerRunnerTest {
         assertThat(state.failure()).isEqualTo("FencedInstanceIdException: fenced");
         assertThat(state.localAssignment()).isEmpty();
         assertThat(client.closed()).isTrue();
-        assertThat(StatusDeriver.status(state, ConsumerStatus.JOINING, Set.of(), Set.of()))
-            .isEqualTo(ConsumerStatus.FAILED);
+        assertThat(StatusDeriver.status(state, ConsumerStatus.JOINING)).isEqualTo(ConsumerStatus.FAILED);
         await().atMost(TIMEOUT).until(() -> threads().isEmpty());
     }
 
