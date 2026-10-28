@@ -669,7 +669,7 @@ export interface components {
             memberEpoch: number;
             /** @description The membership as the coordinator sees it. */
             coordinatorState: components["schemas"]["ConsumerStatus"];
-            /** @description The single state to show, which also accounts for the faults and the local assignment. */
+            /** @description The single state to show, which is the coordinator state unless a failure, a stop or a fault takes priority. */
             status: components["schemas"]["ConsumerStatus"];
             /** @description The message of the error behind the `FAILED` status, empty otherwise. */
             failure: string;

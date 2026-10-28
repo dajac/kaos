@@ -35,8 +35,8 @@ import java.util.Objects;
  * @param memberEpoch the member epoch reported by the coordinator
  * @param coordinatorState the membership of the consumer as the coordinator sees it: one of
  *     {@code STOPPED}, {@code STOPPING}, {@code JOINING}, {@code RECONCILING} and {@code STABLE}
- * @param status the single state to show for the consumer, which also accounts for the faults and
- *     for the assignment the consumer holds locally
+ * @param status the single state to show for the consumer, which is the coordinator state unless
+ *     a failure, a stop or a fault takes priority
  * @param failure the message of the unrecoverable error behind the {@code FAILED} status
  * @param partitions the partitions that concern the consumer, in the order of {@link PartitionRef};
  *     a partition in the {@code EMPTY} state is left out
