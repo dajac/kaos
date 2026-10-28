@@ -14,7 +14,7 @@ section that describes it.
 | Maven multi-module build, `run.sh`, shaded jar | built |
 | Integration-test harness (failsafe, Testcontainers, `KafkaClusterExtension`) | built |
 | CI (GitHub Actions, `./mvnw verify` on every PR and on push to `main`) | built |
-| Docker image, release and nightly workflows (`Dockerfile`, `release.yml`, `nightly.yml`, image on `ghcr.io`) | built |
+| Docker image, release and nightly workflows (`Dockerfile`, `release.yml`, `nightly.yml`, image on `ghcr.io`), `compose.yaml` quickstart | built |
 | `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
 | `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`, and so is `StaticUi`, which serves the UI at `/` |
 | `kaos-ui` | built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, the layout shell, the generated `api/schema.d.ts` with its check, and Vitest; the pure UI model (`model/`: the config form, the assignors, the lag gauge, the axis, the tooltip placement, the rows and the structural sharing); the config panel (`api/client.ts`, `state/configStore.ts`, `components/config/`, `styles/config.css` and `styles/controls.css`); and the Rows view (`api/events.ts`, `state/simulationStore.ts`, `state/uiSettingsStore.ts`, `components/rows/`, `styles/rows.css`) |
@@ -64,10 +64,9 @@ view is not carried over.
 
 - Quality gates in CI (coverage, static analysis, required checks). The
   basic CI build is in place, see [Verification](#verification).
-- docker-compose.
 - Publishing `kaos-core` to a Maven repository.
-- CONTRIBUTING, community files and templates. Open source polish is
-  limited to a good README.
+- Community files beyond `CONTRIBUTING.md` (code of conduct, security
+  policy, issue templates for outside users).
 - A Playwright end-to-end suite.
 - A TUI frontend.
 - A multi-group UI, producer controls and the connection-reset fault in
@@ -199,7 +198,10 @@ in the tree below is planned. `StaticUi` exists, and so does the
 ```
 kaos/
   pom.xml                      parent: BOMs, pluginManagement, -DskipUi, -DskipITs
-  README.md  LICENSE  .gitignore  run.sh  CLAUDE.md
+  README.md                    for users: what Kaos is, the Docker quickstart, the options, the APIs
+  CONTRIBUTING.md              for contributors: build from source, development, release
+  compose.yaml                 the quickstart: a one-broker Kafka cluster and the Kaos image
+  LICENSE  .gitignore  run.sh  CLAUDE.md
   docs/ARCHITECTURE.md         living design doc, kept up to date in every PR
   docs/images/                 the screenshot of the README
   config/                      eclipse-formatter.xml, the Spotless profile
@@ -1744,8 +1746,7 @@ runs the unit tests, the integration-test harness below, the code
 format check and the UI build with Vitest, and produces the shaded jar
 with the UI, that `-DskipITs` and `-DskipUi` work, that
 `./run.sh` builds and starts the server, that the CI workflow runs
-the build, the server tests and the scripted curl session below, and
-that the README example compiles.
+the build, the server tests and the scripted curl session below.
 
 **Build**
 - `./mvnw verify` runs the unit tests, the Testcontainers ITs (Docker is
@@ -1786,6 +1787,21 @@ that the README example compiles.
 - The JVM is PID 1 and receives the `SIGTERM` of `docker stop`, so the
   shutdown hook of `Main` deletes the topics and the groups of the
   simulation, as on Ctrl-C.
+- `compose.yaml` at the root is the quickstart of the README: a
+  one-broker KRaft cluster that advertises `kafka:9092` on the network
+  of the file, and the image of the latest release,
+  `ghcr.io/dajac/kaos:0.1.0` (or `$KAOS_VERSION`), started with
+  `--bootstrap-server kafka:9092` and the port 8081 published. The
+  README pipes it from `main` into `docker compose -f - up`, so a user
+  saves no file; its project name, `kaos`, lets
+  `docker compose -p kaos down` remove it without the file. The release
+  workflow does not move the pinned version: a PR does, after each
+  release.
+- The README also gives the same setup without Compose: a network
+  `kaos`, the broker started with the eight `KAFKA_*` settings that a
+  one-node KRaft cluster needs (any `KAFKA_*` variable replaces the
+  whole default config of the image), and Kaos with
+  `--bootstrap-server kafka:9092`.
 
 **Release**
 - `.github/workflows/release.yml` runs on demand only
@@ -2030,7 +2046,3 @@ that the README example compiles.
 **Java API**
 - The ITs drive `new Simulator(..)`, `add…` and `start()` without HTTP,
   including a two-group scenario.
-- The README example compiles as a test: `ReadmeExampleTest` holds the
-  same code, compiled and not run since it needs a broker on
-  `localhost:9092`, and checks that the Java block of `README.md` is that
-  code, up to the indentation.
