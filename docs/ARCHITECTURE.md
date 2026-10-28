@@ -89,15 +89,15 @@ build steps back one major.
 | Area | Choice |
 |---|---|
 | Language / build | Java 21 (`maven.compiler.release=21`), Maven wrapper, multi-module |
-| Kafka | `kafka-clients` 4.3.1, pinned and excluded from Kroxylicious |
-| Proxy | `kroxylicious-runtime` 0.24.0 (requires Java 21) |
+| Kafka | `kafka-clients` 4.4.0, pinned and excluded from Kroxylicious |
+| Proxy | `kroxylicious-runtime` 0.25.1 (requires Java 21) |
 | HTTP | Javalin 7.2.x (Jetty 12), with REST, SSE and static files |
 | JSON | Jackson via `jackson-bom` 2.22.x |
 | Command line | picocli 4.7.x in server, through reflection (no annotation processor) |
 | Logging | `slf4j-api` only in core; logback-classic 1.5.x in server |
 | Packaging | `maven-shade-plugin` 3.6.x |
 | Code format | `spotless-maven-plugin` 3.10.x with the Eclipse JDT formatter (`config/eclipse-formatter.xml`), import ordering and the Apache License 2.0 header, checked in `verify` |
-| Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.3.1`, failsafe for the tests tagged `integration`, `com.networknt:json-schema-validator` 2.0.x (the Jackson 2 line) for the contract test |
+| Java tests | JUnit (junit-bom), AssertJ 3.27.x, Mockito 5.x, Awaitility 4.3, Testcontainers 2.0.x `testcontainers-kafka` with `apache/kafka:4.4.0`, failsafe for the tests tagged `integration`, `com.networknt:json-schema-validator` 2.0.x (the Jackson 2 line) for the contract test |
 | Frontend | Node 24 LTS (pinned by `frontend-maven-plugin` 2.0.x + `.nvmrc`), Vite 8, React 19, TypeScript 6, Zustand 5, `@fontsource-variable/{jetbrains-mono,dm-sans}` |
 | Frontend tests | Vitest 5, React Testing Library 16 with `user-event` 14 and jsdom 30. Playwright is deferred. |
 | API contract | Hand-written OpenAPI 3.1 YAML, with `openapi-typescript` generating the TS types |
@@ -1939,7 +1939,7 @@ that the README example compiles.
 
 **Backend end-to-end**
 1. Start a local broker:
-   `docker run -p 9092:9092 apache/kafka:4.3.1`.
+   `docker run -p 9092:9092 apache/kafka:4.4.0`.
 2. Run `./run.sh` and open `http://localhost:8081`.
 3. Exercise start, every action and stop.
 4. Confirm the API from the command line:

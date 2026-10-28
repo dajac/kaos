@@ -99,7 +99,7 @@ npm run gen:api                                         # in kaos-ui/; regenerat
 A local broker for manual testing:
 
 ```sh
-docker run -p 9092:9092 apache/kafka:4.3.1
+docker run -p 9092:9092 apache/kafka:4.4.0
 ```
 
 ## Commits and PRs

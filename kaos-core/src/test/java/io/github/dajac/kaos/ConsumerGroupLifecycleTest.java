@@ -366,7 +366,7 @@ class ConsumerGroupLifecycleTest {
                 .hasMessageContaining(
                     "The broker refused the group configs consumer.session.timeout.ms=30000, "
                         + "consumer.heartbeat.interval.ms=20000 of group " + groupId + ": ")
-                .hasMessageContaining("group.consumer.max.heartbeat.interval.ms");
+                .hasMessageContaining("consumer.heartbeat.interval.ms must be in the range");
 
             assertThat(simulator.snapshot().phase()).isEqualTo(Phase.IDLE);
             await().atMost(TIMEOUT).untilAsserted(() -> assertThat(dynamicGroupConfigs(groupId)).isEmpty());

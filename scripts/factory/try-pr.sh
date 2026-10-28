@@ -13,7 +13,7 @@
 #   name is try-<PR|branch|main|worktree>, or try-<name> with --as, so
 #   that parallel runs of one target (David's, a job's) do not collide.
 # - It builds the shaded jar (-DskipTests; --no-build reuses an earlier
-#   one of the same head), starts apache/kafka:4.3.1 in its own
+#   one of the same head), starts apache/kafka:4.4.0 in its own
 #   container on a free port, runs the server on free ports, runs the
 #   scenario (default.json unless --scenario names another, or a file;
 #   "none" for none), and prints the UI's URL on its last line. A
@@ -28,7 +28,7 @@
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
-image=apache/kafka:4.3.1
+image=apache/kafka:4.4.0
 state_root=$FACTORY_STATE/try
 
 # Stops a run: the server first, waiting for it to exit, then its broker.
