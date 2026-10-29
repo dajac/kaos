@@ -104,7 +104,8 @@ class SimulatorTest {
             assertThat(snapshot.producers())
                 .containsExactly(new ProducerSnapshot("producer-0", List.of("orders"), ProducerState.STOPPED, 2.0));
             assertThat(producer.state()).isEqualTo(ProducerState.STOPPED);
-            assertThat(received).contains(snapshot);
+            // awaitSnapshot can return before the publisher thread has called the listeners.
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(received).contains(snapshot));
         }
     }
 
