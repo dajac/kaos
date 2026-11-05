@@ -89,7 +89,8 @@
   --fault-dim: color-mix(in srgb, var(--fault) 12%, transparent);
   --orange: #a54000;
   --orange-dim: color-mix(in srgb, var(--orange) 14%, transparent);
-  --neutral: #5c6878;
+  /* Lighter than --text-dim: it only tints the grey badges that hold it. */
+  --neutral: #97a1b0;
   --ink: #1b2330;
   --halo: #ffffff;
   --shadow-pop: 0 4px 12px rgba(16,24,40,0.14);

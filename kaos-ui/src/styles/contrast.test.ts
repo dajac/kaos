@@ -26,7 +26,7 @@ type Rgba = readonly [number, number, number, number];
 
 function block(selector: string): Map<string, string> {
   const start = tokensCss.indexOf(`${selector} {`);
-  const body = tokensCss.slice(start, tokensCss.indexOf('}', start));
+  const body = tokensCss.slice(start, tokensCss.indexOf('}', start)).replace(/\/\*[\s\S]*?\*\//g, '');
   return new Map([...body.matchAll(/--([\w-]+):\s*([^;]+);/g)].map(([, name = '', value = '']) => [name, value.trim()]));
 }
 
@@ -72,9 +72,14 @@ function luminance([r, g, b]: Rgba): number {
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
+/** A token name, or a colour of the stylesheets such as a `color-mix()` of a token. */
+function paint(nameOrValue: string): Rgba {
+  return nameOrValue.includes('(') ? color(nameOrValue) : token(nameOrValue);
+}
+
 function contrast(text: string, background: string, surface: string): number {
   const fore = luminance(token(text));
-  const back = luminance(over(token(background), token(surface)));
+  const back = luminance(over(paint(background), token(surface)));
   return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
 }
 
@@ -91,6 +96,12 @@ const PAIRS: [string, string, string][] = [
       [state, `${state}-dim`, s],
     ]),
   ),
+  // The grey badges of the empty, idle and stopped states (rows.css).
+  ...[12, 15, 18].map((percent): [string, string, string] => [
+    'text-dim',
+    `color-mix(in srgb, var(--neutral) ${percent}%, transparent)`,
+    'bg',
+  ]),
   ['red', 'surface2', 'surface2'],
   ['yellow', 'surface2', 'surface2'],
   // Start and Stop.
@@ -104,7 +115,7 @@ const PAIRS: [string, string, string][] = [
 
 describe('the light theme', () => {
   for (const [text, background, surface] of PAIRS) {
-    it(`reads --${text} on --${background} over --${surface}`, () => {
+    it(`reads ${text} on ${background} over ${surface}`, () => {
       expect(contrast(text, background, surface)).toBeGreaterThanOrEqual(4.5);
     });
   }
