@@ -1,0 +1,8 @@
+# The dark shots must match main; the light ones show the new theme
+# (main ignores ?theme and stays dark).
+idle-dark none / 1440x900
+idle-light none /?theme=light 1440x900
+running-dark default / 1440x900
+running-light default /?theme=light 1440x900
+frozen-dark frozen-consumer / 1440x900
+frozen-light frozen-consumer /?theme=light 1440x900
