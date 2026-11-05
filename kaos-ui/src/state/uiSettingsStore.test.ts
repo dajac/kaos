@@ -40,8 +40,36 @@ describe('uiSettingsStore', () => {
     const storage = memoryStorage();
     createUiSettingsStore(storage).getState().setStripHeightPreset('L');
 
-    expect(JSON.parse(storage.items.get(UI_SETTINGS_KEY) ?? '')).toEqual({ stripHeightPreset: 'L' });
+    expect(JSON.parse(storage.items.get(UI_SETTINGS_KEY) ?? '')).toEqual({ stripHeightPreset: 'L', theme: 'dark' });
     expect(createUiSettingsStore(storage).getState().stripHeightPreset).toBe('L');
+  });
+
+  it('starts on the dark theme without a stored or valid theme', () => {
+    expect(createUiSettingsStore(memoryStorage()).getState().theme).toBe('dark');
+    expect(createUiSettingsStore(memoryStorage('{"theme":"sepia"}')).getState().theme).toBe('dark');
+    expect(createUiSettingsStore(memoryStorage('{not json')).getState().theme).toBe('dark');
+  });
+
+  it('reads each field on its own', () => {
+    const old = createUiSettingsStore(memoryStorage('{"stripHeightPreset":"L"}')).getState();
+    expect(old.stripHeightPreset).toBe('L');
+    expect(old.theme).toBe('dark');
+
+    const badPreset = createUiSettingsStore(memoryStorage('{"stripHeightPreset":"XL","theme":"light"}')).getState();
+    expect(badPreset.stripHeightPreset).toBe('M');
+    expect(badPreset.theme).toBe('light');
+  });
+
+  it('persists the theme, and each setter keeps the other field', () => {
+    const storage = memoryStorage(JSON.stringify({ stripHeightPreset: 'S', theme: 'system' }));
+    const store = createUiSettingsStore(storage);
+
+    store.getState().setTheme('light');
+    expect(JSON.parse(storage.items.get(UI_SETTINGS_KEY) ?? '')).toEqual({ stripHeightPreset: 'S', theme: 'light' });
+
+    store.getState().setStripHeightPreset('L');
+    expect(JSON.parse(storage.items.get(UI_SETTINGS_KEY) ?? '')).toEqual({ stripHeightPreset: 'L', theme: 'light' });
+    expect(createUiSettingsStore(storage).getState().theme).toBe('light');
   });
 
   it('reads the setting of the prototype and ignores its UI mode', () => {

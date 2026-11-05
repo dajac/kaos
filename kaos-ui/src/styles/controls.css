@@ -39,8 +39,8 @@
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn:active { transform: scale(0.98); }
 
-.btn-start { background: var(--green); color: #0a0e14; }
-.btn-stop { background: var(--red); color: #0a0e14; }
+.btn-start { background: var(--green); color: var(--on-solid); }
+.btn-stop { background: var(--red); color: var(--on-solid); }
 
 /* -- Unified dropdown component (.dd) -- */
 .dd {
@@ -79,7 +79,7 @@
 .dd.open .dd-btn.dd-btn-add {
   background: var(--accent-dim);
   color: var(--accent);
-  border-color: rgba(76,154,255,0.4);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   border-style: solid;
 }
 
@@ -135,7 +135,7 @@
 .dd-item:hover { background: var(--accent-dim); color: var(--accent); }
 .dd-item.selected {
   color: var(--accent);
-  background: rgba(76,154,255,0.05);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 .dd-item-hint {
   color: var(--text-dim);
@@ -169,7 +169,7 @@
 .dd-btn.ui-settings-btn:hover,
 .dd.open .dd-btn.ui-settings-btn {
   background: var(--accent-dim);
-  border-color: rgba(76,154,255,0.4);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--accent);
 }
 .dd-btn.ui-settings-btn .dd-value {
@@ -181,7 +181,8 @@
   line-height: 1;
 }
 .ui-settings-menu {
-  min-width: 260px;
+  /* Not the prototype's 260px: room for System / Light / Dark. */
+  min-width: 300px;
   right: 0;
   left: auto;
   padding: 8px 0;

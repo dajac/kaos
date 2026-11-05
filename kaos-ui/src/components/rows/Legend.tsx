@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-import { memo, type CSSProperties } from 'react';
+import { memo } from 'react';
 
-// The legend of the cell states, with the swatches of the prototype. The lag
-// gradient of the prototype belonged to the Bento view and is not shown.
+// The legend of the cell states, with the swatches of the prototype, coloured
+// by `rows.css` from the fills of the cells. The lag gradient of the prototype
+// belonged to the Bento view and is not shown.
 
-const ITEMS: readonly { readonly label: string; readonly swatch: CSSProperties }[] = [
-  { label: 'Assigned', swatch: { background: 'var(--green-dim)', border: '1px solid rgba(52,211,153,0.25)' } },
-  { label: 'Pending', swatch: { background: 'var(--accent-dim)', border: '1px solid rgba(76,154,255,0.3)' } },
-  { label: 'Revoking', swatch: { background: 'var(--yellow-dim)', border: '1px solid rgba(251,191,36,0.35)' } },
+const ITEMS: readonly { readonly label: string; readonly state: string }[] = [
+  { label: 'Assigned', state: 'assigned' },
+  { label: 'Pending', state: 'pending' },
+  { label: 'Revoking', state: 'revoking' },
 ];
 
 // Memoized: it takes no props, and the header renders again with every change
@@ -32,7 +33,7 @@ export const Legend = memo(function Legend() {
     <div className="legend">
       {ITEMS.map((item) => (
         <div key={item.label} className="legend-item">
-          <div className="legend-swatch" style={item.swatch}></div> {item.label}
+          <div className={`legend-swatch ${item.state}`}></div> {item.label}
         </div>
       ))}
     </div>

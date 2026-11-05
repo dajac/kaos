@@ -3,7 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
     <title>Kaos — Kafka Consumer Group Simulator</title>
+    <script>
+      // Sets the theme before the first paint, as src/state/theme.ts does.
+      (function () {
+        try {
+          var choice = new URLSearchParams(location.search).get('theme');
+          if (choice !== 'system' && choice !== 'light' && choice !== 'dark') {
+            var settings = JSON.parse(localStorage.getItem('kaos.uiSettings') || 'null');
+            choice = settings && settings.theme;
+          }
+          if (choice === 'system') {
+            choice = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', choice === 'light' ? 'light' : 'dark');
+        } catch (e) {
+          // Without the attribute, the page is dark.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
