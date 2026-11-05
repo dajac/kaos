@@ -28,12 +28,15 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { configStore } from './state/configStore';
 import { simulationStore } from './state/simulationStore';
+import { followTheme } from './state/theme';
+import { uiSettingsStore } from './state/uiSettingsStore';
 
 const root = document.getElementById('root');
 if (root === null) {
   throw new Error('The page has no #root element');
 }
 
+followTheme(uiSettingsStore, window.location.search);
 void configStore.getState().load();
 simulationStore.getState().connect({ onStatus: (status) => configStore.getState().applyStatus(status) });
 

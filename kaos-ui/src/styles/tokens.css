@@ -14,10 +14,14 @@
  * limitations under the License.
  */
 
-/* -- Design tokens: the :root block of the prototype. The fonts are the
-      variable fonts of fontsource, bundled with the UI, then the families
-      the prototype loaded from Google Fonts. -- */
+/* -- Design tokens: the :root block of the prototype is the dark theme, and
+      the light theme overrides its colours. The fonts are the variable
+      fonts of fontsource, bundled with the UI, then the families the
+      prototype loaded from Google Fonts. This file is the only one with
+      colour literals: the other styles use the tokens, and an alpha of a
+      token is a color-mix() with transparent. -- */
 :root {
+  color-scheme: dark;
   --bg: #0a0e14;
   --surface: #12171f;
   --surface2: #1a2029;
@@ -39,7 +43,60 @@
   --fault-dim: rgba(92,213,255,0.12);
   --orange: #f97316;
   --orange-dim: rgba(249,115,22,0.14);
+  /* The greys of the empty, idle and stopped states. */
+  --neutral: #6b7a8d;
+  /* The tracks of the cells. */
+  --ink: #ffffff;
+  /* The shadow that keeps a text readable over the strip. */
+  --halo: #000000;
+  --shadow-pop: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-badge: 0 1px 2px rgba(0,0,0,0.35);
+  /* The text of the solid Start and Stop buttons. */
+  --on-solid: #0a0e14;
+  --cell-hover: brightness(1.35);
+  /* The gauge fills of the cells, bright in both themes so that the member
+     name reads over them. */
+  --fill-assigned: var(--green);
+  --fill-pending: var(--accent);
+  --fill-revoking: var(--yellow);
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
   --font-body: 'DM Sans Variable', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --sidebar-w: 340px;
+}
+
+/* -- The light theme. Its texts meet the contrast of WCAG AA on every
+      surface (contrast.test.ts). -- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface2: #eef1f5;
+  --surface3: #e3e8ee;
+  --border: #cdd5df;
+  --border-subtle: #e1e6ec;
+  --text: #1b2330;
+  --text-muted: #4b5869;
+  --text-dim: #5c6878;
+  --accent: #0a5fc2;
+  --accent-dim: color-mix(in srgb, var(--accent) 12%, transparent);
+  --green: #0b7350;
+  --green-dim: color-mix(in srgb, var(--green) 12%, transparent);
+  --yellow: #8a5a00;
+  --yellow-dim: color-mix(in srgb, var(--yellow) 12%, transparent);
+  --red: #c0262d;
+  --red-dim: color-mix(in srgb, var(--red) 12%, transparent);
+  --fault: #006b89;
+  --fault-dim: color-mix(in srgb, var(--fault) 12%, transparent);
+  --orange: #a54000;
+  --orange-dim: color-mix(in srgb, var(--orange) 14%, transparent);
+  --neutral: #5c6878;
+  --ink: #1b2330;
+  --halo: #ffffff;
+  --shadow-pop: 0 4px 12px rgba(16,24,40,0.14);
+  --shadow-badge: 0 1px 2px rgba(16,24,40,0.12);
+  --on-solid: #ffffff;
+  --cell-hover: brightness(0.92);
+  --fill-assigned: #34d399;
+  --fill-pending: #4c9aff;
+  --fill-revoking: #fbbf24;
 }

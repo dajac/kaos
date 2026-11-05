@@ -17,7 +17,7 @@ section that describes it.
 | Docker image, release and nightly workflows (`Dockerfile`, `release.yml`, `nightly.yml`, image on `ghcr.io`), `compose.yaml` quickstart | built |
 | `kaos-core` | the spec, options and validation model is built (specs, options lambdas, `ConfigMetadata`, `Fault`, `Protocol`, `Simulator.validate`, `internal/config`), and so are the `internal.proxy` package (see [Proxy without static state](#proxy-without-static-state)), the snapshot model with its pure logic (the snapshot records and enums, `internal/state`), and the harness with topics, producers and consumer groups, added and removed before `start()` or while running (`Simulator`, `Topic`, `ProducerHandle`, `ConsumerGroup`, `ConsumerHandle`, listeners, the `kaos.events` change log, `internal/engine` and `internal/kafka`) |
 | `kaos-server` | the HTTP API v1 is built (`Main`, `Server`, `ApiRoutes`, `SimulationService`, `SseHub`, `ProblemHandler`, `dto/*`: every route, SSE, problem details, `/meta`), and so is the OpenAPI document `openapi/kaos-v1.yaml`, served at `GET /api/v1/openapi.yaml` and checked by `OpenApiContractTest`, and so is `StaticUi`, which serves the UI at `/` |
-| `kaos-ui` | built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, the layout shell, the generated `api/schema.d.ts` with its check, and Vitest; the pure UI model (`model/`: the config form, the assignors, the lag gauge, the axis, the tooltip placement, the rows and the structural sharing); the config panel (`api/client.ts`, `state/configStore.ts`, `components/config/`, `styles/config.css` and `styles/controls.css`); and the Rows view (`api/events.ts`, `state/simulationStore.ts`, `state/uiSettingsStore.ts`, `components/rows/`, `styles/rows.css`) |
+| `kaos-ui` | built: the Maven module with the frontend build and `-DskipUi`, Vite, React and TypeScript, the fonts, `styles/tokens.css` and `styles/base.css`, the layout shell, the generated `api/schema.d.ts` with its check, and Vitest; the pure UI model (`model/`: the config form, the assignors, the lag gauge, the axis, the tooltip placement, the rows and the structural sharing); the config panel (`api/client.ts`, `state/configStore.ts`, `components/config/`, `styles/config.css` and `styles/controls.css`); and the Rows view (`api/events.ts`, `state/simulationStore.ts`, `state/uiSettingsStore.ts`, `components/rows/`, `styles/rows.css`); and the dark and light themes (`styles/tokens.css`, `state/theme.ts`, the inline script of `index.html`) |
 
 ## Context
 
@@ -239,7 +239,7 @@ kaos/
     package.json package-lock.json vite.config.ts tsconfig.json index.html .nvmrc pom.xml
     src/ main.tsx App.tsx
       api/        schema.d.ts (generated), client.ts, events.ts (EventSource + backoff)
-      state/      simulationStore.ts, configStore.ts, uiSettings.ts ('kaos.uiSettings')
+      state/      simulationStore.ts, configStore.ts, uiSettingsStore.ts ('kaos.uiSettings'), theme.ts
       model/      configModel.ts, assignors.ts, violations.ts, lag.ts, axis.ts, tooltip.ts   (pure, tested)
       components/ layout/ config/ sim/ settings/
       styles/     tokens.css base.css config.css rows.css controls.css
@@ -1050,6 +1050,7 @@ for free):
 - Tooltip placement.
 - Hiding the badge for healthy classic members.
 - S/M/L strip height.
+- The theme.
 
 ### Proxy without static state
 
@@ -1537,10 +1538,18 @@ their styles.
   component of it takes the group id: no component assumes a single
   group. The shown group is the first of the snapshot
   (`selectShownGroupId`), for parity with the prototype.
-- `uiSettingsStore` holds the S/M/L strip height (48, 72 or 120 px),
-  kept in `localStorage` under `kaos.uiSettings` as
-  `{"stripHeightPreset": "M"}`. The `mode` of the prototype is ignored,
-  and a missing, corrupt or unavailable storage gives `M`.
+- `uiSettingsStore` holds the S/M/L strip height (48, 72 or 120 px)
+  and the theme (`system`, `light` or `dark`), kept in `localStorage`
+  under `kaos.uiSettings` as `{"stripHeightPreset": "M", "theme":
+  "dark"}`. Each field is read on its own and defaults on its own (`M`,
+  `dark`), so a value without `theme` keeps its strip height; each
+  setter writes both fields. The `mode` of the prototype is ignored.
+- `state/theme.ts` resolves the theme (`system` follows
+  `prefers-color-scheme`, live) and sets `data-theme="dark|light"` on
+  `<html>`. `main.tsx` binds it to the store with `followTheme`. A
+  query parameter `?theme=light|dark|system` wins over the stored
+  choice for one page load, without saving it; the ⚙ menu still shows
+  the stored choice.
 
 **Rows view (`components/rows/`)**
 - `RowsView` is the main area: the empty state while the simulation is
@@ -1552,7 +1561,7 @@ their styles.
   the epoch and target epoch; `STARTING` until the group is reported.
   A classic group shows no generation: `DescribeGroups` does not report
   it, and the UI shows the coordinator's view only. Then the `Legend`
-  and the `UiSettingsMenu` (⚙).
+  and the `UiSettingsMenu` (⚙), with two rows, Strip Height and Theme.
 - `RowsGrid` renders one memoized `ConsumerRow` per consumer and sets
   `--strip-height`. The lag map of the group changes with the lag of any
   partition, so `ConsumerRow` compares it with `sameLagOf` (`rows.ts`):
@@ -1601,7 +1610,33 @@ their styles.
   families of the prototype.
 - The Bento rules, the lag gradient of the legend and the other dead
   rules are not carried over.
-- No CSS modules. The visual result is identical to the prototype.
+- No CSS modules. The dark theme is identical to the prototype.
+
+**Themes**
+- `tokens.css` holds two themes: the dark one of the prototype on
+  `:root`, with `color-scheme: dark`, and the light one on
+  `:root[data-theme="light"]`, with `color-scheme: light`, which
+  overrides every colour token. A page without the attribute is dark.
+- No other stylesheet and no component holds a colour literal
+  (`styles.test.ts`). An alpha of a token is
+  `color-mix(in srgb, var(--token) N%, transparent)`, the same colour
+  as the `rgba()` it replaces, so each theme sets the base tokens and
+  the borders, tracks, fades and halos follow. The roles the prototype
+  had no token for have one: `--neutral` (the idle greys), `--ink` (the
+  cell tracks), `--halo` (the text shadows), `--shadow-pop`,
+  `--shadow-badge`, `--on-solid` (the text of Start and Stop) and
+  `--cell-hover`.
+- The cell fills have their own tokens, `--fill-assigned`,
+  `--fill-pending` and `--fill-revoking`: the state colours in dark,
+  the bright dark-theme hues in light, so that the member name reads
+  over a full cell while the badges use the deep light hues. The legend
+  swatches are classes of `rows.css` on the same tokens.
+- The texts of the light theme meet WCAG AA (4.5:1) on every surface
+  they sit on (`contrast.test.ts`).
+- The inline script of `index.html` sets `data-theme` before the first
+  paint, from `?theme`, then the stored choice, so the page never
+  flashes the wrong theme; it repeats the resolution of `theme.ts`, and
+  `theme.test.ts` runs it against the app for every combination.
 
 **Dev loop**
 - The Vite dev server proxies `/api`, including SSE, to `localhost:8081`.
@@ -1699,7 +1734,8 @@ Mixed-protocol groups are supported.
 - Group type and state badges; epoch and target epoch for consumer
   groups.
 - A legend.
-- A ⚙ menu with the S/M/L strip height, persisted in `localStorage`.
+- A ⚙ menu with the S/M/L strip height and the theme (System, Light or
+  Dark), persisted in `localStorage`.
 
 **Differences from the prototype**
 - The Bento view and the New/Old toggle do not exist.

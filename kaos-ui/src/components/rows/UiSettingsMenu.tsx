@@ -16,13 +16,21 @@
 
 import { memo } from 'react';
 
-import { STRIP_HEIGHT_PRESETS, useUiSettings, type StripHeightPreset } from '../../state/uiSettingsStore';
+import {
+  STRIP_HEIGHT_PRESETS,
+  THEME_CHOICES,
+  useUiSettings,
+  type StripHeightPreset,
+  type ThemeChoice,
+} from '../../state/uiSettingsStore';
 import { useDropdown } from '../config/Dropdown';
 
-// The ⚙ menu of the header: the height of the strips, S, M or L. The New/Old
-// row of the prototype is gone with the Bento view.
+// The ⚙ menu of the header: the height of the strips, S, M or L, and the
+// theme. The New/Old row of the prototype is gone with the Bento view.
 
 const PRESETS = Object.keys(STRIP_HEIGHT_PRESETS) as StripHeightPreset[];
+
+const THEME_LABELS: Record<ThemeChoice, string> = { system: 'System', light: 'Light', dark: 'Dark' };
 
 // Memoized: it takes no props, and the header renders again with every change
 // of the group.
@@ -30,6 +38,8 @@ export const UiSettingsMenu = memo(function UiSettingsMenu() {
   const { open, setOpen, buttonRef, rootProps } = useDropdown('ui-settings-dd');
   const preset = useUiSettings((s) => s.stripHeightPreset);
   const setPreset = useUiSettings((s) => s.setStripHeightPreset);
+  const theme = useUiSettings((s) => s.theme);
+  const setTheme = useUiSettings((s) => s.setTheme);
 
   return (
     <div {...rootProps} id="ui-settings-dd">
@@ -63,6 +73,24 @@ export const UiSettingsMenu = memo(function UiSettingsMenu() {
                 onClick={() => setPreset(value)}
               >
                 {value}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="ui-settings-row" id="ui-theme-row">
+          <label className="ui-settings-label">Theme</label>
+          <div className="ui-seg" id="ui-theme-seg" role="radiogroup" aria-label="Theme">
+            {THEME_CHOICES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={value === theme}
+                className={value === theme ? 'ui-seg-btn selected' : 'ui-seg-btn'}
+                data-theme-choice={value}
+                onClick={() => setTheme(value)}
+              >
+                {THEME_LABELS[value]}
               </button>
             ))}
           </div>

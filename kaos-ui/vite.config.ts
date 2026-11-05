@@ -42,5 +42,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],
+    // Vitest empties the stylesheets otherwise, and the style tests read them.
+    css: { include: [/\.css\?raw$/] },
   },
 });

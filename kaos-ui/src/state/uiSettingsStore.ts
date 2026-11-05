@@ -18,9 +18,10 @@ import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 // The settings of the presentation, which are not part of the simulation: the
-// height of the strips (S/M/L) of the ⚙ menu. They are kept in `localStorage`
-// under `kaos.uiSettings`, as in the prototype, and a missing, corrupt or
-// unavailable storage gives the defaults.
+// height of the strips (S/M/L) and the theme of the ⚙ menu. They are kept in
+// `localStorage` under `kaos.uiSettings`, as in the prototype; each field is
+// read on its own, and a missing, corrupt or unavailable value gives its
+// default.
 
 export const UI_SETTINGS_KEY = 'kaos.uiSettings';
 
@@ -30,16 +31,31 @@ export type StripHeightPreset = keyof typeof STRIP_HEIGHT_PRESETS;
 
 export const DEFAULT_STRIP_HEIGHT_PRESET: StripHeightPreset = 'M';
 
+export const THEME_CHOICES = ['system', 'light', 'dark'] as const;
+
+/** The theme the user picks: `system` follows the operating system. */
+export type ThemeChoice = (typeof THEME_CHOICES)[number];
+
+export const DEFAULT_THEME: ThemeChoice = 'dark';
+
 export interface UiSettingsState {
   readonly stripHeightPreset: StripHeightPreset;
+  readonly theme: ThemeChoice;
   setStripHeightPreset(preset: StripHeightPreset): void;
+  setTheme(theme: ThemeChoice): void;
 }
 
 /** The part of `Storage` that the settings use. */
 export type SettingsStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
+type Settings = Pick<UiSettingsState, 'stripHeightPreset' | 'theme'>;
+
 function isPreset(value: unknown): value is StripHeightPreset {
   return typeof value === 'string' && Object.hasOwn(STRIP_HEIGHT_PRESETS, value);
+}
+
+export function isThemeChoice(value: unknown): value is ThemeChoice {
+  return typeof value === 'string' && (THEME_CHOICES as readonly string[]).includes(value);
 }
 
 function defaultStorage(): SettingsStorage | undefined {
@@ -50,38 +66,48 @@ function defaultStorage(): SettingsStorage | undefined {
   }
 }
 
-function read(storage: SettingsStorage | undefined): StripHeightPreset {
+function read(storage: SettingsStorage | undefined): Settings {
+  let parsed: Partial<Record<keyof Settings, unknown>> = {};
   try {
     const stored = storage?.getItem(UI_SETTINGS_KEY);
-    if (stored) {
-      const parsed: unknown = JSON.parse(stored);
-      if (typeof parsed === 'object' && parsed !== null && 'stripHeightPreset' in parsed) {
-        const { stripHeightPreset } = parsed;
-        if (isPreset(stripHeightPreset)) {
-          return stripHeightPreset;
-        }
-      }
+    const value: unknown = stored ? JSON.parse(stored) : null;
+    if (typeof value === 'object' && value !== null) {
+      parsed = value;
     }
   } catch {
     // Unavailable or corrupt: the defaults.
   }
-  return DEFAULT_STRIP_HEIGHT_PRESET;
+  return {
+    stripHeightPreset: isPreset(parsed.stripHeightPreset) ? parsed.stripHeightPreset : DEFAULT_STRIP_HEIGHT_PRESET,
+    theme: isThemeChoice(parsed.theme) ? parsed.theme : DEFAULT_THEME,
+  };
 }
 
 export function createUiSettingsStore(storage: SettingsStorage | undefined = defaultStorage()): StoreApi<UiSettingsState> {
-  return createStore<UiSettingsState>()((set) => ({
-    stripHeightPreset: read(storage),
-
-    setStripHeightPreset(preset) {
-      const stripHeightPreset = isPreset(preset) ? preset : DEFAULT_STRIP_HEIGHT_PRESET;
-      set({ stripHeightPreset });
+  return createStore<UiSettingsState>()((set, get) => {
+    // Writes both fields, so that a setter keeps the other one.
+    function update(change: Partial<Settings>) {
+      set(change);
+      const { stripHeightPreset, theme } = get();
       try {
-        storage?.setItem(UI_SETTINGS_KEY, JSON.stringify({ stripHeightPreset }));
+        storage?.setItem(UI_SETTINGS_KEY, JSON.stringify({ stripHeightPreset, theme }));
       } catch {
         // Best effort.
       }
-    },
-  }));
+    }
+
+    return {
+      ...read(storage),
+
+      setStripHeightPreset(preset) {
+        update({ stripHeightPreset: isPreset(preset) ? preset : DEFAULT_STRIP_HEIGHT_PRESET });
+      },
+
+      setTheme(theme) {
+        update({ theme: isThemeChoice(theme) ? theme : DEFAULT_THEME });
+      },
+    };
+  });
 }
 
 /** The UI settings of the app. */
