@@ -100,7 +100,12 @@ export function createUiSettingsStore(storage: SettingsStorage | undefined = def
       ...read(storage),
 
       setStripHeightPreset(preset) {
-        update({ stripHeightPreset: isPreset(preset) ? preset : DEFAULT_STRIP_HEIGHT_PRESET });
+        const stripHeightPreset = isPreset(preset) ? preset : DEFAULT_STRIP_HEIGHT_PRESET;
+        // A click on the current height changes nothing; `followTheme` reads a
+        // change that keeps both fields as a click on the current theme.
+        if (stripHeightPreset !== get().stripHeightPreset) {
+          update({ stripHeightPreset });
+        }
       },
 
       setTheme(theme) {

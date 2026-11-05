@@ -64,8 +64,9 @@
   --sidebar-w: 340px;
 }
 
-/* -- The light theme. Its texts meet the contrast of WCAG AA on every
-      surface (contrast.test.ts). -- */
+/* -- The light theme. Its texts meet the contrast of WCAG AA on the page
+      surfaces (contrast.test.ts); a badge over a cell fill is left to
+      #65. -- */
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #f5f7fa;

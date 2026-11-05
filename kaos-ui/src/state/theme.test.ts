@@ -122,6 +122,19 @@ describe('followTheme', () => {
     expect(storage.items.get(UI_SETTINGS_KEY)).toBe('{"stripHeightPreset":"S","theme":"dark"}');
   });
 
+  it('applies a click on the stored choice under ?theme, and keeps ?theme on a change of the strip height', () => {
+    fakeMedia(false);
+    const store = createUiSettingsStore(memoryStorage('{"stripHeightPreset":"S","theme":"dark"}'));
+    followTheme(store, '?theme=light');
+
+    store.getState().setStripHeightPreset('L');
+    store.getState().setStripHeightPreset('L');
+    expect(theme()).toBe('light');
+
+    store.getState().setTheme('dark');
+    expect(theme()).toBe('dark');
+  });
+
   it('ignores an unknown ?theme', () => {
     expect(themeOverride('?theme=sepia')).toBeUndefined();
     expect(themeOverride('?theme=system')).toBe('system');

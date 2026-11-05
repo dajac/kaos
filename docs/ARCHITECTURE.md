@@ -1591,9 +1591,10 @@ their styles.
 
 **CSS**
 - The styles are the prototype's `<style>` block (`simulator.html` on
-  `initial-setup`), lifted **verbatim** and split by region into
-  `styles/*.css`. The class names are kept. `tokens.css` (the `:root`
-  block) and `base.css` (the `*`, `html, body` and `body` rules) exist,
+  `initial-setup`), lifted verbatim and split by region into
+  `styles/*.css`, then with their colours moved to tokens (see
+  Themes). The class names are kept. `tokens.css` (the two theme
+  blocks) and `base.css` (the `*`, `html, body` and `body` rules) exist,
   and so do `controls.css` (the buttons, the `.dd` dropdown, the ⚙
   menu and the "Actions" menu), `config.css` (the layout shell, the
   sidebar and the config panel, including the `#config-mode.locked`
@@ -1602,8 +1603,9 @@ their styles.
 - `config.css` and `rows.css` end with the only rules that are not the
   prototype's: the inline field errors (`.field-error`,
   `.consumers-error`) and the error banner (`.config-banner`), which
-  replace `alert()`, and the banners of the main area
-  (`.rows-banner*`).
+  replace `alert()`, the banners of the main area (`.rows-banner*`),
+  and the legend swatches (`.legend-swatch.assigned`, `.pending`,
+  `.revoking`).
 - The fonts are bundled from fontsource instead of Google Fonts.
   `--font-mono` and `--font-body` name the variable families,
   `'JetBrains Mono Variable'` and `'DM Sans Variable'`, first, then the
@@ -1631,8 +1633,10 @@ their styles.
   the bright dark-theme hues in light, so that the member name reads
   over a full cell while the badges use the deep light hues. The legend
   swatches are classes of `rows.css` on the same tokens.
-- The texts of the light theme meet WCAG AA (4.5:1) on every surface
-  they sit on (`contrast.test.ts`).
+- The texts of the light theme meet WCAG AA (4.5:1) on the page
+  surfaces they sit on (`contrast.test.ts`). A state badge over a cell
+  fill (a high-lag first cell) falls below it, in both themes; the
+  high-lag text treatment belongs to #65.
 - The inline script of `index.html` sets `data-theme` before the first
   paint, from `?theme`, then the stored choice, so the page never
   flashes the wrong theme; it repeats the resolution of `theme.ts`, and

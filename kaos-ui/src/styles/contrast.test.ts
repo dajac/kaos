@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
 
 import tokensCss from './tokens.css?raw';
 
-// The texts of the light theme meet the contrast of WCAG AA (4.5:1) on every
-// surface they sit on. The tokens are read from tokens.css: the light block
+// The texts of the light theme meet the contrast of WCAG AA (4.5:1) on the
+// page surfaces they sit on; a badge over a cell fill is left to #65. The tokens are read from tokens.css: the light block
 // over the dark one, a `color-mix(... transparent)` laid over its surface.
 
 type Rgba = readonly [number, number, number, number];
