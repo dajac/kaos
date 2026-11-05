@@ -222,9 +222,48 @@ gains an optional `"theme"` field. Both directions are compatible:
 - **First paint:** the page appears in its theme. There is no dark
   flash before a light UI.
 
-No prototype screenshot is attached: this session could not run the
-capture tools. Build PR 2 publishes before and after shots of both
-themes, using the `?theme` parameter.
+### Prototype
+
+A throwaway prototype of both PRs (the token rules 1 to 5, the light
+block above, the boot script with `?theme`, and a static Theme row)
+was captured with `scripts/factory/shots.sh`, then discarded. The
+palette is the one of the table, unchanged.
+
+Light, idle:
+
+![light-idle-proto](https://github.com/dajac/kaos/blob/issue-screenshots/pr-129/light-idle-proto.png?raw=true)
+
+Light, a running group of three stable consumers:
+
+![light-running-proto](https://github.com/dajac/kaos/blob/issue-screenshots/pr-129/light-running-proto.png?raw=true)
+
+Light, the ⚙ menu with the Theme row:
+
+![light-menu-proto](https://github.com/dajac/kaos/blob/issue-screenshots/pr-129/light-menu-proto.png?raw=true)
+
+Light, a frozen consumer whose lag fills its cells with the bright
+fill, the member name still reading over it:
+
+![light-frozen-proto](https://github.com/dajac/kaos/blob/issue-screenshots/pr-129/light-frozen-proto.png?raw=true)
+
+Dark, the same running group, for comparison (the derived tokens
+leave it as today):
+
+![dark-running-proto](https://github.com/dajac/kaos/blob/issue-screenshots/pr-129/dark-running-proto.png?raw=true)
+
+What the prototype showed:
+
+- **The Theme control is cramped.** In the menu's current width, the
+  three buttons `System`, `Light` and `Dark` touch. PR 2 widens the
+  ⚙ menu, or gives `.ui-seg-btn` a horizontal padding, so that each
+  label has room. Strip Height keeps its look.
+- The pale tracks of the assigned cells (9% of the fill over white)
+  are light but visible, and the legend swatches match them.
+- The sidebar of a running simulation keeps the dimmed look of dark:
+  its inputs are greyed, as today.
+
+Build PR 2 publishes before and after shots of both themes, using the
+`?theme` parameter.
 
 ## Alternatives
 
