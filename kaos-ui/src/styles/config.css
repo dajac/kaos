@@ -171,14 +171,27 @@
 }
 .config-section.expanded .section-body { display: block; }
 
-/* -- Running state: config stays fully visible but grayed out & non-interactive -- */
-#config-mode.locked .config-scroll {
-  opacity: 0.45;
-}
+/* -- Running state: dashed inputs show the lock; an opacity would break the contrast. -- */
 #config-mode.locked .field-input,
 #config-mode.locked .btn-add-consumer {
   pointer-events: none;
 }
+#config-mode.locked .field-input,
+#config-mode.locked .field .dd-btn {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+#config-mode.locked .field-input:focus { border-color: var(--accent); }
+#config-mode.locked .dd-chevron { visibility: hidden; }
+#config-mode.locked .field,
+#config-mode.locked .add-consumer-row { cursor: not-allowed; }
+#config-mode.locked .btn-add-consumer,
+#config-mode.locked .dd-btn-add,
+#config-mode.locked .field-remove,
+#config-mode.locked .section-toggle:hover .section-remove,
+#config-mode.locked .section-remove:focus-visible { opacity: 0.35; }
 
 /* -- Form fields -- */
 .field {
