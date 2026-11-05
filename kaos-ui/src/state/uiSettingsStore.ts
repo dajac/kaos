@@ -41,6 +41,11 @@ export const DEFAULT_THEME: ThemeChoice = 'dark';
 export interface UiSettingsState {
   readonly stripHeightPreset: StripHeightPreset;
   readonly theme: ThemeChoice;
+  /**
+   * The choice of the `?theme=` query parameter, shown over `theme` for this
+   * page load and never stored; `followTheme` sets it, and `setTheme` ends it.
+   */
+  readonly themeOverride: ThemeChoice | undefined;
   setStripHeightPreset(preset: StripHeightPreset): void;
   setTheme(theme: ThemeChoice): void;
 }
@@ -85,8 +90,8 @@ function read(storage: SettingsStorage | undefined): Settings {
 
 export function createUiSettingsStore(storage: SettingsStorage | undefined = defaultStorage()): StoreApi<UiSettingsState> {
   return createStore<UiSettingsState>()((set, get) => {
-    // Writes both fields, so that a setter keeps the other one.
-    function update(change: Partial<Settings>) {
+    // Writes both stored fields, so that a setter keeps the other one.
+    function update(change: Partial<Settings & Pick<UiSettingsState, 'themeOverride'>>) {
       set(change);
       const { stripHeightPreset, theme } = get();
       try {
@@ -98,18 +103,14 @@ export function createUiSettingsStore(storage: SettingsStorage | undefined = def
 
     return {
       ...read(storage),
+      themeOverride: undefined,
 
       setStripHeightPreset(preset) {
-        const stripHeightPreset = isPreset(preset) ? preset : DEFAULT_STRIP_HEIGHT_PRESET;
-        // A click on the current height changes nothing; `followTheme` reads a
-        // change that keeps both fields as a click on the current theme.
-        if (stripHeightPreset !== get().stripHeightPreset) {
-          update({ stripHeightPreset });
-        }
+        update({ stripHeightPreset: isPreset(preset) ? preset : DEFAULT_STRIP_HEIGHT_PRESET });
       },
 
       setTheme(theme) {
-        update({ theme: isThemeChoice(theme) ? theme : DEFAULT_THEME });
+        update({ theme: isThemeChoice(theme) ? theme : DEFAULT_THEME, themeOverride: undefined });
       },
     };
   });

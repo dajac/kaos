@@ -58,19 +58,18 @@ export function applyTheme(choice: ThemeChoice): () => void {
 }
 
 /**
- * Applies the theme of the settings, or of the `?theme=` override, and again
- * at every change of the setting, until the returned function is called.
+ * Applies the theme of the settings, or of the `?theme=` override until a
+ * click on a theme ends it, and again at every change of the shown choice,
+ * until the returned function is called.
  */
 export function followTheme(store: StoreApi<UiSettingsState>, search: string): () => void {
-  let applied = themeOverride(search) ?? store.getState().theme;
+  store.setState({ themeOverride: themeOverride(search) });
+  const shown = (state: UiSettingsState) => state.themeOverride ?? state.theme;
+  let applied = shown(store.getState());
   let stop = applyTheme(applied);
-  const unsubscribe = store.subscribe((state, previous) => {
-    // `setTheme` notifies even when the theme stays: under a `?theme` override,
-    // a click on the stored choice applies it. A change of the strip height
-    // always changes that field, and keeps the applied theme.
-    const themeSet = state.theme !== previous.theme || state.stripHeightPreset === previous.stripHeightPreset;
-    if (themeSet && state.theme !== applied) {
-      applied = state.theme;
+  const unsubscribe = store.subscribe((state) => {
+    if (shown(state) !== applied) {
+      applied = shown(state);
       stop();
       stop = applyTheme(applied);
     }

@@ -1548,8 +1548,11 @@ their styles.
   `prefers-color-scheme`, live) and sets `data-theme="dark|light"` on
   `<html>`. `main.tsx` binds it to the store with `followTheme`. A
   query parameter `?theme=light|dark|system` wins over the stored
-  choice for one page load, without saving it; the ⚙ menu still shows
-  the stored choice.
+  choice for one page load, without saving it: `followTheme` puts it in
+  the store's `themeOverride`, which is never stored, and shows
+  `themeOverride ?? theme`. The ⚙ menu still shows the stored choice;
+  a click on a theme, the shown one included, ends the override and
+  applies the clicked choice.
 
 **Rows view (`components/rows/`)**
 - `RowsView` is the main area: the empty state while the simulation is
